@@ -27,3 +27,28 @@ that need them (per BUILD_PLAN.md).
 
 **Effect:** unblocks P0-T2 (monorepo scaffold). All build tickets now have a
 confirmed stack.
+
+---
+
+## 2026-05-26 — P0-T2: Monorepo scaffold
+
+**`vite.config.ts` added to frontend/.** The ticket spec listed `package.json`,
+`tsconfig.json`, `index.html`, `src/main.tsx`, `src/App.tsx` as the FE files.
+`vite.config.ts` is not listed but is required for `@vitejs/plugin-react` to load
+(Vite errors without it when the plugin is declared). Treated as part of the
+minimal runnable skeleton, not a scope expansion. Includes a `/api` proxy entry
+pointing at the backend dev server (`localhost:8000`) to avoid CORS friction in
+local dev.
+
+**`@types/react` and `@types/react-dom` added to devDependencies.** Required for
+TypeScript to compile `.tsx` files. Not a new runtime dependency.
+
+**`hatchling` chosen as build backend for `pyproject.toml`.** Zero-config for a
+flat `app/` layout; no `src/` wrapper needed. Consistent with the "simple over
+clever" rule. Alternative (`setuptools`) would require a `setup.cfg` or explicit
+`find:`. No difference in practice at scaffold time.
+
+**Dependency install deferred.** Neither `pip install` nor `npm install` was run.
+Deps are correctly declared; install/verify steps are documented in
+`docs/implementation.md § Validation`. P0-T3 will establish the canonical install
+path in CI.

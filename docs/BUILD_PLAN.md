@@ -59,7 +59,7 @@
 ## Current Status
 - Overall status: In Progress
 - Current phase: Phase 0 — Decisions & Scaffolding
-- Current ticket: P0-T2 — Monorepo scaffold
+- Current ticket: P0-T3 — Lint, test harness, and CI
 - Blockers: None (Open decisions #1–#3 resolved 2026-05-26; #4/#5/#7 deferred to their tickets)
 
 ---
@@ -95,7 +95,7 @@
   - Depends on: P0-T1
   - Acceptance criteria covered: PRD § Code Quality Expectations (monorepo);
     PRD § Suggested Architecture § Monorepo; ARCHITECTURE § 1
-  - Status: Todo
+  - Status: Complete (2026-05-26)
 
 - P0-T3 — Lint, test harness, and CI
   - Objective: Configure linters/formatters and test runners for BE + FE; add
