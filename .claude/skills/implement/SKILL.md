@@ -6,7 +6,7 @@ description: Implement a feature or ticket strictly from spec and build plan usi
 Implement this scope: $ARGUMENTS
 
 Input:
-- /docs/spec.md (REQUIRED)
+- /docs/PRD.md (REQUIRED)
 - /docs/BUILD_PLAN.md (REQUIRED)
 - /docs/ux.md (OPTIONAL)
 
