@@ -1,163 +1,221 @@
 # Implementation
 
 ## Scope Implemented
-- Requested scope: P0-T2 — Monorepo scaffold
+- Requested scope: P0-T3 — Lint, test harness, and CI
 - Related phase: Phase 0 — Decisions & Scaffolding
-- Related ticket(s): P0-T2
+- Related ticket(s): P0-T3
 
 ## Approach
-- High-level strategy: Create the minimal monorepo skeleton directories and files
-  for the confirmed stack (Python + FastAPI backend, React + TypeScript frontend).
-  No logic beyond `/health`, no linting config, no test runner, no database — those
-  are P0-T3 and P0-T4.
-- Key decisions:
-  - `backend/pyproject.toml` uses `hatchling` as the build backend (standard,
-    zero-config for a flat src layout). `ruff` and `pytest` are declared as
-    `[project.optional-dependencies].dev`, not installed by default — consistent
-    with "declare deps correctly" without requiring install at scaffold time.
-  - `frontend/vite.config.ts` is included (Vite requires it for the `@vitejs/plugin-react`
-    plugin); the proxy entry (`/api → http://localhost:8000`) avoids CORS friction
-    in local dev without introducing a new dependency.
-  - `frontend/tsconfig.json` uses `"moduleResolution": "bundler"` (required for
-    `allowImportingTsExtensions` with Vite 5 / TS 5).
-  - `shared/README.md` and `tests/README.md` are plain placeholders — no code, no
-    config. Content describes what each directory will hold and which ticket sets
-    it up.
-- Assumptions:
-  - No `.gitkeep` files existed in `shared/` or `tests/` (confirmed by inspection —
-    neither directory existed before this ticket).
-  - Python 3.11+ is the runtime target (per ARCHITECTURE.md confirmed stack).
-  - React 18 is current stable — `react@^18.3.1` is appropriate.
+- Configure `ruff` (lint + format) and `pytest` for the backend with a real passing
+  test against `GET /health` using FastAPI's `TestClient`.
+- Configure ESLint (TypeScript + React) and vitest for the frontend with a real
+  passing test that renders `<App/>` and asserts on content.
+- Add `.gitlab-ci.yml` with `lint` and `test` stages covering both BE and FE.
+- Pin all dependency versions to avoid pip resolver backtracking (see
+  implementation-notes.md for rationale).
+- Fix hatchling package-discovery for the `app/` directory (required for
+  `pip install .` in CI).
+
+**Key decisions:**
+- Pinned exact versions (`fastapi==0.111.0`, `starlette==0.37.2`, `pydantic==2.7.4`,
+  `pytest==8.3.5`, `httpx==0.27.2`, `ruff==0.4.10`) rather than open ranges to
+  ensure CI installs are fast and deterministic.
+- Embedded vitest config in `vite.config.ts` via triple-slash reference (avoids a
+  separate config file; standard vitest+vite pattern).
+- ESLint config in `.eslintrc.cjs` (not `.js`) because `package.json` sets
+  `"type": "module"` — CJS extension forces correct evaluation for ESLint v8.
+
+**Assumptions:**
+- GitLab CI runner has network access to PyPI and npmjs.com.
+- `python:3.11-slim` and `node:20-slim` images are available on the self-hosted
+  GitLab at labs.gauntletai.com.
 
 ---
 
 ## Implementation Plan
-1. Create `backend/` directory and `backend/app/` subdirectory.
-2. Write `backend/pyproject.toml` declaring runtime + dev deps.
-3. Write `backend/app/__init__.py` (empty).
-4. Write `backend/app/main.py` with FastAPI app + `GET /health`.
-5. Create `frontend/src/` directory.
-6. Write `frontend/package.json` (react, react-dom, typescript, vite, plugin-react, @types).
-7. Write `frontend/tsconfig.json`.
-8. Write `frontend/vite.config.ts` (plugin-react + dev proxy).
-9. Write `frontend/index.html`.
-10. Write `frontend/src/main.tsx`.
-11. Write `frontend/src/App.tsx`.
-12. Create `shared/` and write `shared/README.md`.
-13. Create `tests/` and write `tests/README.md`.
-14. Validate Python syntax for `main.py` and `__init__.py`.
-15. Write `docs/implementation.md` (this file).
-16. Append P0-T2 entry to `docs/implementation-notes.md`.
-17. Update `docs/BUILD_PLAN.md` status.
+1. Create `backend/tests/__init__.py` and `backend/tests/test_health.py`.
+2. Update `backend/pyproject.toml`: add `httpx` dev dep, `ruff.format` config,
+   `hatch.build.targets.wheel` packages, pin versions.
+3. Update `frontend/package.json`: add devDeps (eslint, @typescript-eslint/*,
+   vitest, @testing-library/react, jsdom, eslint plugins) and lint/test scripts.
+4. Create `frontend/.eslintrc.cjs`.
+5. Update `frontend/vite.config.ts`: add vitest config block.
+6. Create `frontend/src/App.test.tsx`.
+7. Create `.gitlab-ci.yml`.
+8. Run backend validation: `ruff check`, `ruff format --check`, `pytest`.
+9. Run frontend validation: `npm install`, `npm run lint`, `npm run test`.
 
 ---
 
 ## Code Changes
 
-### File: backend/pyproject.toml
-- Change summary: New file. Declares project metadata, Python ≥ 3.11, runtime deps
-  (fastapi, uvicorn[standard]), and dev deps (pytest, ruff). Pytest testpaths set to
-  `tests`. Ruff configured for E/F/I rules at line length 88.
+### File: `backend/tests/__init__.py`
+- Change summary: New empty file; makes `tests/` a proper Python package.
+- Contents: (empty)
 
-### File: backend/app/__init__.py
-- Change summary: New empty file. Makes `app` a Python package.
+### File: `backend/tests/test_health.py`
+- Change summary: New file; two pytest tests via FastAPI TestClient.
+```python
+from fastapi.testclient import TestClient
+from app.main import app
 
-### File: backend/app/main.py
-- Change summary: New file. Creates the FastAPI application instance and exposes a
-  single `GET /health` endpoint returning `{"status": "ok", "service": "entityiq-backend", "version": "0.1.0"}`.
+client = TestClient(app)
 
-### File: frontend/package.json
-- Change summary: New file. Declares `entityiq-frontend` v0.1.0 with runtime deps
-  react + react-dom and dev deps typescript, vite, @vitejs/plugin-react, and @types.
-  Scripts: dev / build / preview.
+def test_health_returns_200():
+    response = client.get("/health")
+    assert response.status_code == 200
 
-### File: frontend/tsconfig.json
-- Change summary: New file. Standard Vite + React + TS 5 config with strict mode,
-  `moduleResolution: bundler`, `jsx: react-jsx`, `noEmit: true`.
+def test_health_returns_expected_body():
+    response = client.get("/health")
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["service"] == "entityiq-backend"
+    assert body["version"] == "0.1.0"
+```
 
-### File: frontend/vite.config.ts
-- Change summary: New file. Configures `@vitejs/plugin-react`, dev server port 5173,
-  and a proxy rule `/api → http://localhost:8000` for local development.
+### File: `backend/pyproject.toml`
+- Change summary: Pin deps; add httpx dev dep; add ruff.format config; add
+  hatch.build.targets.wheel packages declaration.
+- Key diffs:
+  - `fastapi==0.111.0`, `starlette==0.37.2`, `pydantic==2.7.4` pinned in runtime deps
+  - `httpx==0.27.2` added to dev deps
+  - `[tool.ruff.format]` section added
+  - `[tool.hatch.build.targets.wheel] packages = ["app"]` added
 
-### File: frontend/index.html
-- Change summary: New file. Minimal HTML entry point mounting `#root` and loading
-  `/src/main.tsx` as an ES module.
+### File: `frontend/package.json`
+- Change summary: Add eslint, @typescript-eslint/*, vitest, @testing-library/react,
+  jsdom, eslint-plugin-react-hooks, eslint-plugin-react-refresh as devDeps; add
+  `lint` and `test` scripts.
 
-### File: frontend/src/main.tsx
-- Change summary: New file. React 18 entry point using `createRoot`, renders `<App />`
-  inside `<StrictMode>`. Throws clearly if `#root` is absent.
+### File: `frontend/.eslintrc.cjs`
+- Change summary: New file; ESLint v8 config for TypeScript + React.
+```js
+module.exports = {
+  root: true,
+  env: { browser: true, es2020: true },
+  extends: [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:react-hooks/recommended",
+  ],
+  ignorePatterns: ["dist", ".eslintrc.cjs"],
+  parser: "@typescript-eslint/parser",
+  plugins: ["react-refresh"],
+  rules: {
+    "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
+  },
+};
+```
 
-### File: frontend/src/App.tsx
-- Change summary: New file. Minimal placeholder component rendering the app name
-  and one-line description. No state, no imports beyond the implicit JSX transform.
+### File: `frontend/vite.config.ts`
+- Change summary: Added `/// <reference types="vitest" />` and `test:` block for
+  jsdom environment and globals.
 
-### File: shared/README.md
-- Change summary: New file. Placeholder documenting that this directory will hold
-  the FastAPI-generated `openapi.json` and the TS types derived from it, configured
-  in P0-T3.
+### File: `frontend/src/App.test.tsx`
+- Change summary: New file; two vitest tests rendering `<App/>` via
+  `@testing-library/react` and asserting on heading and description text.
 
-### File: tests/README.md
-- Change summary: New file. Placeholder documenting that cross-cutting / E2E tests
-  live here; test harness config is P0-T3.
+### File: `.gitlab-ci.yml`
+- Change summary: New file; two stages (`lint`, `test`), four jobs:
+  `backend-lint`, `backend-test` (python:3.11-slim), `frontend-lint`,
+  `frontend-test` (node:20-slim).
 
 ---
 
 ## Acceptance Criteria Mapping
 
-- Criterion: PRD § Suggested Architecture § Monorepo — `frontend/ backend/ shared/ docs/ tests/` present.
-  - Implementation: All five directories exist. `docs/` was pre-existing.
-  - File(s): `frontend/`, `backend/`, `shared/`, `tests/`
+- Criterion: PRD § Technical Success — test coverage
+  - Implementation: pytest test suite for backend health endpoint; vitest test
+    suite for frontend App component. Both run in CI.
+  - Files: `backend/tests/test_health.py`, `frontend/src/App.test.tsx`,
+    `.gitlab-ci.yml`
 
-- Criterion: PRD § Code Quality Expectations (monorepo) — skeleton in place.
-  - Implementation: Each directory has at least a minimal file; no spurious files added.
-  - File(s): all scaffold files
+- Criterion: CLAUDE.md § Validation — run lint and tests before considering work
+  complete
+  - Implementation: `ruff check` + `ruff format --check` (backend); `eslint`
+    (frontend); both in CI. Tests run in `test` stage.
+  - Files: `backend/pyproject.toml`, `frontend/.eslintrc.cjs`, `.gitlab-ci.yml`
 
-- Criterion: ARCHITECTURE § 1 — FastAPI backend, React/TS frontend.
-  - Implementation: `backend/app/main.py` uses FastAPI; `frontend/` is a Vite + React + TS project.
-  - File(s): `backend/app/main.py`, `frontend/package.json`, `frontend/tsconfig.json`
-
-- Criterion: `GET /health` returns a status payload.
-  - Implementation: Route defined in `main.py` returning `{"status": "ok", "service": ..., "version": ...}`.
-  - File(s): `backend/app/main.py`
+- Criterion: P0-T3 objective — lint/format, test runners, CI with lint + test
+  stages
+  - Implementation: All four tools configured (ruff, pytest, eslint, vitest);
+    `.gitlab-ci.yml` with `lint` and `test` stages covering both workspaces.
+  - Files: all files listed above
 
 ---
 
 ## Build Plan Mapping
 
-- Ticket: P0-T2 — Monorepo scaffold
+- Ticket: P0-T3 — Lint, test harness, and CI
   - Status: Complete
-  - What was completed: All directories and minimal app skeletons created; Python syntax validated.
-  - Remaining work: None for this ticket. Lint/test/CI config (P0-T3) and Postgres (P0-T4) are separate.
+  - What was completed: ruff (lint + format) configured and passing; pytest with
+    one health test passing (2 assertions); ESLint configured and passing;
+    vitest with one App render test passing (2 assertions); `.gitlab-ci.yml`
+    with 4 jobs across 2 stages created.
+  - Remaining work: none
 
 ---
 
 ## Validation
 
-- Python syntax check: `python3 -c "import ast; ast.parse(open('backend/app/main.py').read())"` — passed.
-- Python syntax check: `python3 -c "import ast; ast.parse(open('backend/app/__init__.py').read())"` — passed.
-- File structure verified with `find` — all required files present.
-- Dependency install not performed (no venv, no `npm install`); deps are declared correctly and will be resolved by P0-T3.
+**Backend — ran locally:**
+```
+cd backend
+python3 -m venv .venv
+.venv/bin/pip install (pinned deps)
 
-Manual verification steps (no further blocker — can be done by any developer):
-1. `cd backend && python -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]" && uvicorn app.main:app --reload`
-   — confirm `curl http://localhost:8000/health` returns `{"status":"ok","service":"entityiq-backend","version":"0.1.0"}`.
-2. `cd frontend && npm install && npm run build`
-   — confirm TypeScript compiles cleanly and Vite outputs `dist/`.
-3. `cd frontend && npm run dev`
-   — confirm the dev server starts at `http://localhost:5173` and renders the placeholder page.
+.venv/bin/ruff check .
+  -> All checks passed!
+
+.venv/bin/ruff format --check .
+  -> 4 files already formatted
+
+.venv/bin/pytest -v
+  -> tests/test_health.py::test_health_returns_200 PASSED
+  -> tests/test_health.py::test_health_returns_expected_body PASSED
+  -> 2 passed in 0.77s
+```
+
+**Frontend — ran locally:**
+```
+cd frontend
+npm install
+  -> exit 0 (with audit warnings unrelated to lint/test tools)
+
+npm run lint
+  -> exit 0, no output (no warnings, no errors)
+
+npm run test
+  -> src/App.test.tsx  (2 tests) 88ms
+  -> Test Files: 1 passed (1)
+  -> Tests: 2 passed (2)
+```
+
+**Manual verification steps (for CI):**
+- Push to a branch on labs.gauntletai.com; confirm the 4 jobs appear in the
+  pipeline and pass.
+- Confirm `backend-lint`, `backend-test`, `frontend-lint`, `frontend-test` all
+  show green.
 
 ---
 
 ## Open Issues
-- No blockers for P0-T2.
-- Vite's `vite.config.ts` is a minor scope addition versus the ticket spec (which listed only `package.json`, `tsconfig.json`, `index.html`, `src/main.tsx`, `src/App.tsx`). It is required for the build to work with `@vitejs/plugin-react` and is considered part of the minimal runnable skeleton. Noted in `implementation-notes.md`.
-- TypeScript types for react (`@types/react`, `@types/react-dom`) included in `devDependencies` — required for `tsx` compilation; not a scope expansion.
+
+- The local Python is 3.10.10; `pyproject.toml` specifies `requires-python = ">=3.11"`.
+  CI uses `python:3.11-slim` which satisfies the constraint. Local dev on Python 3.10
+  works in practice (no 3.11-only syntax used in the scaffold). This is a minor
+  discrepancy to clean up when developers set up local environments with pyenv/asdf.
+- `npm audit` reports vulnerability warnings (unrelated to test/lint tooling). These
+  are in transitive deps of `vite`/`eslint` and are not security-blocking for a
+  dev-only toolchain; address them when upgrading the FE dependency tree.
+- CI installs all deps on every job (no caching configured). GitLab CI caching can
+  be added in a follow-on pass (P3-T5 or infra work) once the CI topology is stable.
 
 ---
 
 ## BUILD_PLAN Update
-
-See `docs/BUILD_PLAN.md`:
-- P0-T2 status: **Complete**
-- Current ticket: **P0-T3 — Lint, test harness, and CI**
+- Current phase: Phase 0 — Decisions & Scaffolding
+- Current ticket: P0-T4 — Postgres + migrations + core data model
+- P0-T3 status: Complete
 - Blockers: None
+- Recommended next ticket: P0-T4

@@ -1,0 +1,40 @@
+stages:
+  - lint
+  - test
+
+# ── Backend ──────────────────────────────────────────────────────────────────
+
+backend-lint:
+  stage: lint
+  image: python:3.11-slim
+  script:
+    - cd backend
+    - pip install --quiet ".[dev]"
+    - ruff check .
+    - ruff format --check .
+
+backend-test:
+  stage: test
+  image: python:3.11-slim
+  script:
+    - cd backend
+    - pip install --quiet ".[dev]"
+    - pytest
+
+# ── Frontend ─────────────────────────────────────────────────────────────────
+
+frontend-lint:
+  stage: lint
+  image: node:20-slim
+  script:
+    - cd frontend
+    - npm ci
+    - npm run lint
+
+frontend-test:
+  stage: test
+  image: node:20-slim
+  script:
+    - cd frontend
+    - npm ci
+    - npm run test

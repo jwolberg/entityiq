@@ -59,7 +59,7 @@
 ## Current Status
 - Overall status: In Progress
 - Current phase: Phase 0 — Decisions & Scaffolding
-- Current ticket: P0-T3 — Lint, test harness, and CI
+- Current ticket: P0-T4 — Postgres + migrations + core data model
 - Blockers: None (Open decisions #1–#3 resolved 2026-05-26; #4/#5/#7 deferred to their tickets)
 
 ---
@@ -105,7 +105,7 @@
   - Depends on: P0-T2
   - Acceptance criteria covered: PRD § Technical Success (test coverage);
     CLAUDE.md § Validation
-  - Status: Todo
+  - Status: Complete (2026-05-26)
 
 - P0-T4 — Postgres + migrations + core data model
   - Objective: Stand up Postgres and migration tooling; implement the core tables
