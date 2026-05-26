@@ -346,11 +346,12 @@ _Track: Integration & reporting API_
 31. P3-T5
 
 ## Recommended Next Step
-- Start with: **P0-T1 — Resolve blocking Open Decisions**
-- Why this is first: ARCHITECTURE § Open decisions flags the backend-stack choice
-  (#1) as a prerequisite for any implementation ticket, and the monorepo scaffold
-  (P0-T2) can't be created until the stack is chosen. Resolving #1–#3 unblocks the
-  entire dependency chain; deferring it would force rework of P0-T2 onward.
+- Start with: **P1-T1 — Submission endpoint + network-metadata capture**
+- Why this is next: Phase 0 is complete (P0-T1–P0-T4) — stack confirmed, monorepo +
+  lint/test/CI in place, and the core data model + migrations landed in P0-T4, which
+  P1-T1 depends on. P1-T1 opens the MVP vertical slice: it creates the ingestion
+  entry point (submission + network metadata) that every later pipeline, scoring,
+  and report ticket builds on.
 
 ## Deferred / Out of Scope
 - **Auto-approval / full automation of compliance decisions** — PRD § Non-Goals
