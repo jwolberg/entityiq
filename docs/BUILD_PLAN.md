@@ -58,8 +58,11 @@
 
 ## Current Status
 - Overall status: In Progress
-- Current phase: Phase 0 — Decisions & Scaffolding
-- Current ticket: P0-T4 — Postgres + migrations + core data model
+- Current phase: Phase 1 — MVP Vertical Slice (walking skeleton)
+- Current ticket: P1-T1 — Submission endpoint + network-metadata capture
+- Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
+  confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
+  core schema runnable (SQLite-verified; Postgres verification pending P1-T1 setup).
 - Blockers: None (Open decisions #1–#3 resolved 2026-05-26; #4/#5/#7 deferred to their tickets)
 
 ---
@@ -115,7 +118,7 @@
   - Depends on: P0-T2, P0-T3
   - Acceptance criteria covered: ARCHITECTURE § 3 Data model;
     PRD § Auditability Requirements (audit_event)
-  - Status: Todo
+  - Status: Complete (2026-05-26)
 
 ### Phase 1 — MVP Vertical Slice (walking skeleton)
 **Goal**

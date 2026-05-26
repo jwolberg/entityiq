@@ -94,3 +94,54 @@ so `jest-dom` matchers are not needed. Kept scope minimal.
 - `pytest -v` → 2 passed in 0.77s
 - `npm run lint` → exit 0, no warnings
 - `npm run test` (vitest run) → 2 passed in 1.47s
+
+---
+
+## 2026-05-26 — P0-T4: Postgres + migrations + core data model
+
+**Generic JSON not JSONB (portability decision).** All JSON columns use
+SQLAlchemy's generic `JSON` type rather than the Postgres-specific `JSONB`.
+Reason: `JSONB` only builds on Postgres; using it would break the SQLite-based
+model tests in CI. In production, `json` and `jsonb` have identical semantics
+for reads/writes; the difference is GIN-index support, which isn't needed until
+we're querying `evidence.raw_payload` or `audit_event.payload` at scale. A
+future migration can alter the columns to `jsonb` without application code
+changes.
+
+**String(36) PKs not native UUID columns (portability decision).** All primary
+keys are `String(36)` with a Python-side `uuid.uuid4()` default. PostgreSQL's
+native `UUID` column type and `gen_random_uuid()` server-default would be more
+idiomatic but require dialect-specific DDL. This tradeoff keeps the schema
+portable for the SQLite test path. Revisit when the test strategy migrates away
+from SQLite (e.g., testcontainers with Postgres).
+
+**Alembic migration generated against SQLite, not Postgres.** No live Postgres
+instance was available. The migration was generated and applied against a
+throwaway SQLite file (`sqlite:////tmp/entityiq_upgrade_test.db`). Alembic
+renders dialect-appropriate DDL at apply time, so the migration will work
+against Postgres when `DATABASE_URL` points to one — but this has not been
+manually verified. Flagged as a step for P1-T1 setup.
+
+**`per-file-ignores` for `app/db/migrations/versions/*.py` (ruff E501).**
+Alembic-generated migration scripts contain long lines from auto-generated
+column definitions. Added a ruff per-file-ignore for E501 in the versions
+directory rather than hand-editing generated code, which would create a
+maintenance burden on every future migration.
+
+**`VerificationRun.supersedes_id` self-reference.** SQLAlchemy needs an
+explicit `foreign_keys=` and `remote_side=` to resolve the ambiguous join
+direction on a self-referential FK. The `superseded_run` relationship
+(pointing up the chain to the run that was superseded) uses
+`remote_side="VerificationRun.id"`; the `superseding_run` relationship
+(pointing down to the run that supersedes this one) uses `uselist=False`.
+Tested by `test_verification_run_supersedes_self_reference`.
+
+**AuditEvent append-only contract is model-layer only.** No `.update()` or
+`.delete()` methods are exposed on the class. DB-level enforcement (RLS or a
+trigger) is explicitly deferred to P3-T3 per the build plan.
+
+**Validation results (all passing locally):**
+- `ruff check .` → "All checks passed!"
+- `ruff format --check .` → "20 files already formatted"
+- `pytest -v` → 9 passed in 1.50s (2 health + 7 new model tests)
+- `alembic upgrade head` (SQLite) → "Running upgrade -> c46233bc9881, initial_schema"
