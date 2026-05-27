@@ -352,12 +352,15 @@ _Track: Integration & reporting API_
 31. P3-T5
 
 ## Recommended Next Step
-- Start with: **P1-T1 — Submission endpoint + network-metadata capture**
-- Why this is next: Phase 0 is complete (P0-T1–P0-T4) — stack confirmed, monorepo +
-  lint/test/CI in place, and the core data model + migrations landed in P0-T4, which
-  P1-T1 depends on. P1-T1 opens the MVP vertical slice: it creates the ingestion
-  entry point (submission + network metadata) that every later pipeline, scoring,
-  and report ticket builds on.
+- Start with: **P2-T1 — Entity candidate resolution (pipeline stage 2)**
+- Why this is next: Phase 1 (MVP vertical slice) is complete — a submission flows
+  through the pipeline (normalize → registries → domain → consistency → score) to a
+  stored, viewable report an operator can sign in to review and mark reviewed. Phase
+  2 deepens the tracks; P2-T1 adds the entity-candidate resolution stage that was
+  deferred in Phase 1, disambiguating registry lookups and unblocking fuller
+  evidence coverage (P2-T2 IP intel, P2-T3 more Tier-1 sources, P2-T4 public web).
+- Note: Open Decision #5 (OpenCorporates licensing) still blocks *production* use of
+  the Tier-1 adapter; resolve before relying on it beyond the public API.
 
 ## Deferred / Out of Scope
 - **Auto-approval / full automation of compliance decisions** — PRD § Non-Goals
