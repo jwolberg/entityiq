@@ -2,6 +2,31 @@
 
 ---
 
+## 2026-05-26 — P1-T6: Consistency checks → field comparisons
+
+**Three fields checked: company_name, country_iso, billing_address.** These are
+the core submitted fields with corresponding evidence fields (company_name →
+company_name, country_iso → jurisdiction, billing_address → legal_address).
+Additional fields (domain, tax_id, phone) are deferred to P1-T7 / P2-T6 where
+scoring assigns weights.
+
+**Match logic is intentionally loose (substring / token-overlap), not exact.**
+Registry names often include "Ltd", "Inc", "GmbH" suffixes not in the submission.
+Addresses may abbreviate "Street" as "St". A strict equality check would produce
+false mismatches. The 40% token-overlap threshold for addresses and substring
+matching for names balance precision vs. recall at MVP scope.
+
+**"unverified" is the correct status when no evidence exists, not "mismatch".**
+This is explicitly specified in the acceptance criteria. If a Tier-1 adapter
+returned not-found, there is no basis for a mismatch verdict.
+
+**jurisdiction_code prefix comparison.** OpenCorporates returns jurisdiction
+codes like "us_ca" (US state of California). We compare the ISO country prefix:
+"US" submitted vs "us_ca" evidence → match. This avoids false country mismatches
+when entity is incorporated in a specific state.
+
+---
+
 ## 2026-05-26 — P1-T5: Tier-2 domain/infrastructure signals adapter
 
 **Three injectable clients (WHOIS, DNS, SSL) allow fully offline tests.** No
