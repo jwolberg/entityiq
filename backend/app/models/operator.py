@@ -8,7 +8,7 @@ Roles:
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import DateTime, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -25,6 +25,12 @@ class Operator(Base):
     role: Mapped[str] = mapped_column(
         String(32), nullable=False, default="operator"
     )  # "operator" | "lead"
+
+    # Password hash for MVP session auth (PBKDF2-HMAC-SHA256 via stdlib).
+    # Nullable: future OIDC-only accounts may omit it.
+    # Format: "pbkdf2_sha256:<iterations>:<salt_hex>:<digest_hex>"
+    password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

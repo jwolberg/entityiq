@@ -59,7 +59,7 @@
 ## Current Status
 - Overall status: In Progress
 - Current phase: Phase 1 — MVP Vertical Slice (walking skeleton)
-- Current ticket: P1-T9 — Operator auth + audit foundation
+- Current ticket: P1-T10 — Operator app: list + detail + mark reviewed
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
   core schema runnable (SQLite-verified; Postgres verification pending P1-T1 setup).
@@ -218,7 +218,7 @@
   - Acceptance criteria covered: PRD § FE § Operator Authentication;
     § Auditability Requirements; USERS § Access, permissions & audit;
     ARCHITECTURE § 5
-  - Status: Todo
+  - Status: Complete (2026-05-26)
 
 - P1-T10 — Operator app: list + detail + mark reviewed
   - Objective: Dashboard list (company, analysis date, risk score, review status);

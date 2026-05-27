@@ -2,6 +2,46 @@
 
 ---
 
+## 2026-05-26 — P1-T9: Operator auth + append-only audit foundation
+
+**Session store is in-memory (dict) for MVP.** A single `_session_store: dict`
+maps opaque tokens to operator_ids.  Appropriate for a single-process MVP dev
+environment.  The replacement path for OIDC/multi-process: (1) swap
+`_session_store` for a Redis-backed TTL store or JWT validation, (2) keep
+`get_current_operator()` signature unchanged — routes need no changes.  This
+is documented in the module docstring.
+
+**Password hashing uses PBKDF2-HMAC-SHA256 via stdlib `hashlib` — no new deps.**
+260,000 iterations (NIST SP 800-132).  Hash format is self-describing:
+`"pbkdf2_sha256:<iterations>:<salt_hex>:<digest_hex>"`.  Swap for argon2/bcrypt
+in P3 — the verify_password() interface stays the same.  No new Python packages
+were added.
+
+**`password_hash` column added to the Operator model.** Nullable (Text), so
+future OIDC-only accounts can omit it.  This is a schema addition that needs an
+Alembic migration for production Postgres.  SQLite tests use `create_all()` which
+picks it up automatically.  Production migration is flagged for when a live
+Postgres is provisioned.
+
+**`record_event()` issues a `db.commit()` inside its own call.** This ensures
+the audit row is persisted independently of the caller's transaction lifecycle.
+The caller (e.g. `mark_reviewed`) calls `db.flush()` first (to get review.id),
+then `record_event()` (which commits), then returns the response.  If the route
+were to raise after `record_event()`, the audit row would still be persisted.
+This is a deliberate durability choice for the audit trail.
+
+**`require_lead()` is a FastAPI dependency, not a middleware.** It takes the
+already-resolved `operator` from `get_current_operator()` and checks the role.
+This is simpler than middleware for per-route RBAC and consistent with how
+FastAPI recommends structuring role-based access.
+
+**No auto-approval path in mark-reviewed.** The endpoint writes `review.status`
+as-provided by the operator body (default `"reviewed"`).  The `"approved"` value
+is a review status tag, not an EntityIQ system action — the human operator makes
+the approval decision.
+
+---
+
 ## 2026-05-26 — P1-T8: Report retrieval API
 
 **Report serialization reads pre-assembled summary JSON, not live joins.**
