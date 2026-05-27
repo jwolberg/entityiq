@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.api.reports import router as reports_router
 from app.api.submissions import router as submissions_router
 
 app = FastAPI(
@@ -9,6 +10,7 @@ app = FastAPI(
 )
 
 app.include_router(submissions_router)
+app.include_router(reports_router)
 
 
 @app.get("/health")

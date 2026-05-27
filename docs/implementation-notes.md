@@ -2,6 +2,28 @@
 
 ---
 
+## 2026-05-26 — P1-T8: Report retrieval API
+
+**Report serialization reads pre-assembled summary JSON, not live joins.**
+`_serialize_report()` reads `report.summary` (assembled by `StoreReportStage`)
+rather than re-joining Evidence + FieldComparison + RiskAssessment on every
+API call.  Trade-off: summary is slightly stale between stage runs; payoff: fast
+reads and no complex join logic in the API layer.
+
+**404 distinguishes "unknown run" from "report not yet assembled".**
+Two separate 404 paths: (1) `VerificationRun` not found → run_id unknown;
+(2) `Report` not found → run exists but pipeline hasn't stored the report yet.
+Different detail strings allow callers to handle these cases differently.
+
+**`_get_db` is a separate dependency per router.** The reports router has its
+own `_get_db` (not shared with the submissions router) so its DB fixture can
+be overridden independently in tests.  The submissions conftest only overrides
+`app.api.submissions._get_db`; the reports conftest overrides
+`app.api.reports._get_db`.  Both share the same SessionLocal factory in
+production.
+
+---
+
 ## 2026-05-26 — P1-T7: Risk scoring v1 + report assembly
 
 **Scoring is purely advisory — no approve/reject field exists.** `ScoringResult`

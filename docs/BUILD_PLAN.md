@@ -59,7 +59,7 @@
 ## Current Status
 - Overall status: In Progress
 - Current phase: Phase 1 — MVP Vertical Slice (walking skeleton)
-- Current ticket: P1-T8 — Report retrieval API
+- Current ticket: P1-T9 — Operator auth + audit foundation
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
   core schema runnable (SQLite-verified; Postgres verification pending P1-T1 setup).
@@ -208,7 +208,7 @@
   - Depends on: P1-T7
   - Acceptance criteria covered: PRD § API § Report Endpoint; § Backend § REST API
     (report retrieval)
-  - Status: Todo
+  - Status: Complete (2026-05-26)
 
 - P1-T9 — Operator auth + audit foundation
   - Objective: Operator sign-in (minimal session for MVP), RBAC (operator / lead),
