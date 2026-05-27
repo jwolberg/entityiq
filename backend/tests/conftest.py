@@ -6,7 +6,14 @@ No live Postgres or Redis required.
 SQLite in-memory caveat: each new connection to sqlite:///:memory: gets a
 DIFFERENT empty database.  We use StaticPool to force all sessions/connections
 to reuse the same in-memory database connection.
+
+Celery / enqueue_run: the api_client fixture patches app.pipeline.orchestrator.
+enqueue_run to a no-op so that the submission endpoint can call it without a
+live broker or Postgres worker session.  The orchestrator tests call run_sync()
+directly — they never go through the Celery path.
 """
+
+import unittest.mock as mock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -60,8 +67,11 @@ def db_session(sqlite_engine):
 def api_client(sqlite_engine):
     """FastAPI TestClient backed by the SQLite in-memory database.
 
-    Overrides the _get_db dependency so no live Postgres is required.
-    Each request gets its own session from the shared StaticPool connection.
+    Two overrides are applied:
+    1. _get_db: replaced with SQLite-backed sessions (no live Postgres).
+    2. enqueue_run: patched to a no-op so the submission endpoint does not
+       attempt to connect to a Redis broker.  Orchestrator behaviour is tested
+       separately in tests/pipeline/test_orchestrator.py via run_sync().
     """
     TestingSessionLocal = sessionmaker(
         bind=sqlite_engine,
@@ -77,6 +87,8 @@ def api_client(sqlite_engine):
             db.close()
 
     app.dependency_overrides[_get_db] = override_get_db
-    client = TestClient(app, raise_server_exceptions=True)
-    yield client
+    with mock.patch("app.pipeline.orchestrator.enqueue_run") as _mock_enqueue:
+        _mock_enqueue.return_value = None
+        client = TestClient(app, raise_server_exceptions=True)
+        yield client
     app.dependency_overrides.clear()

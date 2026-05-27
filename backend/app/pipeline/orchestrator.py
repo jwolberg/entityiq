@@ -1,15 +1,209 @@
-"""Verification run orchestrator (P1-T2 stub — enqueue_run only).
+"""Verification run orchestrator.
 
-Full orchestration (stage execution, status tracking, re-analysis) is
-implemented in P1-T2.  For P1-T1 we only need enqueue_run to be importable.
+Drives a VerificationRun through its registered pipeline stages, recording
+per-stage status, writing partial results, and handling stage failures
+gracefully (a failing stage is recorded as 'unavailable' — it does NOT abort
+the run).
+
+Usage patterns:
+
+  1. Synchronous (tests, CLI):
+       from app.pipeline.orchestrator import Orchestrator, default_stages
+       orch = Orchestrator(default_stages())
+       orch.run_sync(run_id, db)
+
+  2. Via Celery (production):
+       from app.pipeline.orchestrator import enqueue_run
+       enqueue_run(run_id)
+       # The Celery worker calls run_verification_task, which calls run_sync
+       # with its own DB session.
+
+Testability: run_sync() takes an explicit db session, so tests can pass an
+in-memory SQLite session directly.  Celery workers can be configured with
+task_always_eager=True for integration tests that still need the Celery path.
 """
+
+from __future__ import annotations
+
+import logging
+import traceback
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING
+
+from sqlalchemy.orm import Session
+
+from app.models.verification_run import VerificationRun
+from app.pipeline.base import PipelineStage
+
+if TYPE_CHECKING:
+    pass
+
+logger = logging.getLogger(__name__)
+
+# Status constants for source_availability entries.
+STAGE_COMPLETE = "complete"
+STAGE_UNAVAILABLE = "unavailable"
+STAGE_PENDING = "pending"
+
+
+def default_stages() -> list[PipelineStage]:
+    """Return the ordered list of registered pipeline stages.
+
+    Stages are imported lazily here so that:
+      a) the orchestrator doesn't need to import every stage at module load, and
+      b) tests can register their own stages without touching this function.
+    """
+    from app.pipeline.normalize import NormalizeInputStage  # noqa: PLC0415
+
+    return [NormalizeInputStage()]
+
+
+class Orchestrator:
+    """Drives a VerificationRun through an ordered list of pipeline stages.
+
+    Args:
+        stages: Ordered list of PipelineStage instances.  Stages execute in
+                order; a failing stage is skipped (unavailable) but the run
+                continues.
+    """
+
+    def __init__(self, stages: list[PipelineStage]) -> None:
+        self.stages = stages
+
+    # ------------------------------------------------------------------
+    # Public: synchronous execution (used directly in tests and by the
+    # Celery task).
+    # ------------------------------------------------------------------
+
+    def run_sync(self, run_id: str, db: Session) -> None:
+        """Drive the run synchronously using the provided DB session.
+
+        Transitions:
+          pending → running → complete (or failed if the pre/post-amble raises)
+
+        Per-stage status is written to VerificationRun.source_availability
+        after each stage completes, making partial results readable mid-run.
+        """
+        run = db.get(VerificationRun, run_id)
+        if run is None:
+            logger.error("Orchestrator: run %s not found", run_id)
+            return
+
+        # Transition: pending → running
+        run.status = "running"
+        run.started_at = datetime.now(tz=timezone.utc)
+        run.source_availability = {stage.name: STAGE_PENDING for stage in self.stages}
+        db.commit()
+
+        context: dict = {}
+
+        try:
+            for stage in self.stages:
+                stage_name = stage.name
+                logger.info(
+                    "Orchestrator: run %s starting stage %s", run_id, stage_name
+                )
+                try:
+                    context = stage.run(run_id, db, context)
+                    # Persist partial result visibility after each stage.
+                    _update_stage_status(run, db, stage_name, STAGE_COMPLETE)
+                    logger.info(
+                        "Orchestrator: run %s stage %s complete",
+                        run_id,
+                        stage_name,
+                    )
+                except Exception:
+                    # A failing stage is recorded as unavailable; the run continues.
+                    tb = traceback.format_exc()
+                    logger.warning(
+                        "Orchestrator: run %s stage %s unavailable:\n%s",
+                        run_id,
+                        stage_name,
+                        tb,
+                    )
+                    _update_stage_status(run, db, stage_name, STAGE_UNAVAILABLE)
+
+            # All stages attempted — transition to complete.
+            run.status = "complete"
+            run.finished_at = datetime.now(tz=timezone.utc)
+            db.commit()
+            logger.info("Orchestrator: run %s complete", run_id)
+
+        except Exception:
+            # Unexpected error outside stage execution (e.g. DB failure).
+            tb = traceback.format_exc()
+            logger.error("Orchestrator: run %s failed unexpectedly:\n%s", run_id, tb)
+            try:
+                run = db.get(VerificationRun, run_id)
+                if run is not None:
+                    run.status = "failed"
+                    run.finished_at = datetime.now(tz=timezone.utc)
+                    run.failure_reason = tb[:2000]
+                    db.commit()
+            except Exception:
+                pass
+
+
+def _update_stage_status(
+    run: VerificationRun, db: Session, stage_name: str, status: str
+) -> None:
+    """Write per-stage status to source_availability and flush to DB.
+
+    We use a copy-assign to ensure SQLAlchemy detects the mutation to the
+    JSON column (in-place dict mutation is not always tracked).
+    """
+    current = dict(run.source_availability or {})
+    current[stage_name] = status
+    run.source_availability = current
+    db.commit()
+
+
+# ------------------------------------------------------------------
+# Celery integration
+# ------------------------------------------------------------------
 
 
 def enqueue_run(run_id: str) -> None:
-    """Enqueue a verification run for async processing.
+    """Enqueue a verification run for async processing via Celery.
 
-    Stub implementation for P1-T1.  P1-T2 replaces this with a real
-    Celery task dispatch.
+    In production this dispatches to the Celery worker.
+    In tests with task_always_eager=True the task runs synchronously
+    in-process (no broker needed).
     """
-    # No-op stub — will be replaced in P1-T2.
-    pass
+    from app.worker import run_verification_task  # noqa: PLC0415
+
+    run_verification_task.delay(run_id)
+
+
+# ------------------------------------------------------------------
+# Re-analysis helper
+# ------------------------------------------------------------------
+
+
+def enqueue_reanalysis(entity_id: str, supersedes_run_id: str, db: Session) -> str:
+    """Create a new VerificationRun superseding the given run and enqueue it.
+
+    Args:
+        entity_id:         The entity to re-analyse.
+        supersedes_run_id: The run_id of the run being superseded.
+        db:                Open session to persist the new run.
+
+    Returns:
+        The new run_id.
+    """
+    # Find the submission linked to the superseded run.
+    prior_run = db.get(VerificationRun, supersedes_run_id)
+    if prior_run is None:
+        raise ValueError(f"Run {supersedes_run_id!r} not found")
+
+    new_run = VerificationRun(
+        submission_id=prior_run.submission_id,
+        entity_id=entity_id,
+        status="pending",
+        supersedes_id=supersedes_run_id,
+    )
+    db.add(new_run)
+    db.commit()
+
+    enqueue_run(new_run.id)
+    return new_run.id

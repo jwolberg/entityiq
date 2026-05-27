@@ -97,6 +97,41 @@ so `jest-dom` matchers are not needed. Kept scope minimal.
 
 ---
 
+## 2026-05-26 — P1-T2: Async run orchestration skeleton
+
+**Celery task_always_eager vs. direct run_sync() for tests.** The submission
+tests use `mock.patch("app.pipeline.orchestrator.enqueue_run")` (no-op) so the
+API tests don't need Redis. The orchestrator tests call `Orchestrator.run_sync()`
+directly with a SQLite session — no Celery involved. This gives clean isolation:
+API tests verify the HTTP layer; orchestrator tests verify the pipeline logic.
+The `CELERY_TASK_ALWAYS_EAGER` env var remains available for future integration
+tests that want to exercise the full Celery path.
+
+**task_always_eager also kept as env-var config in worker.py.** Retained for
+production-adjacent staging environments that set `CELERY_TASK_ALWAYS_EAGER=true`
+to run synchronous verification (e.g. smoke tests against a staging DB). This is
+a deployment concern, not a unit-test concern.
+
+**run_verification_task opens its own SessionLocal().** The Celery worker runs in
+a separate process and must open its own DB session. This means `task_always_eager`
+integration would require DATABASE_URL pointing to a real DB. Acceptable — the
+unit tests bypass the Celery path entirely.
+
+**`default_stages()` is a function, not a module-level list.** Lazy import of
+each stage (NormalizeInputStage, etc.) keeps the module-level import graph
+clean and allows tests to instantiate Orchestrator with custom stage lists
+without importing every adapter.
+
+**`_update_stage_status` copies the JSON dict before re-assigning.** SQLAlchemy
+does not always detect in-place mutations to JSON columns. Copy-assign (new dict)
+guarantees the change is tracked for the next `db.commit()`.
+
+**Re-analysis is a helper function, not a separate endpoint.** `enqueue_reanalysis`
+in orchestrator.py creates the new VerificationRun and calls `enqueue_run`. The
+API endpoint for re-analysis is P2-T11 — this ticket delivers the plumbing.
+
+---
+
 ## 2026-05-26 — P1-T1: Submission endpoint + network-metadata capture
 
 **Trusted-IP invariant implemented via TRUSTED_PROXY_DEPTH env var (default 0).**

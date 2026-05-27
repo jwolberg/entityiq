@@ -59,7 +59,7 @@
 ## Current Status
 - Overall status: In Progress
 - Current phase: Phase 1 — MVP Vertical Slice (walking skeleton)
-- Current ticket: P1-T2 — Async run orchestration skeleton
+- Current ticket: P1-T3 — Pipeline stage: normalize input
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
   core schema runnable (SQLite-verified; Postgres verification pending P1-T1 setup).
@@ -151,7 +151,7 @@
   - Depends on: P1-T1, P0-T1 (orchestration choice)
   - Acceptance criteria covered: ARCHITECTURE § 2 (execution properties);
     PRD § Performance Expectations (partial results viewable)
-  - Status: In Progress
+  - Status: Complete (2026-05-26)
 
 - P1-T3 — Pipeline stage: normalize input
   - Objective: Canonicalize domain, country, address, email; stub country-aware
@@ -160,7 +160,7 @@
   - Depends on: P1-T2
   - Acceptance criteria covered: ARCHITECTURE § 2 stage 1; PRD § Agentic Pipeline
     stage 1
-  - Status: Todo
+  - Status: In Progress
 
 - P1-T4 — Tier-1 authoritative source adapter (OpenCorporates)
   - Objective: Implement the adapter interface and one Tier-1 lookup returning
