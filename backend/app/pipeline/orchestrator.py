@@ -58,17 +58,23 @@ def default_stages() -> list[PipelineStage]:
       2. query_registries      — Tier-1 authoritative lookup (P1-T4)
       3. analyze_domain        — Tier-2 domain/infrastructure signals (P1-T5)
       4. consistency_checks    — submitted-vs-discovered comparisons (P1-T6)
+      5. scoring               — risk assessment v1 (P1-T7)
+      6. store_report          — assemble queryable report (P1-T7)
     """
     from app.adapters.domain import AnalyzeDomainStage  # noqa: PLC0415
     from app.adapters.opencorporates import QueryRegistriesStage  # noqa: PLC0415
     from app.pipeline.consistency import ConsistencyChecksStage  # noqa: PLC0415
     from app.pipeline.normalize import NormalizeInputStage  # noqa: PLC0415
+    from app.scoring.engine import ScoringStage  # noqa: PLC0415
+    from app.scoring.report import StoreReportStage  # noqa: PLC0415
 
     return [
         NormalizeInputStage(),
         QueryRegistriesStage(),
         AnalyzeDomainStage(),
         ConsistencyChecksStage(),
+        ScoringStage(),
+        StoreReportStage(),
     ]
 
 

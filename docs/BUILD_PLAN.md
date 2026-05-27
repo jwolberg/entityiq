@@ -59,7 +59,7 @@
 ## Current Status
 - Overall status: In Progress
 - Current phase: Phase 1 — MVP Vertical Slice (walking skeleton)
-- Current ticket: P1-T7 — Minimal risk assessment + report assembly
+- Current ticket: P1-T8 — Report retrieval API
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
   core schema runnable (SQLite-verified; Postgres verification pending P1-T1 setup).
@@ -199,7 +199,7 @@
   - Depends on: P1-T6
   - Acceptance criteria covered: PRD § Risk Scoring, § Explainability Requirements;
     ARCHITECTURE § 2 stage 8
-  - Status: Todo
+  - Status: Complete (2026-05-26)
 
 - P1-T8 — Report retrieval API
   - Objective: `GET` report returning normalized report, evidence, scores,

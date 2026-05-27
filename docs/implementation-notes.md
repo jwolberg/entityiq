@@ -2,6 +2,41 @@
 
 ---
 
+## 2026-05-26 — P1-T7: Risk scoring v1 + report assembly
+
+**Scoring is purely advisory — no approve/reject field exists.** `ScoringResult`
+has no `decision`, `approved`, or `rejected` attribute.  `triage_tier` maps only
+to `"pre_clear"`, `"review"`, or `"escalate"` — none are approval states.  Tests
+explicitly assert this.
+
+**Signals with no evidence IDs are intentional for "unavailable" cases.**
+When a source is entirely missing (no evidence at all), the engine emits an
+`elevated` signal like `"no_registry_evidence"` with `evidence_ids=[]`.  This is
+acceptable because the signal explains the *absence* of evidence, not a finding from
+evidence.  The invariant "every finding must cite evidence" is satisfied for all
+signals that *do* cite findings; absence signals document what is missing.
+
+**Scores reflect uncertainty, not confirmed low-risk, when sources are absent.**
+`_score_entity_legitimacy` returns 60 (not 0) when no Tier-1 evidence is available.
+`_score_infrastructure_legitimacy` returns 40 when no Tier-2 data is found.
+Both are above `TRIAGE_PRE_CLEAR_MAX=30`, so missing sources can never yield a
+`pre_clear` outcome on their own.
+
+**Layer weights are equal (0.25 each) in v1.** Full weighted scoring with
+per-signal catalog is P2-T6.  Equal weights are explicit and documented so the
+change in P2-T6 is a targeted update, not a discovery.
+
+**`StoreReportStage` is idempotent.** `assemble_report` uses a query-then-upsert
+pattern (create if none, update if exists).  Called after `ScoringStage` in the
+default pipeline; can be re-called on re-analysis without leaving stale rows.
+
+**`Report.summary` is denormalized JSON for fast API reads.** Rather than
+requiring the API layer to join Evidence + FieldComparison + RiskAssessment on
+every request, the summary is pre-assembled at pipeline time.  This is updated
+on every `StoreReportStage` call including during partial runs.
+
+---
+
 ## 2026-05-26 — P1-T6: Consistency checks → field comparisons
 
 **Three fields checked: company_name, country_iso, billing_address.** These are
