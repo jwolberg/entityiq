@@ -59,11 +59,13 @@
 ## Current Status
 - Overall status: In Progress
 - Current phase: Phase 1 — MVP Vertical Slice (walking skeleton)
-- Current ticket: P1-T4 — Tier-1 authoritative source adapter (OpenCorporates)
+- Current ticket: P1-T7 — Minimal risk assessment + report assembly
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
   core schema runnable (SQLite-verified; Postgres verification pending P1-T1 setup).
-- Blockers: None (Open decisions #1–#3 resolved 2026-05-26; #4/#5/#7 deferred to their tickets)
+- Blockers: Open Decision #5 (data-source licensing for OpenCorporates) remains
+  UNRESOLVED. Production use of the OpenCorporates adapter requires a license
+  agreement. #4/#7 deferred to their tickets.
 
 ---
 
@@ -170,7 +172,8 @@
   - Depends on: P1-T3; **Open decision #5 (data-source access/licensing)**
   - Acceptance criteria covered: PRD § Verification Sources § Tier 1;
     ARCHITECTURE § 4 (adapter contract)
-  - Status: Todo (confirm #5 before starting)
+  - Status: Complete (2026-05-26) — Open Decision #5 still UNRESOLVED; module
+    docstring warns against production use without a license.
 
 - P1-T5 — Tier-2 domain/infrastructure signals
   - Objective: WHOIS/domain age, DNS, MX, SPF/DKIM, SSL metadata → `evidence`.
@@ -178,7 +181,7 @@
   - Depends on: P1-T3
   - Acceptance criteria covered: PRD § Verification Sources § Tier 2;
     PRD § FE § DNS & Domain Intelligence
-  - Status: Todo
+  - Status: Complete (2026-05-26)
 
 - P1-T6 — Consistency checks → field comparisons
   - Objective: Compute submitted-vs-discovered `field_comparison` (match / mismatch
@@ -187,7 +190,7 @@
   - Depends on: P1-T4, P1-T5
   - Acceptance criteria covered: PRD § FE § Registration Data (match/mismatch);
     ARCHITECTURE § 2 stage 7
-  - Status: Todo
+  - Status: Complete (2026-05-26)
 
 - P1-T7 — Minimal risk assessment + report assembly
   - Objective: Produce overall 0–100 score and the available layer scores from

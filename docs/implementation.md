@@ -1,160 +1,213 @@
 # Implementation
 
 ## Scope Implemented
-- Requested scope: P1-T1, P1-T2, P1-T3 (three sequential tickets, each committed separately)
+- Requested scope: P1-T4, P1-T5, P1-T6
 - Related phase: Phase 1 — MVP Vertical Slice (walking skeleton)
-- Related ticket(s): P1-T1, P1-T2, P1-T3
+- Related ticket(s): P1-T4, P1-T5, P1-T6
 
 ## Approach
-- Implemented tickets strictly in dependency order: P1-T1 → P1-T2 → P1-T3
-- Each ticket validated (ruff + pytest) and committed before the next began
-- Reused all Phase 0 patterns: SQLAlchemy ORM, in-memory SQLite for tests, exact-version pinning in pyproject.toml
-- No scope expansion: adapters, consistency checks, scoring, and report assembly are explicitly deferred per BUILD_PLAN
+- Three tickets implemented in order, each as an atomic commit.
+- Adapter contract defined first (base.py) so both adapters share the same
+  typed-failure vocabulary (AdapterSuccess / AdapterFailure).
+- HTTP/WHOIS/DNS/SSL clients injected via constructor parameters; all tests
+  use in-process fakes — zero network calls.
+- Placeholder stubs for domain.py and consistency.py created during P1-T4 so
+  that `orchestrator.default_stages()` imports all four stage classes without error.
+  Stubs replaced by full implementations in P1-T5 and P1-T6 respectively.
+- Match logic in consistency.py uses loose (substring / token-overlap) semantics to
+  handle real-world registry formatting differences.
 
-## Key Decisions
-1. **Trusted-IP**: `request.client.host` (TCP peer) is authoritative by default; `TRUSTED_PROXY_DEPTH` env var allows configuring N-hop proxy trust. `X-Forwarded-For` is captured in `forwarded_headers` (context only, never as `source_ip`).
-2. **Celery testability**: API tests patch `enqueue_run` to a no-op. Orchestrator tests call `run_sync()` directly. `task_always_eager` retained as env-var option for staging. No live Redis needed in CI.
-3. **StaticPool**: SQLite `:memory:` gives each new connection a fresh DB. `StaticPool` forces all test sessions to share one connection so tables created by `create_all()` are visible to API endpoint writes.
-4. **normalize.py bootstrapped in P1-T2**: `default_stages()` needed a concrete import at P1-T2 commit time. The full normalize logic was included then; P1-T3 adds tests and refines the docstring.
-5. **Entity-per-submission in P1-T1**: Entity resolution is P2-T1. Each submission creates a new entity row as a placeholder.
+### Key decisions
+1. Injectable client pattern (not monkeypatching) for testability — matches the
+   existing pattern used for `enqueue_run` in the orchestrator tests.
+2. `AdapterResult = AdapterSuccess | AdapterFailure` union avoids exceptions
+   propagating out of the pipeline; the stage wrapper checks `isinstance`.
+3. `recently_registered` threshold is 180 days (constant; matches PRD § Risk Signals).
+4. Consistency checks use three fields (company_name, country_iso, billing_address)
+   against evidence fields (company_name, jurisdiction, legal_address). Additional
+   fields deferred to P1-T7 / P2-T6.
+5. Open Decision #5 (OpenCorporates licensing) remains UNRESOLVED. The module
+   docstring in opencorporates.py carries a prominent warning.
+
+### Assumptions
+- httpx is already present (FastAPI transitive dep) — used as default HTTP client.
+- python-whois and dnspython are NOT in pyproject.toml; default clients gracefully
+  degrade (raise RuntimeError) if absent. Tests inject fakes — no new deps required.
 
 ---
 
 ## Implementation Plan (executed)
 
-### P1-T1
-1. Create `backend/app/schemas/submission.py` — Pydantic models for request/response
-2. Create `backend/app/api/submissions.py` — POST endpoint with trusted-IP logic and free-email detection
-3. Create `backend/app/pipeline/orchestrator.py` — stub `enqueue_run` (no-op)
-4. Wire router into `app/main.py`
-5. Create `backend/tests/conftest.py` — shared SQLite fixtures (StaticPool)
-6. Create `backend/tests/test_submissions.py` — 14 tests
+### P1-T4
+1. Create `backend/app/adapters/__init__.py`
+2. Create `backend/app/adapters/base.py` — AdapterContext, AdapterSuccess,
+   AdapterFailure, SourceAdapter Protocol
+3. Create `backend/app/adapters/opencorporates.py` — OpenCorporatesAdapter +
+   QueryRegistriesStage; HttpClient protocol for injection
+4. Create placeholder `backend/app/adapters/domain.py` and
+   `backend/app/pipeline/consistency.py` for orchestrator import compatibility
+5. Register all four stages in `orchestrator.default_stages()`
+6. Create `backend/tests/adapters/__init__.py`,
+   `backend/tests/adapters/test_base.py`,
+   `backend/tests/adapters/test_opencorporates.py`
+7. Append P1-T4 entry to `docs/implementation-notes.md`
+8. Lint + test → commit
 
-### P1-T2
-1. Create `backend/app/pipeline/base.py` — `PipelineStage` protocol
-2. Rewrite `backend/app/pipeline/orchestrator.py` — `Orchestrator`, `enqueue_run`, `enqueue_reanalysis`
-3. Create `backend/app/worker.py` — Celery app + `run_verification_task`
-4. Create `backend/app/pipeline/normalize.py` — full normalize logic (stub for P1-T3 tests)
-5. Update `tests/conftest.py` — patch `enqueue_run` in `api_client` fixture
-6. Create `backend/tests/pipeline/test_orchestrator.py` — 8 tests
+### P1-T5
+1. Replace placeholder `domain.py` with full DomainAdapter + AnalyzeDomainStage
+2. WhoisClient, DnsClient, SslClient protocols; default implementations for
+   python-whois / dnspython / stdlib ssl
+3. Risk signals: recently_registered, no_mx
+4. Create `backend/tests/adapters/test_domain.py`
+5. Append P1-T5 entry to `docs/implementation-notes.md`
+6. Lint + test → commit
 
-### P1-T3
-1. Update `normalize.py` docstring — remove "stub" language, finalize design notes
-2. Create `backend/tests/pipeline/test_normalize.py` — 32 tests covering helpers + stage
+### P1-T6
+1. Replace placeholder `consistency.py` with full ConsistencyChecksStage
+2. _names_match, _iso_match, _address_match helpers; _FIELD_SPECS list
+3. _run_comparisons persists FieldComparison rows with match_status
+4. Create `backend/tests/pipeline/test_consistency.py`
+5. Append P1-T6 entry to `docs/implementation-notes.md`
+6. Update `docs/BUILD_PLAN.md` ticket statuses + Current Status
+7. Lint + test → commit
 
 ---
 
 ## Code Changes
 
-### File: backend/app/schemas/submission.py
-- Pydantic `SubmissionRequest` (required + optional fields per PRD) + `SubmissionResponse`
-- `model_validator` on `SubmissionRequest` strips scheme/path from `company_domain`
-- `EmailStr` for work_email validation (requires `email-validator` package, already present)
+### File: backend/app/adapters/__init__.py
+- Change summary: New package init.
 
-### File: backend/app/api/submissions.py
-- `POST /submissions` endpoint returning 202
-- Trusted-IP: `_get_trusted_client_ip` uses `request.client.host` at depth 0; configurable via `TRUSTED_PROXY_DEPTH`
-- Free-email: `_is_free_email_domain` checks against a 30+ domain frozenset; returned in response, not a rejection
-- Idempotency: duplicate `idempotency_key` returns existing run without creating new rows
-- Network metadata captured server-side: `source_ip`, `user_agent`, `forwarded_headers`, `endpoint`, `submitted_at`
-- Creates Entity + Submission + VerificationRun then calls `enqueue_run`
+### File: backend/app/adapters/base.py
+- Change summary: Adapter contract. AdapterContext dataclass, AdapterSuccess,
+  AdapterFailure (typed failures), SourceAdapter Protocol (runtime_checkable).
+  FailureKind Literal["timeout","unavailable","not_found","rate_limited"].
 
-### File: backend/app/pipeline/base.py
-- `PipelineStage` runtime-checkable Protocol with `name: str` property and `run(run_id, db, context) -> dict`
+### File: backend/app/adapters/opencorporates.py
+- Change summary: Tier-1 OpenCorporates adapter. Injectable HttpClient protocol.
+  Queries /v0.4/companies/search. Emits Evidence rows for company_name,
+  registration_number, registration_status, jurisdiction, legal_address.
+  Includes QueryRegistriesStage pipeline wrapper. Module docstring warns about
+  Open Decision #5 (licensing unresolved).
+
+### File: backend/app/adapters/domain.py
+- Change summary: Tier-2 domain adapter. Injectable WhoisClient/DnsClient/SslClient.
+  Emits domain_creation_date, domain_age_days, domain_registrar, domain_expiry_date,
+  mx_records, no_mx, spf_record, dkim_present, ssl_issuer, ssl_subject,
+  recently_registered. AnalyzeDomainStage pipeline wrapper.
+
+### File: backend/app/pipeline/consistency.py
+- Change summary: ConsistencyChecksStage. Reads Evidence rows from DB for current
+  run, compares against context["normalized"] using field-specific match logic.
+  Persists FieldComparison rows with match_status "match"/"mismatch"/"unverified"
+  and evidence_id reference.
 
 ### File: backend/app/pipeline/orchestrator.py
-- `Orchestrator.run_sync(run_id, db)`: pending->running->complete lifecycle; per-stage `source_availability` committed after each stage; failing stage -> `unavailable`; run always reaches `complete` or `failed`
-- `enqueue_run(run_id)`: calls `run_verification_task.delay()`
-- `enqueue_reanalysis(entity_id, supersedes_run_id, db)`: creates new run with `supersedes_id`, calls `enqueue_run`
-- `default_stages()`: lazily imports and returns `[NormalizeInputStage()]`
+- Change summary: default_stages() now returns 4 stages in order:
+  NormalizeInputStage → QueryRegistriesStage → AnalyzeDomainStage →
+  ConsistencyChecksStage.
 
-### File: backend/app/worker.py
-- `celery_app` with Redis broker (configurable via env); `CELERY_TASK_ALWAYS_EAGER` env var
-- `run_verification_task(run_id)`: opens `SessionLocal()`, calls `Orchestrator(default_stages()).run_sync()`
+### File: backend/tests/adapters/test_base.py
+- Change summary: 12 tests for base contract (dataclasses, protocol satisfaction).
 
-### File: backend/app/pipeline/normalize.py
-- `normalize_domain()`: lowercase, strip scheme/path/port/query
-- `normalize_country()`: ISO2 passthrough or dict lookup across 40+ aliases
-- `normalize_email()`: lowercase + strip
-- `normalize_address()`: strip whitespace
-- `format_tax_id()`: stub — returns stripped value
-- `NormalizeInputStage`: reads `run.submission`, calls helpers, returns `{**context, "normalized": {...}}`; no raise on malformed input
+### File: backend/tests/adapters/test_opencorporates.py
+- Change summary: 13 tests — happy path, typed failures (timeout/rate-limited/
+  unavailable/not-found), stage DB persistence. All offline.
 
-### File: backend/tests/conftest.py
-- `sqlite_engine` (session scope, StaticPool), `db_session` (function scope, rollback), `api_client` (patches `enqueue_run` + overrides `_get_db`)
+### File: backend/tests/adapters/test_domain.py
+- Change summary: 18 tests — long-lived domain trust signals, recently-registered +
+  no-MX risk signals, WHOIS unavailable partial results, stage persistence. Offline.
 
-### File: backend/tests/test_submissions.py
-- 14 tests covering 202 + DB persistence, 422 on missing fields, trusted-IP invariant, idempotency dedup, free-email flag, optional fields, domain normalization
-
-### File: backend/tests/pipeline/test_orchestrator.py
-- 8 tests covering pending->complete, all stages complete, raising->unavailable+run completes, all-fail still completes, partial-result visibility, re-analysis supersedes, prior run retained, protocol compliance
-
-### File: backend/tests/pipeline/test_normalize.py
-- 32 tests covering domain normalization, country mapping, email normalization, NormalizeInputStage round-trips, and format_tax_id stub
+### File: backend/tests/pipeline/test_consistency.py
+- Change summary: 21 tests — name/country/address match, country mismatch,
+  unverified-when-no-evidence, stage persistence, evidence_id attribution. Offline.
 
 ---
 
 ## Acceptance Criteria Mapping
 
-- **POST /submissions returns 202 with run_id**: `test_valid_submission_returns_202`
-- **Missing required field -> 422**: `test_missing_required_field_returns_422[*]`
-- **Trusted peer IP, not XFF**: `test_spoofed_x_forwarded_for_is_not_used_as_source_ip`
-- **Forwarded headers stored for context**: `test_forwarded_headers_are_stored_separately`
-- **Duplicate idempotency key -> no second run**: `test_idempotent_submission_does_not_create_duplicate`
-- **Free/disposable email accepted + flagged**: `test_free_email_domain_accepted_but_flagged`
-- **Two-stage run: pending->complete**: `test_two_stage_run_transitions_pending_to_complete`
-- **Raising stage -> unavailable, run completes**: `test_raising_stage_is_unavailable_run_still_completes`
-- **Partial results readable mid-run**: `test_stage_status_is_readable_after_each_stage`
-- **Re-analysis supersedes prior run**: `test_reanalysis_creates_new_run_with_supersedes_id`
-- **Mixed-case domain normalised**: `test_normalize_stage_mixed_case_domain`
-- **Country mapped to ISO**: `test_normalize_stage_country_mapped_to_iso`
-- **Malformed domain no raise**: `test_normalize_stage_malformed_domain_handled`
-- **Unsupported country no raise**: `test_normalize_stage_unsupported_country_is_none_not_raised`
+- **Adapter contract (base.py)**: fetch(context) -> AdapterResult; typed failures
+  never raise out of pipeline — satisfied.
+- **Evidence carries source attribution + confidence + tier**: every Evidence row
+  emitted by both adapters has source=, tier=, confidence=, attribution= — satisfied.
+- **OpenCorporates: registry evidence (existence, status, jurisdiction, identifiers,
+  legal address)**: fields company_name, registration_number, registration_status,
+  jurisdiction, legal_address emitted — satisfied.
+- **Provider timeout → typed `unavailable`**: _TimeoutHttpClient fake raises
+  TimeoutError → AdapterFailure(kind="timeout") — verified by test.
+- **No match → `not_found` with zero evidence**: empty companies list →
+  AdapterFailure(kind="not_found") — verified by test.
+- **Domain adapter: WHOIS age, DNS, MX, SPF/DKIM, SSL, registrar**: all present in
+  domain.py evidence fields — satisfied.
+- **Recently-registered + no-MX → elevated-risk signals**: recently_registered and
+  no_mx evidence fields emitted — verified by tests.
+- **WHOIS unavailable → typed unavailable section; run continues**: WhoisUnavailable
+  fake → whois_status evidence; AdapterSuccess still returned — verified by test.
+- **match / mismatch / unverified FieldComparison**: all three statuses tested and
+  persisted — satisfied.
+- **No discovered value → unverified (not mismatch)**: explicit AC — verified by
+  test_no_evidence_for_field_is_unverified.
+- **FieldComparison references supporting evidence**: evidence_id set on match —
+  verified by test_stage_sets_evidence_id_on_match.
 
 ---
 
 ## Build Plan Mapping
 
-- **P1-T1**: Complete (2026-05-26) — submission endpoint, network metadata, idempotency, free-email flag
-- **P1-T2**: Complete (2026-05-26) — orchestrator, Celery worker, stage protocol, re-analysis plumbing
-- **P1-T3**: Complete (2026-05-26) — normalize stage with full helper functions and test suite
+- P1-T4: Complete (2026-05-26). Open Decision #5 still unresolved — license warning
+  in module docstring; no API key hard-coded.
+- P1-T5: Complete (2026-05-26). python-whois / dnspython optional; default clients
+  degrade gracefully if absent.
+- P1-T6: Complete (2026-05-26). Three fields (company_name, country_iso,
+  billing_address). Additional fields deferred to scoring/P2.
 
 ---
 
 ## Validation
 
-All validation run inside the `.venv` (Python 3.10.10, packages pinned):
+### P1-T4
+- `ruff check .` → All checks passed
+- `ruff format --check .` → 40 files already formatted
+- `pytest -q` → 84 passed in 0.70s
 
-```
-ruff check . --exclude .venv  ->  All checks passed!
-ruff format --check . --exclude .venv  ->  34 files already formatted
-pytest tests/ -v  ->  63 passed in 0.45s
-```
+### P1-T5
+- `ruff check .` → All checks passed
+- `ruff format --check .` → 43 files already formatted
+- `pytest -q` → 100 passed in 0.72s
 
-Test breakdown per ticket:
-- P1-T1: 14 tests (test_submissions.py)
-- P1-T2: 8 tests (pipeline/test_orchestrator.py)
-- P1-T3: 32 tests (pipeline/test_normalize.py)
-- Pre-existing (P0): 9 tests (test_health.py + test_models.py)
+### P1-T6
+- `ruff check .` → All checks passed
+- `ruff format --check .` → 44 files already formatted
+- `pytest -q` → 121 passed in 0.79s
+
+All tests run offline (SQLite + injected fakes). No live Redis, Postgres, or
+network required.
 
 ---
 
 ## Open Issues
 
-1. **Entity-per-submission** (known tech debt): P1-T1 creates one Entity per submission. Entity deduplication/resolution is P2-T1.
-
-2. **Celery task in API tests is patched, not exercised**: `run_verification_task` is tested synchronously via `run_sync()`. Full Celery path integration test is deferred to P3-T5.
-
-3. **Free-email flag not persisted to DB**: Returned in the 202 response only. P1-T3 normalize stage can persist this as Evidence when warranted.
-
-4. **Country map covers ~40 aliases**: Will grow as Tier 1 adapters (P1-T4) encounter new locales.
+- **Open Decision #5 (OpenCorporates licensing)** — UNRESOLVED. The adapter
+  targets the public API with no authenticated key. Production deployment requires
+  a license agreement with OpenCorporates. Recorded in module docstring and
+  implementation-notes.md.
+- **DKIM probe is a presence-only check** using the `_domainkey.<domain>` base
+  label. A full implementation would iterate common selectors (google, default,
+  selector1, selector2). Deferred to P2-T5 (adapter robustness).
+- **Domain adapter default clients require optional deps** (python-whois,
+  dnspython) not in pyproject.toml. They raise RuntimeError if absent.
+  Add to dependencies when enabling production use.
+- **Consistency checks cover 3 fields** (company_name, country_iso,
+  billing_address). Domain, tax_id, phone comparisons deferred to P1-T7 / P2-T6
+  where scoring assigns weights to these signals.
 
 ---
 
 ## BUILD_PLAN Update
 
-- P1-T1: Complete (2026-05-26)
-- P1-T2: Complete (2026-05-26)
-- P1-T3: Complete (2026-05-26)
-- Current ticket updated to: P1-T4 — Tier-1 authoritative source adapter (OpenCorporates)
-- Blockers: None (Open decision #5 should be confirmed before starting P1-T4)
+- P1-T4: Complete (2026-05-26)
+- P1-T5: Complete (2026-05-26)
+- P1-T6: Complete (2026-05-26)
+- Current ticket updated to: P1-T7 — Minimal risk assessment + report assembly
+- Blocker noted: Open Decision #5 (OpenCorporates licensing) for production use
+- Recommended next: P1-T7
