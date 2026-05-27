@@ -59,7 +59,7 @@
 ## Current Status
 - Overall status: In Progress
 - Current phase: Phase 2 — Deepen the Tracks
-- Current ticket: P2-T6 — Full four-layer scoring + signal catalog
+- Current ticket: P2-T7 — Explainability + triage tiers
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
   core schema runnable (SQLite-verified; Postgres verification pending P1-T1 setup).
@@ -267,7 +267,7 @@ _Track: Risk scoring & explainability_
   - Objective: entity / infrastructure / representation / fraud-staging layers with
     weighting; full elevated-risk and trust signal sets.
   - Depends on: P1-T7, P2-T2 · AC: PRD § Core Verification Philosophy, § Risk
-    Signals, § Risk Scoring § Confidence Breakdown · Status: Todo
+    Signals, § Risk Scoring § Confidence Breakdown · Status: Complete (2026-05-27) — full PRD signal catalog in signals.py; cross-submission IP/ASN reuse implemented; 332 tests pass.
 - P2-T7 — Explainability + triage tiers
   - Objective: per-score evidence + attribution + contributing signals; triage tier
     (pre-clear low-risk vs escalate) feeding the operator queue.

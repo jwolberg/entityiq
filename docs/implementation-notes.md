@@ -2,6 +2,36 @@
 
 ---
 
+## 2026-05-27 — P2-T6: Full four-layer scoring + signal catalog
+
+**Full PRD signal catalog in `signals.py`, engine delegates layer functions.**
+`engine.py` delegates each of the four layer computations to dedicated functions in
+`signals.py`.  The lazy-import pattern (imports inside layer helper functions, not at
+module top) prevents the circular import that would arise because `signals.py` imports
+`Signal` from `engine.py`.
+
+**Cross-submission IP/ASN reuse implemented here (deferred from P2-T2).**
+`fraud_staging_risk_signals()` accepts an optional `db` session and `run_id`.  When
+both are provided, `_cross_submission_reuse_signals()` queries Evidence rows from
+*other* runs sharing the same ASN.  One reuse hit → `ip_asn_reuse` (elevated, w=0.3);
+≥3 hits → `ip_asn_reuse_high` (elevated, w=0.6).  This is in `signals.py`, not the
+adapter, per the P2-T2 note that reuse detection is a scoring concern.
+
+**Absence signals have `evidence_ids=[]` — this is intentional.**
+Signals like `no_registry_evidence` document the *absence* of data, not a finding.
+They are elevated but with `evidence_ids=[]`.  The invariant "every finding signal
+MUST cite ≥1 evidence row" is satisfied for all signals that represent a finding.
+Tests cover both paths.
+
+**Scoring is advisory — no approve/reject field.**  `ScoringResult` has no
+`decision`, `approved`, or `rejected` attribute.  `triage_tier` maps only to
+`pre_clear` / `review` / `escalate`.  Pre-clear requires human sign-off (per PRD
+§ Non-Goals).  Tests explicitly assert no approval state.
+
+**332 tests pass** (expanded from 302 baseline with 30 new signal + engine tests).
+
+---
+
 ## 2026-05-27 — P2-T5: Adapter robustness — caching, rate-limiting, graceful degradation
 
 **In-process dict cache with no Redis dependency.** `AdapterCache` is a
