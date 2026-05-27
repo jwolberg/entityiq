@@ -1,254 +1,160 @@
 # Implementation
 
 ## Scope Implemented
-- Requested scope: P0-T4 — Postgres + migrations + core data model
-- Related phase: Phase 0 — Decisions & Scaffolding
-- Related ticket(s): P0-T4 (final Phase 0 ticket)
+- Requested scope: P1-T1, P1-T2, P1-T3 (three sequential tickets, each committed separately)
+- Related phase: Phase 1 — MVP Vertical Slice (walking skeleton)
+- Related ticket(s): P1-T1, P1-T2, P1-T3
 
 ## Approach
-- Added `sqlalchemy==2.0.30`, `alembic==1.13.1`, and `psycopg[binary]==3.1.19`
-  to `backend/pyproject.toml` with exact pinned versions (consistent with
-  existing pinning convention established in P0-T3).
-- Created `backend/app/db/session.py`: engine + `SessionLocal` factory reading
-  `DATABASE_URL` from env (default: local Postgres), and `Base` (DeclarativeBase).
-- Created 10 model files in `backend/app/models/` (one per entity), all
-  using portable SQLAlchemy types (generic `JSON`, not Postgres-only `JSONB`)
-  so the schema builds on both Postgres (production) and SQLite (tests/CI).
-- Initialized Alembic under `backend/` (`alembic.ini`, `backend/app/db/migrations/`
-  with `env.py` wired to `Base.metadata` and `DATABASE_URL`); generated initial
-  migration with `--autogenerate`.
-- Wrote `backend/tests/test_models.py` covering schema creation, round-trip
-  CRUD for the submission→run→evidence chain, the `supersedes` self-reference,
-  and the `AuditEvent` append-only contract — all using in-memory SQLite.
+- Implemented tickets strictly in dependency order: P1-T1 → P1-T2 → P1-T3
+- Each ticket validated (ruff + pytest) and committed before the next began
+- Reused all Phase 0 patterns: SQLAlchemy ORM, in-memory SQLite for tests, exact-version pinning in pyproject.toml
+- No scope expansion: adapters, consistency checks, scoring, and report assembly are explicitly deferred per BUILD_PLAN
 
-### Key decisions
-- **Generic JSON vs JSONB**: Used SQLAlchemy's generic `JSON` type everywhere.
-  On Postgres this maps to `json`; switching to `JSONB` for GIN-index
-  performance is a future migration. SQLite does not support `JSONB`.
-- **String PKs (UUID strings)**: All PKs are `String(36)` with a Python-side
-  `uuid.uuid4()` default rather than `uuid` column type. The `uuid` type is
-  Postgres-specific; `String(36)` works on both engines.
-- **Alembic migration generated against SQLite**: No live Postgres was available.
-  The migration was generated and applied against a throwaway SQLite file to
-  verify it runs cleanly. The SQL DDL generated is correct; it will apply
-  against Postgres as-is (SQLAlchemy renders dialect-appropriate DDL at apply
-  time).
-- **`per-file-ignores` for migration versions**: Alembic auto-generates migration
-  scripts with long lines. Added `"app/db/migrations/versions/*.py" = ["E501"]`
-  to `pyproject.toml` to keep ruff passing without hand-editing generated code.
-- **Append-only audit_event**: No `.update()` or `.delete()` helpers are exposed
-  on the `AuditEvent` model class. DB-level enforcement (e.g. RLS or a trigger)
-  is deferred to P3-T3 (PII retention & access policy).
-
-### Assumptions
-- `psycopg[binary]==3.1.19` (psycopg3) is compatible with the project's Python
-  3.10/3.11 target. The `binary` extra bundles the C extension for performance
-  and avoids a separate `libpq` system dependency.
-- The `supersedes_id` self-reference on `VerificationRun` is modelled as a
-  nullable FK to the same table. SQLAlchemy requires `remote_side` to resolve
-  the ambiguous join direction; this is handled with `foreign_keys=[supersedes_id]`
-  and `remote_side="VerificationRun.id"`.
+## Key Decisions
+1. **Trusted-IP**: `request.client.host` (TCP peer) is authoritative by default; `TRUSTED_PROXY_DEPTH` env var allows configuring N-hop proxy trust. `X-Forwarded-For` is captured in `forwarded_headers` (context only, never as `source_ip`).
+2. **Celery testability**: API tests patch `enqueue_run` to a no-op. Orchestrator tests call `run_sync()` directly. `task_always_eager` retained as env-var option for staging. No live Redis needed in CI.
+3. **StaticPool**: SQLite `:memory:` gives each new connection a fresh DB. `StaticPool` forces all test sessions to share one connection so tables created by `create_all()` are visible to API endpoint writes.
+4. **normalize.py bootstrapped in P1-T2**: `default_stages()` needed a concrete import at P1-T2 commit time. The full normalize logic was included then; P1-T3 adds tests and refines the docstring.
+5. **Entity-per-submission in P1-T1**: Entity resolution is P2-T1. Each submission creates a new entity row as a placeholder.
 
 ---
 
-## Implementation Plan
-1. Pin and add `sqlalchemy`, `alembic`, `psycopg[binary]` to `pyproject.toml`.
-2. Create `app/db/` package with `session.py` (engine, SessionLocal, Base).
-3. Create `app/models/` package with 10 model files.
-4. Update `app/models/__init__.py` to import all models (needed for Alembic
-   autogenerate).
-5. Initialize Alembic; wire `env.py` to Base.metadata and DATABASE_URL.
-6. Generate initial migration (`--autogenerate` via SQLite).
-7. Apply migration to ephemeral SQLite to confirm it runs.
-8. Write `tests/test_models.py`.
-9. Run lint + format + tests; fix all issues.
+## Implementation Plan (executed)
 
-### Files created/modified
-**Created:**
-- `backend/app/db/__init__.py`
-- `backend/app/db/session.py`
-- `backend/app/models/__init__.py`
-- `backend/app/models/operator.py`
-- `backend/app/models/entity.py`
-- `backend/app/models/submission.py`
-- `backend/app/models/verification_run.py`
-- `backend/app/models/evidence.py`
-- `backend/app/models/field_comparison.py`
-- `backend/app/models/risk_assessment.py`
-- `backend/app/models/report.py`
-- `backend/app/models/review.py`
-- `backend/app/models/audit_event.py`
-- `backend/alembic.ini`
-- `backend/app/db/migrations/env.py`
-- `backend/app/db/migrations/README`
-- `backend/app/db/migrations/script.py.mako`
-- `backend/app/db/migrations/versions/c46233bc9881_initial_schema.py`
-- `backend/tests/test_models.py`
+### P1-T1
+1. Create `backend/app/schemas/submission.py` — Pydantic models for request/response
+2. Create `backend/app/api/submissions.py` — POST endpoint with trusted-IP logic and free-email detection
+3. Create `backend/app/pipeline/orchestrator.py` — stub `enqueue_run` (no-op)
+4. Wire router into `app/main.py`
+5. Create `backend/tests/conftest.py` — shared SQLite fixtures (StaticPool)
+6. Create `backend/tests/test_submissions.py` — 14 tests
 
-**Modified:**
-- `backend/pyproject.toml` (deps + per-file-ignores for migrations)
+### P1-T2
+1. Create `backend/app/pipeline/base.py` — `PipelineStage` protocol
+2. Rewrite `backend/app/pipeline/orchestrator.py` — `Orchestrator`, `enqueue_run`, `enqueue_reanalysis`
+3. Create `backend/app/worker.py` — Celery app + `run_verification_task`
+4. Create `backend/app/pipeline/normalize.py` — full normalize logic (stub for P1-T3 tests)
+5. Update `tests/conftest.py` — patch `enqueue_run` in `api_client` fixture
+6. Create `backend/tests/pipeline/test_orchestrator.py` — 8 tests
+
+### P1-T3
+1. Update `normalize.py` docstring — remove "stub" language, finalize design notes
+2. Create `backend/tests/pipeline/test_normalize.py` — 32 tests covering helpers + stage
 
 ---
 
 ## Code Changes
 
-### File: backend/pyproject.toml
-- Added `sqlalchemy==2.0.30`, `alembic==1.13.1`, `psycopg[binary]==3.1.19`
-  to runtime `dependencies`.
-- Added `[tool.ruff.lint.per-file-ignores]` to suppress E501 on Alembic-generated
-  migration scripts.
+### File: backend/app/schemas/submission.py
+- Pydantic `SubmissionRequest` (required + optional fields per PRD) + `SubmissionResponse`
+- `model_validator` on `SubmissionRequest` strips scheme/path from `company_domain`
+- `EmailStr` for work_email validation (requires `email-validator` package, already present)
 
-### File: backend/app/db/session.py
-- `create_engine` reading `DATABASE_URL` env var; falls back to local Postgres URL.
-- `SessionLocal = sessionmaker(autocommit=False, autoflush=False)`.
-- `Base(DeclarativeBase)` shared by all models.
+### File: backend/app/api/submissions.py
+- `POST /submissions` endpoint returning 202
+- Trusted-IP: `_get_trusted_client_ip` uses `request.client.host` at depth 0; configurable via `TRUSTED_PROXY_DEPTH`
+- Free-email: `_is_free_email_domain` checks against a 30+ domain frozenset; returned in response, not a rejection
+- Idempotency: duplicate `idempotency_key` returns existing run without creating new rows
+- Network metadata captured server-side: `source_ip`, `user_agent`, `forwarded_headers`, `endpoint`, `submitted_at`
+- Creates Entity + Submission + VerificationRun then calls `enqueue_run`
 
-### File: backend/app/models/
-10 model files implementing the entities from ARCHITECTURE § 3:
+### File: backend/app/pipeline/base.py
+- `PipelineStage` runtime-checkable Protocol with `name: str` property and `run(run_id, db, context) -> dict`
 
-| Model | Key fields / notes |
-|---|---|
-| `Operator` | email, full_name, role (operator/lead) |
-| `Entity` | canonical_name, canonical_domain; linked to submissions + runs |
-| `Submission` | required inputs + optional inputs + network metadata; immutable |
-| `VerificationRun` | status, started/finished, supersedes_id self-FK |
-| `Evidence` | source, tier, field, raw/normalized values, confidence, raw_payload |
-| `FieldComparison` | field_name, submitted/discovered values, match_status |
-| `RiskAssessment` | four layer scores, overall_score, triage_tier, contributing_signals |
-| `Report` | status, section_statuses, summary; one-to-one with VerificationRun |
-| `Review` | operator verdict, notes, corrections; FK to Operator + Run |
-| `AuditEvent` | event_type, operator_id, verification_run_id, payload; append-only |
+### File: backend/app/pipeline/orchestrator.py
+- `Orchestrator.run_sync(run_id, db)`: pending->running->complete lifecycle; per-stage `source_availability` committed after each stage; failing stage -> `unavailable`; run always reaches `complete` or `failed`
+- `enqueue_run(run_id)`: calls `run_verification_task.delay()`
+- `enqueue_reanalysis(entity_id, supersedes_run_id, db)`: creates new run with `supersedes_id`, calls `enqueue_run`
+- `default_stages()`: lazily imports and returns `[NormalizeInputStage()]`
 
-`risk_assessment_evidence` association table links `RiskAssessment` many-to-many
-to `Evidence`.
+### File: backend/app/worker.py
+- `celery_app` with Redis broker (configurable via env); `CELERY_TASK_ALWAYS_EAGER` env var
+- `run_verification_task(run_id)`: opens `SessionLocal()`, calls `Orchestrator(default_stages()).run_sync()`
 
-### File: backend/app/db/migrations/env.py
-- Imports `app.models` (side-effect) to populate `Base.metadata`.
-- Reads `DATABASE_URL` env var and sets it via `config.set_main_option`.
-- Standard offline/online migration functions.
+### File: backend/app/pipeline/normalize.py
+- `normalize_domain()`: lowercase, strip scheme/path/port/query
+- `normalize_country()`: ISO2 passthrough or dict lookup across 40+ aliases
+- `normalize_email()`: lowercase + strip
+- `normalize_address()`: strip whitespace
+- `format_tax_id()`: stub — returns stripped value
+- `NormalizeInputStage`: reads `run.submission`, calls helpers, returns `{**context, "normalized": {...}}`; no raise on malformed input
 
-### File: backend/app/db/migrations/versions/c46233bc9881_initial_schema.py
-- Auto-generated by `alembic revision --autogenerate -m "initial_schema"`.
-- Creates all 11 tables (10 entity tables + `risk_assessment_evidence`) and
-  all indexes.
+### File: backend/tests/conftest.py
+- `sqlite_engine` (session scope, StaticPool), `db_session` (function scope, rollback), `api_client` (patches `enqueue_run` + overrides `_get_db`)
 
-### File: backend/tests/test_models.py
-- 7 tests across 3 categories: schema creation, round-trip CRUD chain,
-  supersedes self-reference, AuditEvent append-only contract.
-- All use in-memory SQLite.
+### File: backend/tests/test_submissions.py
+- 14 tests covering 202 + DB persistence, 422 on missing fields, trusted-IP invariant, idempotency dedup, free-email flag, optional fields, domain normalization
+
+### File: backend/tests/pipeline/test_orchestrator.py
+- 8 tests covering pending->complete, all stages complete, raising->unavailable+run completes, all-fail still completes, partial-result visibility, re-analysis supersedes, prior run retained, protocol compliance
+
+### File: backend/tests/pipeline/test_normalize.py
+- 32 tests covering domain normalization, country mapping, email normalization, NormalizeInputStage round-trips, and format_tax_id stub
 
 ---
 
 ## Acceptance Criteria Mapping
 
-- Criterion: ARCHITECTURE § 3 Data model — 10 entities implemented
-  - Implementation: 10 model files in `app/models/`, field sketches mirrored
-  - Files: `backend/app/models/*.py`
-
-- Criterion: PRD § Auditability Requirements — audit_event stores operator actions, runs, score changes, sources, re-analysis
-  - Implementation: `AuditEvent` model with `event_type`, `operator_id`,
-    `verification_run_id`, `submission_id`, `payload` columns; no update/delete
-    helpers; enforced by test `test_audit_event_has_no_update_or_delete_methods`
-  - Files: `backend/app/models/audit_event.py`, `backend/tests/test_models.py`
-
-- Criterion: Evidence-centric design — risk_assessment and field_comparison reference evidence; verification_run has supersedes self-reference
-  - Implementation: `FieldComparison.evidence_id` FK; `RiskAssessment` to
-    `Evidence` via `risk_assessment_evidence`; `VerificationRun.supersedes_id`
-    self-FK with ORM relationship
-  - Files: `backend/app/models/field_comparison.py`,
-    `backend/app/models/risk_assessment.py`,
-    `backend/app/models/verification_run.py`
-
-- Criterion: Alembic initialized, wired to Base.metadata + DATABASE_URL, initial migration generated
-  - Implementation: `alembic.ini` + `env.py` wired; migration
-    `c46233bc9881_initial_schema.py` generated and verified against SQLite
-  - Files: `backend/alembic.ini`, `backend/app/db/migrations/`
-
-- Criterion: Tests — SQLite-based, no live Postgres required, CI-compatible
-  - Implementation: `tests/test_models.py` using `sqlite:///:memory:`; all 7
-    new tests pass alongside the 2 existing health tests
-  - Files: `backend/tests/test_models.py`
+- **POST /submissions returns 202 with run_id**: `test_valid_submission_returns_202`
+- **Missing required field -> 422**: `test_missing_required_field_returns_422[*]`
+- **Trusted peer IP, not XFF**: `test_spoofed_x_forwarded_for_is_not_used_as_source_ip`
+- **Forwarded headers stored for context**: `test_forwarded_headers_are_stored_separately`
+- **Duplicate idempotency key -> no second run**: `test_idempotent_submission_does_not_create_duplicate`
+- **Free/disposable email accepted + flagged**: `test_free_email_domain_accepted_but_flagged`
+- **Two-stage run: pending->complete**: `test_two_stage_run_transitions_pending_to_complete`
+- **Raising stage -> unavailable, run completes**: `test_raising_stage_is_unavailable_run_still_completes`
+- **Partial results readable mid-run**: `test_stage_status_is_readable_after_each_stage`
+- **Re-analysis supersedes prior run**: `test_reanalysis_creates_new_run_with_supersedes_id`
+- **Mixed-case domain normalised**: `test_normalize_stage_mixed_case_domain`
+- **Country mapped to ISO**: `test_normalize_stage_country_mapped_to_iso`
+- **Malformed domain no raise**: `test_normalize_stage_malformed_domain_handled`
+- **Unsupported country no raise**: `test_normalize_stage_unsupported_country_is_none_not_raised`
 
 ---
 
 ## Build Plan Mapping
 
-- Ticket: P0-T4 — Postgres + migrations + core data model
-  - Status: Complete
-  - What was completed: All deps added, session/Base created, 10 models
-    implemented, Alembic initialized and migration generated + applied,
-    7 model tests pass, lint + format clean.
-  - Remaining work: None. Manual Postgres verification (see Validation below).
+- **P1-T1**: Complete (2026-05-26) — submission endpoint, network metadata, idempotency, free-email flag
+- **P1-T2**: Complete (2026-05-26) — orchestrator, Celery worker, stage protocol, re-analysis plumbing
+- **P1-T3**: Complete (2026-05-26) — normalize stage with full helper functions and test suite
 
 ---
 
 ## Validation
 
-### What was run
+All validation run inside the `.venv` (Python 3.10.10, packages pinned):
 
 ```
-# Lint
-cd backend
-.venv/bin/ruff check .          -> All checks passed!
-.venv/bin/ruff format --check . -> 20 files already formatted
-
-# Tests (in-memory SQLite, no live DB)
-.venv/bin/pytest -v
-  tests/test_health.py::test_health_returns_200                       PASSED
-  tests/test_health.py::test_health_returns_expected_body             PASSED
-  tests/test_models.py::test_all_tables_created                       PASSED
-  tests/test_models.py::test_submission_create_and_read               PASSED
-  tests/test_models.py::test_verification_run_create_and_read         PASSED
-  tests/test_models.py::test_evidence_linked_to_verification_run      PASSED
-  tests/test_models.py::test_verification_run_supersedes_self_reference PASSED
-  tests/test_models.py::test_audit_event_has_no_update_or_delete_methods PASSED
-  tests/test_models.py::test_audit_event_create                       PASSED
-  9 passed in 1.50s
-
-# Migration against ephemeral SQLite
-DATABASE_URL="sqlite:////tmp/entityiq_upgrade_test.db" .venv/bin/alembic upgrade head
-  INFO [alembic.runtime.migration] Running upgrade  -> c46233bc9881, initial_schema
-  exit 0
+ruff check . --exclude .venv  ->  All checks passed!
+ruff format --check . --exclude .venv  ->  34 files already formatted
+pytest tests/ -v  ->  63 passed in 0.45s
 ```
 
-### What needs manual Postgres verification
-No live Postgres was available during implementation. When a Postgres instance
-is running, verify:
-
-```bash
-cd backend
-DATABASE_URL="postgresql+psycopg://user:pass@host:5432/entityiq_dev" \
-  .venv/bin/alembic upgrade head
-```
-
-Expected: all 11 tables created, `alembic_version` row inserted, no DDL errors.
-`psycopg[binary]==3.1.19` supports Postgres 13+. The migration DDL is rendered
-by SQLAlchemy at apply-time so dialect-specific syntax is handled automatically.
-
-### CI
-The existing `.gitlab-ci.yml` runs `ruff check`, `ruff format --check`, and
-`pytest` against the backend. The new model tests use SQLite in-memory and
-require no external services, so they will pass in CI as-is. No CI changes needed.
+Test breakdown per ticket:
+- P1-T1: 14 tests (test_submissions.py)
+- P1-T2: 8 tests (pipeline/test_orchestrator.py)
+- P1-T3: 32 tests (pipeline/test_normalize.py)
+- Pre-existing (P0): 9 tests (test_health.py + test_models.py)
 
 ---
 
 ## Open Issues
 
-- **JSONB**: Generic `JSON` maps to Postgres `json` (not `jsonb`). A future
-  migration can alter to `jsonb` for columns needing GIN-index searches. This
-  is a P2/P3 concern, not blocking for P1.
-- **DB-level append-only enforcement for audit_event**: Only model-layer
-  enforcement (no `.update()`/`.delete()` methods) is in place. Row-level
-  security or a trigger preventing UPDATE/DELETE on `audit_event` is scoped
-  to P3-T3.
-- **UUID column type**: PKs are `String(36)` to stay portable. A Postgres
-  `UUID` column type and a `gen_random_uuid()` server-default would be more
-  idiomatic. Can be changed in a migration once SQLite tests are no longer needed.
-- **Postgres verification**: Not run locally due to no live instance. Must be
-  verified during P1-T1 setup or in the deployment environment.
+1. **Entity-per-submission** (known tech debt): P1-T1 creates one Entity per submission. Entity deduplication/resolution is P2-T1.
+
+2. **Celery task in API tests is patched, not exercised**: `run_verification_task` is tested synchronously via `run_sync()`. Full Celery path integration test is deferred to P3-T5.
+
+3. **Free-email flag not persisted to DB**: Returned in the 202 response only. P1-T3 normalize stage can persist this as Evidence when warranted.
+
+4. **Country map covers ~40 aliases**: Will grow as Tier 1 adapters (P1-T4) encounter new locales.
 
 ---
 
 ## BUILD_PLAN Update
-See `docs/BUILD_PLAN.md` — P0-T4 marked Complete; Current Status updated to
-Phase 1, current ticket P1-T1; Phase 0 exit criteria noted as met.
+
+- P1-T1: Complete (2026-05-26)
+- P1-T2: Complete (2026-05-26)
+- P1-T3: Complete (2026-05-26)
+- Current ticket updated to: P1-T4 — Tier-1 authoritative source adapter (OpenCorporates)
+- Blockers: None (Open decision #5 should be confirmed before starting P1-T4)

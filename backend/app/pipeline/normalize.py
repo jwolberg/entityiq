@@ -1,18 +1,22 @@
-"""Pipeline stage 1: Normalize Input.
+"""Pipeline stage 1: Normalize Input (P1-T3).
 
 Canonicalizes submitted fields:
-  - domain: lowercase, strip scheme/path
-  - country: map to ISO 3166-1 alpha-2
-  - work_email: lowercase
+  - domain: lowercase, strip scheme/path/port
+  - country: map to ISO 3166-1 alpha-2 from name or code
+  - work_email: lowercase + strip
   - billing_address: strip leading/trailing whitespace
-  - tax_id: stub country-aware formatting
+  - tax_id: stub country-aware formatting (stripped; full formatting deferred)
 
 Produces a 'normalized' key in the pipeline context that subsequent stages
-can consume.  Persists findings as Evidence rows (source='normalize', tier=1).
+can consume.
 
-Implementation note: the normalize stage is implemented in P1-T3.
-This module is created as part of P1-T2 so the orchestrator's default_stages()
-can import it.  The full implementation is in the P1-T3 commit.
+Design notes:
+  - Does NOT raise on malformed / unrecognised input; records None for fields
+    that cannot be normalised.
+  - Does NOT persist Evidence rows directly (P1-T3 scope); subsequent stages
+    can read context['normalized'] and persist as needed.
+  - Country map covers ISO-common aliases; additions are welcome as new locales
+    surface during adapter development (P1-T4+).
 """
 
 from __future__ import annotations

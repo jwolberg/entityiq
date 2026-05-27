@@ -97,6 +97,31 @@ so `jest-dom` matchers are not needed. Kept scope minimal.
 
 ---
 
+## 2026-05-26 — P1-T3: Pipeline stage: normalize input
+
+**normalize.py was created in P1-T2 as a stub required by default_stages().**
+The full implementation (country map, domain/email/address functions,
+NormalizeInputStage class) was delivered in the same file. The P1-T3 commit
+adds tests and updates the module docstring. No functional change from P1-T2.
+
+**country map covers ~40 common aliases/codes.** The design assumption is that
+a submitted country of "US", "usa", "United States", or "united states of america"
+all map to "US". The map is extended as new locales surface. Full ISO 3166-1
+coverage is not the goal (no external dep for this MVP stage).
+
+**Format_tax_id is a stub (stripped value only).** Country-specific tax ID
+formatting (e.g. EIN for US, VAT number for EU, CIF for Spain) requires per-
+country logic and is deferred to the adapter/source tickets (P1-T4+) where the
+format becomes relevant for registry lookups.
+
+**NormalizeInputStage does not persist Evidence rows.** The ticket scope is
+context production for later stages. Evidence persistence is a concern of the
+stages that have a source to attribute (Tier 1/2/3 adapters). Adding an
+'normalize' evidence row now would be premature and untestable without P1-T4's
+adapter interface.
+
+---
+
 ## 2026-05-26 — P1-T2: Async run orchestration skeleton
 
 **Celery task_always_eager vs. direct run_sync() for tests.** The submission
