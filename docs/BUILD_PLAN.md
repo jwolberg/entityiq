@@ -291,7 +291,8 @@ _Track: Operator workbench_
 _Track: Integration & reporting API_
 - P2-T11 — Re-analysis + operator workflow endpoints + report export
   - Depends on: P1-T8 · AC: PRD § Backend § REST API (re-analysis, workflow);
-    § API Requirements · Status: Todo
+    § API Requirements · Status: Complete (2026-05-27) — done out of order; endpoints:
+    POST /reanalysis, POST /workflow (correct+re-run, notes), report export.
 - P2-T12 — API auth for integrating systems
   - Objective: service-credential auth at the API boundary with per-system
     attribution.

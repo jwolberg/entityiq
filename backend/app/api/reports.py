@@ -209,6 +209,43 @@ def list_reports(
 
 
 @router.get(
+    "/{run_id}/export",
+    response_model=ReportResponse,
+    summary="Machine-readable report export for integrating systems (P2-T11)",
+)
+def export_report(
+    run_id: str,
+    db: Session = Depends(_get_db),
+) -> ReportResponse:
+    """Return the full normalized report for automated extraction.
+
+    Identical payload to GET /reports/{run_id} but signals intent for
+    programmatic consumption by integrating systems (PRD § API Requirements).
+    Wraps the same _serialize_report() helper.
+
+    Returns 404 if the run or report does not exist.
+    """
+    run = db.get(VerificationRun, run_id)
+    if run is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Verification run {run_id!r} not found.",
+        )
+
+    report = db.query(Report).filter(Report.verification_run_id == run_id).first()
+    if report is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"Report for run {run_id!r} has not been assembled yet. "
+                "The pipeline may still be in early stages."
+            ),
+        )
+
+    return _serialize_report(report)
+
+
+@router.get(
     "/{run_id}",
     response_model=ReportResponse,
     summary="Retrieve the report for a verification run",
