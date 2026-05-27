@@ -97,6 +97,45 @@ so `jest-dom` matchers are not needed. Kept scope minimal.
 
 ---
 
+## 2026-05-26 — P1-T1: Submission endpoint + network-metadata capture
+
+**Trusted-IP invariant implemented via TRUSTED_PROXY_DEPTH env var (default 0).**
+Default: use `request.client.host` (TCP connection peer — the edge-assigned IP).
+If the operator sets `TRUSTED_PROXY_DEPTH=N` (N>0), the Nth entry from the right
+of `X-Forwarded-For` is used (the entry the trusted edge appended). This is
+explicitly configurable rather than implicit, matching ARCHITECTURE § 5.
+
+**Free-email domain flag stored in response only, not in DB.**
+The ticket requires flagging for downstream stages. We return `is_free_email_domain`
+in the 202 response. The normalize stage (P1-T3) will persist this as evidence.
+Storing it as a DB column on `submission` was considered but rejected — that field
+isn't in the P0-T4 schema and adding it would require a new migration before the
+normalize stage exists. Deferred to P1-T3 where it naturally belongs.
+
+**Entity created one-per-submission in P1-T1.** Entity resolution/deduplication is
+P2-T1. For now each submission spawns a new entity row. This will be corrected when
+the entity-resolution stage is added — it's expected tech debt.
+
+**`email-validator` already installed** (pulled in by fastapi extras). Added to
+pyproject.toml as `pydantic[email]` is the canonical way to declare this dep; but
+since `email-validator==2.2.0` was already present from fastapi, no new install was
+needed. Added explicit `email-validator==2.2.0` to dev deps in pyproject.toml for
+clarity.
+
+**SQLite StaticPool in tests.** sqlite:///:memory: gives each new connection a fresh
+empty DB. The conftest uses StaticPool so all sessions share one connection — this
+is required to make API endpoint writes (which commit) visible to the `db_session`
+fixture in the same test. The existing `test_models.py` was unaffected (it manages
+its own engine/session independently).
+
+**`noqa: PLC0415` on deferred import of enqueue_run.** The import is inside the
+endpoint function to avoid a circular import at module load time (submissions →
+orchestrator → potentially back to submissions). This is a known pattern for
+circular-import avoidance; the noqa suppresses the ruff "import not at top of file"
+warning.
+
+---
+
 ## 2026-05-26 — P0-T4: Postgres + migrations + core data model
 
 **Generic JSON not JSONB (portability decision).** All JSON columns use

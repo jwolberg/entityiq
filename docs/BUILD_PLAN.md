@@ -59,7 +59,7 @@
 ## Current Status
 - Overall status: In Progress
 - Current phase: Phase 1 — MVP Vertical Slice (walking skeleton)
-- Current ticket: P1-T1 — Submission endpoint + network-metadata capture
+- Current ticket: P1-T2 — Async run orchestration skeleton
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
   core schema runnable (SQLite-verified; Postgres verification pending P1-T1 setup).
@@ -141,7 +141,7 @@
   - Acceptance criteria covered: PRD § Backend § REST API (submission endpoint),
     § API § Submission Endpoint, § Inputs, § Network & IP Intelligence (captured
     fields); ARCHITECTURE § 5 (trusted edge IP)
-  - Status: Todo
+  - Status: Complete (2026-05-26)
 
 - P1-T2 — Async run orchestration skeleton
   - Objective: Queue + worker that drives a `verification_run` through pipeline
@@ -151,7 +151,7 @@
   - Depends on: P1-T1, P0-T1 (orchestration choice)
   - Acceptance criteria covered: ARCHITECTURE § 2 (execution properties);
     PRD § Performance Expectations (partial results viewable)
-  - Status: Todo
+  - Status: In Progress
 
 - P1-T3 — Pipeline stage: normalize input
   - Objective: Canonicalize domain, country, address, email; stub country-aware

@@ -1,10 +1,14 @@
 from fastapi import FastAPI
 
+from app.api.submissions import router as submissions_router
+
 app = FastAPI(
     title="EntityIQ API",
     description="Enterprise Business Verification & Risk Intelligence Platform",
     version="0.1.0",
 )
+
+app.include_router(submissions_router)
 
 
 @app.get("/health")
