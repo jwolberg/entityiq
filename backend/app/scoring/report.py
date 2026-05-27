@@ -1,14 +1,17 @@
-"""Report assembly (P1-T7).
+"""Report assembly (P1-T7, extended P2-T7).
 
 Assembles or updates a queryable Report row for a verification run.  The
 report is readable at any point during the run (partial results — each
 section carries its own status).
 
 Report sections and their source:
-  scores      — from RiskAssessment (if scored)
-  evidence    — raw evidence rows (one summary entry per row)
-  mismatches  — FieldComparison rows with status "mismatch" or "unverified"
-  sources     — distinct sources used, with per-source evidence counts
+  scores          — from RiskAssessment (if scored)
+  evidence        — raw evidence rows (one summary entry per row)
+  mismatches      — FieldComparison rows with status "mismatch" or "unverified"
+  sources         — distinct sources used, with per-source evidence counts
+  triage          — TriageResult dict (P2-T7): tier, reason, critical_signals
+  explainability  — ExplainabilityPayload dict (P2-T7): per-layer signals +
+                    evidence attribution + source coverage
 
 Section statuses:
   pending     — no data yet for this section
@@ -79,12 +82,14 @@ def _build_summary(
 ) -> dict:
     """Build the denormalized summary dict stored on the Report row.
 
-    This is what the API serializes for consumers.  Structure:
+    This is what the API serializes for consumers.  Structure (P2-T7 extended):
     {
       "scores": {...} | None,
       "evidence": [...],
       "mismatches": [...],
-      "sources": {...}
+      "sources": {...},
+      "triage": {...} | None,          # TriageResult (P2-T7)
+      "explainability": {...} | None   # ExplainabilityPayload (P2-T7)
     }
     """
     # Scores section
@@ -142,12 +147,104 @@ def _build_summary(
             }
         sources[ev.source]["evidence_count"] += 1
 
+    # Triage section (P2-T7) — TriageResult derived from assessment signals
+    triage: dict | None = None
+    explainability: dict | None = None
+
+    if assessment is not None:
+        # Re-derive triage + explainability from the persisted assessment data.
+        # We reconstruct lightweight objects rather than re-running the full engine.
+        triage = _derive_triage_from_assessment(assessment)
+        explainability = _build_explainability_from_assessment(
+            assessment, evidence_rows, field_comparisons
+        )
+
     return {
         "scores": scores,
         "evidence": evidence_summary,
         "mismatches": mismatches,
         "sources": list(sources.values()),
+        "triage": triage,
+        "explainability": explainability,
     }
+
+
+def _derive_triage_from_assessment(assessment) -> dict:
+    """Derive a TriageResult dict from a persisted RiskAssessment.
+
+    Reconstructs a ScoringResult-like object from the persisted JSON fields
+    and delegates to triage.derive_triage().
+    """
+    from app.scoring.engine import ScoringResult, Signal  # noqa: PLC0415
+    from app.scoring.triage import derive_triage  # noqa: PLC0415
+
+    signals = [
+        Signal(
+            name=s.get("name", ""),
+            layer=s.get("layer", "entity"),
+            direction=s.get("direction", "elevated"),
+            weight=s.get("weight", 0.0),
+            description=s.get("description", ""),
+            evidence_ids=s.get("evidence_ids", []),
+        )
+        for s in (assessment.contributing_signals or [])
+    ]
+
+    pseudo_result = ScoringResult(
+        entity_score=assessment.entity_score or 50.0,
+        infrastructure_score=assessment.infrastructure_score or 50.0,
+        representation_score=assessment.representation_score or 50.0,
+        risk_score=assessment.risk_score or 50.0,
+        overall_score=assessment.overall_score or 50.0,
+        triage_tier=assessment.triage_tier or "review",
+        contributing_signals=signals,
+        confidence=0.0,  # confidence not stored; only tier matters here
+    )
+
+    return derive_triage(pseudo_result).to_dict()
+
+
+def _build_explainability_from_assessment(
+    assessment, evidence_rows: list, field_comparisons: list
+) -> dict:
+    """Build an ExplainabilityPayload dict from a persisted RiskAssessment.
+
+    Reconstructs Signal objects from the persisted JSON and delegates to
+    explain.build_explainability().
+    """
+    from app.scoring.engine import ScoringResult, Signal  # noqa: PLC0415
+    from app.scoring.explain import build_explainability  # noqa: PLC0415
+
+    signals = [
+        Signal(
+            name=s.get("name", ""),
+            layer=s.get("layer", "entity"),
+            direction=s.get("direction", "elevated"),
+            weight=s.get("weight", 0.0),
+            description=s.get("description", ""),
+            evidence_ids=s.get("evidence_ids", []),
+        )
+        for s in (assessment.contributing_signals or [])
+    ]
+
+    # Estimate confidence from evidence tier coverage (same formula as engine)
+    tiers_present = {e.tier for e in evidence_rows if e.tier in (1, 2, 3)}
+    confidence = len(tiers_present) / 3.0 if tiers_present else 0.0
+
+    pseudo_result = ScoringResult(
+        entity_score=assessment.entity_score or 50.0,
+        infrastructure_score=assessment.infrastructure_score or 50.0,
+        representation_score=assessment.representation_score or 50.0,
+        risk_score=assessment.risk_score or 50.0,
+        overall_score=assessment.overall_score or 50.0,
+        triage_tier=assessment.triage_tier or "review",
+        contributing_signals=signals,
+        confidence=confidence,
+    )
+
+    return build_explainability(
+        pseudo_result, evidence_rows, field_comparisons
+    ).to_dict()
 
 
 def assemble_report(run_id: str, db: "Session") -> None:

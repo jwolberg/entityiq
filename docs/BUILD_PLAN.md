@@ -59,7 +59,7 @@
 ## Current Status
 - Overall status: In Progress
 - Current phase: Phase 2 — Deepen the Tracks
-- Current ticket: P2-T7 — Explainability + triage tiers
+- Current ticket: P2-T8 — Detail view completeness
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
   core schema runnable (SQLite-verified; Postgres verification pending P1-T1 setup).
@@ -272,7 +272,7 @@ _Track: Risk scoring & explainability_
   - Objective: per-score evidence + attribution + contributing signals; triage tier
     (pre-clear low-risk vs escalate) feeding the operator queue.
   - Depends on: P2-T6 · AC: PRD § Explainability Requirements; STRATEGY § Our
-    approach (triage) + § Key metrics (triage precision/recall) · Status: Todo
+    approach (triage) + § Key metrics (triage precision/recall) · Status: Complete (2026-05-27) — triage.py + explain.py; triage + explainability in report summary; 356 tests pass; no auto-approval.
 
 _Track: Operator workbench_
 - P2-T8 — Detail view completeness

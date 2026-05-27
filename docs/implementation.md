@@ -1,134 +1,129 @@
 # Implementation
 
 ## Scope Implemented
-- Requested scope: P2-T3, P2-T4, P2-T5
+- Requested scope: P2-T6, P2-T7
 - Related phase: Phase 2 — Deepen the Tracks
-- Related ticket(s): P2-T3, P2-T4, P2-T5
+- Related ticket(s): P2-T6 (Full four-layer scoring + signal catalog), P2-T7 (Explainability + triage tiers)
 
 ## Approach
 
-### P2-T3 — Sanctions/Watchlist Screening (Tier-1)
-- Implemented OFAC SDN list screening in `backend/app/adapters/sanctions.py`.
-- Injectable `SdnListFetcher` protocol; tests use a small deterministic CSV fixture.
-- Name matching: exact after lowercase normalization + legal-suffix stripping (Ltd, Inc, LLC, Corp, GmbH, etc.).
-- On hit: emits `sanctions_hit` + `sanctions_risk_flag` evidence (confidence 0.95, tier=1).
-- On clean: emits `sanctions_screened` evidence (confidence 1.0).
-- On unavailable: `AdapterFailure(kind="unavailable")` — run continues.
-- `SanctionsScreeningStage` registered after `query_registries` in `default_stages()`.
-- **Government registries deferred** — Open Decision #5 (per-country licensing/variance) unresolved.
+### P2-T6
+- `signals.py` contains the full PRD signal catalog for all four scoring layers, called lazily from `engine.py` to avoid circular imports.
+- `engine.py` updated to delegate each layer function to `signals.py` and to accept optional `run_id`+`db` parameters for cross-submission IP/ASN reuse detection (deferred from P2-T2).
+- `_cross_submission_reuse_signals()` in `signals.py` queries Evidence rows from other runs sharing the same ASN — 1 hit → `ip_asn_reuse` (w=0.3); ≥3 hits → `ip_asn_reuse_high` (w=0.6).
+- Absence signals (`no_registry_evidence`, etc.) have `evidence_ids=[]` by design — they document missing sources, not findings.
+- Scoring is advisory only: `ScoringResult` has no `decision`/`approved`/`rejected` attribute.
 
-### P2-T4 — Public Web Evidence (Tier-3)
-- Implemented in `backend/app/adapters/web.py`.
-- `WebAdapter` fetches the company domain (httpx); extracts brand, emails, phones, addresses, footprint.
-- `_PlaywrightFetcher` exists but is lazy-imported inside `__init__` only — never at module level.
-- Tests inject `FakeWebFetcher` (returns canned HTML); no network, no browser in tests.
-- Evidence: `web_brand`, `web_contacts_email`, `web_contacts_phone`, `web_contacts_address`, `web_employee_footprint` / `web_thin_footprint`. All tier=3 with source attribution.
-- `WebEvidenceStage` registered after `enrich_network_ip`, before `consistency_checks`.
-
-### P2-T5 — Adapter Robustness
-- `backend/app/adapters/cache.py`: `AdapterCache` (thread-safe, per-source TTL, FIFO eviction at max_size). `CachedAdapter` wrapper is transparent to callers.
-- `backend/app/adapters/ratelimit.py`: `RateLimiter` (token bucket per source, jittered exponential backoff). `RateLimitedAdapter` wrapper. `SourceAvailabilityTracker` records available/unavailable per source per run.
-- No Redis dependency — in-process stdlib only.
+### P2-T7
+- `triage.py` derives `TriageResult` (tier, reason, critical_signals, advisory_note) from `ScoringResult`. Two paths: (1) critical-signal override (sanctions/ASN-reuse-high → always escalate); (2) score-threshold path.
+- `explain.py` builds `ExplainabilityPayload` with per-layer `LayerExplanation` (score + signals + sources), `MismatchDetail` list, and `source_coverage` map.
+- `report.py` extended: `_build_summary()` adds `triage` and `explainability` top-level keys to the report summary JSON, reconstructing Signal objects from persisted `RiskAssessment.contributing_signals` without re-running the engine.
 
 ### Key decisions
-- Gov registries are deferred per Open Decision #5 (documented in implementation-notes).
-- Playwright is lazy-imported inside `_PlaywrightFetcher.__init__` only; `playwright` is not added to pyproject.toml since tests use fakes.
-- Cache key defaults to `company_name|domain` (lowercased). Custom key functions are injectable.
-- Rate limiter blocks with jittered backoff up to `max_wait_seconds`, then returns `AdapterFailure(rate_limited)`.
+- Lazy imports in `engine.py` layer helpers prevent the `signals.py` → `engine.Signal` → `signals.py` circular import.
+- `report.py` derives triage/explainability from the persisted `RiskAssessment` data rather than re-scoring, keeping `StoreReportStage` idempotent.
+- `TriageResult.advisory_note` is always set on every result; tests assert its presence.
+- No new endpoints or UI changes — downstream FE/API reads the new fields from the existing `GET /reports/{run_id}` summary.
 
 ---
 
 ## Implementation Plan
 
-1. Read base adapter + orchestrator + existing adapter patterns.
-2. P2-T3: Write `sanctions.py` with injectable fetcher + `SanctionsScreeningStage`. Update orchestrator. Write 25 tests.
-3. P2-T4: Write `web.py` with httpx fetcher, lazy Playwright, HTML extractors, `WebEvidenceStage`. Write 29 tests including playwright isolation check.
-4. P2-T5: Write `cache.py` (AdapterCache + CachedAdapter) and `ratelimit.py` (RateLimiter + RateLimitedAdapter + SourceAvailabilityTracker). Write 31 tests.
-5. Run full gate before each commit.
+### P2-T6 (committed first)
+1. Add `backend/app/scoring/signals.py` — full PRD signal catalog
+2. Modify `backend/app/scoring/engine.py` — delegate to signals.py, add run_id/db params
+3. Add `backend/tests/scoring/test_signals.py` — 30 new tests
+4. Update docs, commit
+
+### P2-T7
+1. Add `backend/app/scoring/triage.py` — TriageResult + derive_triage()
+2. Add `backend/app/scoring/explain.py` — ExplainabilityPayload + build_explainability()
+3. Modify `backend/app/scoring/report.py` — include triage + explainability in summary
+4. Add `backend/tests/scoring/test_triage.py` — 24 new tests
+5. Update docs, commit
 
 ---
 
 ## Code Changes
 
-### File: backend/app/adapters/sanctions.py
-- New file: OFAC SDN adapter with injectable fetcher, name normalization, evidence emission.
-- `SanctionsScreeningStage` pipeline wrapper.
+### File: `backend/app/scoring/signals.py` (new)
+- Full PRD signal catalog for all four layers.
+- `entity_legitimacy_signals()`, `infrastructure_legitimacy_signals()`, `representation_confidence_signals()`, `fraud_staging_risk_signals()`.
+- `_cross_submission_reuse_signals()` for cross-submission IP/ASN reuse detection.
 
-### File: backend/app/adapters/web.py
-- New file: Tier-3 web evidence adapter. `WebAdapter` + `WebEvidenceStage`. Playwright lazy-imported only inside `_PlaywrightFetcher.__init__`.
+### File: `backend/app/scoring/engine.py` (modified)
+- Docstring updated to document P2-T6 changes.
+- Layer helper functions now delegate to `signals.py` via lazy imports.
+- `ScoringEngine.score()` accepts optional `run_id` + `db` parameters.
 
-### File: backend/app/adapters/cache.py
-- New file: `AdapterCache` (thread-safe, per-source TTL, FIFO eviction). `CachedAdapter` wrapper.
+### File: `backend/app/scoring/triage.py` (new)
+- `TriageResult` dataclass: tier, reason, critical_signals, advisory_note.
+- `derive_triage(result: ScoringResult) -> TriageResult`.
+- Critical signal set: `sanctions_hit`, `sanctions_hit_fraud_flag`, `ip_asn_reuse_high`.
 
-### File: backend/app/adapters/ratelimit.py
-- New file: `RateLimiter` (token bucket + backoff). `RateLimitedAdapter` wrapper. `SourceAvailabilityTracker`.
+### File: `backend/app/scoring/explain.py` (new)
+- `ExplainabilityPayload`, `LayerExplanation`, `SignalDetail`, `MismatchDetail` dataclasses.
+- `build_explainability(result, evidence_rows, field_comparisons) -> ExplainabilityPayload`.
 
-### File: backend/app/pipeline/orchestrator.py
-- Updated `default_stages()` to include `SanctionsScreeningStage` (after `query_registries`) and `WebEvidenceStage` (after `enrich_network_ip`).
+### File: `backend/app/scoring/report.py` (modified)
+- `_build_summary()` adds `triage` and `explainability` keys to the summary dict.
+- `_derive_triage_from_assessment()` and `_build_explainability_from_assessment()` reconstruct from persisted JSON.
 
-### File: backend/tests/adapters/test_sanctions.py
-- New file: 25 tests for SanctionsAdapter and SanctionsScreeningStage.
+### File: `backend/tests/scoring/test_signals.py` (new, P2-T6)
+- 30 tests: clean entity, sanctions hit, registry mismatch, fraud stack, confidence, IP/ASN reuse, IP country mismatch, trust catalog, no-orphan integration.
 
-### File: backend/tests/adapters/test_web.py
-- New file: 29 tests for WebAdapter and WebEvidenceStage (including Playwright isolation check).
-
-### File: backend/tests/adapters/test_cache.py
-- New file: cache hit/miss/TTL/eviction/capacity tests + CachedAdapter.
-
-### File: backend/tests/adapters/test_ratelimit.py
-- New file: rate limiter backoff/exhaustion, RateLimitedAdapter, SourceAvailabilityTracker tests.
-
-### File: docs/implementation-notes.md
-- Appended entries for P2-T3, P2-T4, P2-T5.
-
-### File: docs/BUILD_PLAN.md
-- Updated P2-T3/T4/T5 statuses to Complete; current ticket updated to P2-T6.
+### File: `backend/tests/scoring/test_triage.py` (new, P2-T7)
+- 24 tests: pre_clear with full explanation, sanctions escalate, mismatch escalate, no auto-approval invariant, explainability payload integrity, report summary inclusion.
 
 ---
 
 ## Acceptance Criteria Mapping
 
-- **PRD § Tier 1 (sanctions/registries)**: SanctionsAdapter screens against OFAC SDN. Gov registries deferred (Open Decision #5).
-- **PRD § Tier 3 (public web)**: WebAdapter fetches domain, extracts contacts + branding + footprint.
-- **PRD § FE § Contact Information**: web_contacts_email / phone / address emitted with attribution.
-- **ARCHITECTURE § 4 (adapter contract)**: All adapters return typed AdapterResult; never raise. CachedAdapter + RateLimitedAdapter are transparent wrappers. SourceAvailabilityTracker records coverage.
-- **ARCHITECTURE § 4 (caching)**: AdapterCache keyed by (source, lookup_key) with per-source TTL.
-- **ARCHITECTURE § 4 (rate limiting)**: RateLimiter token bucket with backoff per source.
-- **ARCHITECTURE § 4 (graceful degradation)**: Unavailable sources yield AdapterFailure, not failed runs.
+- PRD § Core Verification Philosophy (four layers): All four layer scores computed with full signal catalog.
+- PRD § Risk Signals (elevated + trust): Full catalog in `signals.py` covering all PRD-listed signals.
+- PRD § Risk Scoring (overall 0-100 + confidence breakdown): `ScoringEngine` produces overall + four layer scores + confidence.
+- PRD § Explainability Requirements (evidence, source attribution, contributing signals, mismatches): `ExplainabilityPayload` surfaces all four.
+- PRD § Non-Goals (no auto-approval): `TriageResult` has no approval state; advisory_note always present; tests assert invariant.
+- STRATEGY § Our approach (triage): `pre_clear`/`review`/`escalate` tiers feed the operator queue.
+- ARCHITECTURE § 3 (`risk_assessment` + `risk_assessment_evidence`): All signal evidence_ids reference valid evidence rows; no orphan signals.
 
 ---
 
 ## Build Plan Mapping
 
-- **P2-T3**: Complete (2026-05-27) — OFAC SDN sanctions screening; gov registries deferred.
-- **P2-T4**: Complete (2026-05-27) — Web evidence adapter + 29 offline tests.
-- **P2-T5**: Complete (2026-05-27) — Cache + rate limiter + availability tracker + 31 offline tests.
+- Ticket: P2-T6
+  - Status: Complete (2026-05-27)
+  - What was completed: signals.py with full PRD catalog; engine.py delegates + cross-submission reuse; test_signals.py; 332 tests pass.
+  - Remaining: none
+
+- Ticket: P2-T7
+  - Status: Complete (2026-05-27)
+  - What was completed: triage.py + explain.py; report.py updated; test_triage.py; 356 tests pass.
+  - Remaining: none
 
 ---
 
 ## Validation
 
-- `.venv/bin/ruff check .` — All checks passed
-- `.venv/bin/ruff format --check .` — 76 files already formatted
-- `.venv/bin/pytest -q` — **302 passed** (217 existing + 25 P2-T3 + 29 P2-T4 + 31 P2-T5)
-- No browser installed; `playwright` not imported at module level (verified by `test_playwright_not_imported_at_module_level`).
+- `backend/.venv/bin/ruff check .` → All checks passed!
+- `backend/.venv/bin/ruff format --check .` → 81 files already formatted
+- `backend/.venv/bin/pytest -q` → 356 passed in 7.75s
 
 ---
 
 ## Open Issues
 
-- **Gov registries (P2-T3 partial)**: Open Decision #5 blocks per-country registry adapters. Deferred explicitly.
-- **Playwright as optional dep**: Not added to pyproject.toml. A future ticket should add `playwright` as an optional dep and document the `playwright install chromium` step for production.
-- **Cache not applied to existing adapters in default_stages()**: The wrappers exist but are not yet wired into `default_stages()`. Wiring them requires the P2-T6 scoring integration (which reads `SourceAvailabilityTracker`) to be in place first.
-- **IPINFO_TOKEN production plan**: Unresolved (same class as Open Decision #5). Free tier operational.
+- IPINFO_TOKEN (free tier in use; paid plan unresolved — same class as Open Decision #5).
+- OpenCorporates production licensing (Open Decision #5) still unresolved; adapter has warning in docstring.
+- No new API endpoints expose triage/explainability directly — downstream FE (P2-T8) and API (P2-T11) consume from `report.summary`.
 
 ---
 
 ## BUILD_PLAN Update
 
 - Current phase: Phase 2 — Deepen the Tracks
-- Current ticket: P2-T6 — Full four-layer scoring + signal catalog
-- P2-T3 status: Complete
-- P2-T4 status: Complete
-- P2-T5 status: Complete
-- Recommended next: P2-T6
+- Current ticket: P2-T8 — Detail view completeness
+- P2-T6: Complete (2026-05-27)
+- P2-T7: Complete (2026-05-27)
+- Blockers: Open Decision #5, IPINFO_TOKEN (both pre-existing; unblocked for P2-T8)
+- Recommended next ticket: P2-T8 — Detail view completeness

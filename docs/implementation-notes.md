@@ -2,6 +2,38 @@
 
 ---
 
+## 2026-05-27 — P2-T7: Explainability payload + triage tiers
+
+**`triage.py` derives `TriageResult` from `ScoringResult` — NEVER auto-approves.**
+`derive_triage()` has two paths: (1) critical-signal override — `sanctions_hit`,
+`sanctions_hit_fraud_flag`, or `ip_asn_reuse_high` force `escalate` regardless of
+score; (2) score-threshold path using the thresholds imported from `engine.py`
+(`TRIAGE_PRE_CLEAR_MAX=30`, `TRIAGE_ESCALATE_MIN=70`).  `TriageResult.advisory_note`
+is always set and explicitly states human approval is required.  `TriageResult` has
+no `decision`, `approved`, or `rejected` attribute.
+
+**`explain.py` builds `ExplainabilityPayload` from `ScoringResult` + evidence rows.**
+The payload has a `LayerExplanation` per layer (entity, infrastructure, representation,
+risk), each listing `SignalDetail` objects with `evidence_ids` and the distinct
+`sources` that contributed evidence to that layer's signals.  `MismatchDetail` list
+includes all field comparisons (match, mismatch, unverified).  `source_coverage` maps
+source → `{tier, evidence_count}`.
+
+**`report.py` extended to include `triage` + `explainability` in the summary JSON.**
+`_build_summary()` adds two new top-level keys: `triage` (TriageResult dict) and
+`explainability` (ExplainabilityPayload dict).  Both are derived from the persisted
+`RiskAssessment.contributing_signals` JSON by reconstructing lightweight `Signal`
+objects — no re-run of the full scoring engine.  This keeps the report assembly
+idempotent and fast.
+
+**Downstream FE/API can read triage tier + explainability from report summary.**
+No new endpoints or UI changes are made (P2-T8/T11 scope); the data is in the
+existing `GET /reports/{run_id}` `summary` field.
+
+**356 tests pass** (332 post-P2-T6 + 24 new triage tests).
+
+---
+
 ## 2026-05-27 — P2-T6: Full four-layer scoring + signal catalog
 
 **Full PRD signal catalog in `signals.py`, engine delegates layer functions.**
