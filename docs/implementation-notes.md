@@ -2,6 +2,62 @@
 
 ---
 
+## 2026-05-27 — P2-T2: Network/IP intelligence enrichment
+
+**Production IPINFO_TOKEN is unresolved — free tier is the default.** The
+`IPInfoAdapter` reads `IPINFO_TOKEN` from the environment; if absent it uses
+the anonymous free tier (no API key).  The free tier has strict rate limits and
+omits the `privacy` sub-object (hosting/VPN/proxy flags).  A free-tier fallback
+uses org-name keyword matching for datacenter detection at 0.70 confidence (vs
+0.85–0.95 for explicit privacy flags).  Production deployment should set
+`IPINFO_TOKEN`; obtaining a paid plan is the same class of open decision as
+Open Decision #5.  This is documented in the module docstring.
+
+**`source_ip` added to `context["normalized"]` by `NormalizeInputStage`.**
+The IPinfo stage reads `source_ip` from the pipeline context (not from a second
+DB query).  The normalize stage already reads the `Submission` row — adding
+`source_ip` there is zero cost and avoids a second DB hit in the IPinfo stage.
+This is a minimal addition to the normalize contract; no existing tests broke.
+
+**ASN reuse detection is a scoring/consistency concern, not an adapter concern.**
+The adapter emits `ip_asn` evidence on every enriched run.  Cross-submission
+reuse patterns (e.g. repeated registrations from the same ASN) are a P2-T6
+scoring signal, not something a single-run adapter can determine.  The test
+documents this via `test_asn_evidence_is_emitted_for_reuse_detection`.
+
+**`ip_suspicious_asn` flag requires both keyword match AND anonymized=True.**
+Emitting a suspicious-ASN flag purely from org-name keywords (e.g. "Google
+LLC") would produce false positives for residential ISPs with cloud subsidiaries.
+The flag is gated on `anonymized` also being True — conservative by design.
+
+---
+
+## 2026-05-27 — P2-T1: Entity candidate resolution stage
+
+**Single candidate from submission itself for MVP.** `_build_candidates` returns
+one candidate synthesised from the submitted name + domain.  The conflict-
+detection path (two candidates within the gap) is exercised by patching
+`_score_and_rank` in tests, demonstrating the logic is wired correctly for
+when P2-T3 injects additional registry candidates.
+
+**Conflict detection patches `_score_and_rank`, not `_build_candidates`.**
+Tests that verify the conflict window patch `_score_and_rank` (the output of
+scoring) rather than `_build_candidates` (the raw input list).  This is because
+`_score_and_rank` re-scores every raw candidate — injecting pre-scored candidates
+via `_build_candidates` had no effect on the final scores.  Patching at the
+correct boundary (the ranked output) tests the actual logic.
+
+**No Evidence rows are persisted by this stage.** Candidate resolution is an
+intermediate pipeline computation, not a source-attributable finding.
+Evidence for the `conflict_signal` risk factor will be produced by the scoring
+stage (P2-T6) which has the full picture of all stage outputs.
+
+**Stage is deterministic and fully offline.** No network I/O, no DB writes —
+only reads from `context["normalized"]`.  This means the stage never degrades
+the run and never writes to `source_availability` as "unavailable".
+
+---
+
 ## 2026-05-26 — P1-T10: Operator app — list + detail + mark reviewed
 
 **Added `GET /reports/` list endpoint to backend** (not present in P1-T8).  The

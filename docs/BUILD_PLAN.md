@@ -59,7 +59,7 @@
 ## Current Status
 - Overall status: In Progress
 - Current phase: Phase 2 — Deepen the Tracks
-- Current ticket: P2-T1 — Entity candidate resolution (pipeline stage 2)
+- Current ticket: P2-T3 — Additional Tier-1 sources (gov registries, sanctions/watchlist)
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
   core schema runnable (SQLite-verified; Postgres verification pending P1-T1 setup).
@@ -68,7 +68,9 @@
   submitted-vs-discovered fields, and mark it reviewed.
 - Blockers: Open Decision #5 (data-source licensing for OpenCorporates) remains
   UNRESOLVED. Production use of the OpenCorporates adapter requires a license
-  agreement. #4/#7 deferred to their tickets.
+  agreement. Open Decision on IPINFO_TOKEN (production paid plan for full
+  privacy/VPN/proxy flags) is unresolved — free tier is operational. #4/#7
+  deferred to their tickets.
 
 ---
 
@@ -246,12 +248,12 @@
 
 _Track: Evidence & enrichment pipeline_
 - P2-T1 — Entity candidate resolution (pipeline stage 2)
-  - Depends on: P1-T3 · AC: ARCHITECTURE § 2 stage 2; PRD pipeline stage 2 · Status: Todo
+  - Depends on: P1-T3 · AC: ARCHITECTURE § 2 stage 2; PRD pipeline stage 2 · Status: Complete (2026-05-27)
 - P2-T2 — Network/IP intelligence enrichment (IPinfo)
   - Objective: enrich submission IP → geo, ASN/ISP, org, hosting/VPN/proxy,
     distance/mismatch, reuse patterns; emit risk flags.
   - Depends on: P1-T2 · AC: PRD § Network & IP Intelligence (report + flags);
-    ARCHITECTURE § 2 stage 5 · Status: Todo
+    ARCHITECTURE § 2 stage 5 · Status: Complete (2026-05-27)
 - P2-T3 — Additional Tier-1 sources (gov registries, sanctions/watchlist)
   - Depends on: P1-T4; **Open decision #5** · AC: PRD § Tier 1 (sanctions/registries) · Status: Todo
 - P2-T4 — Tier-3 public web evidence (Playwright fallback)
@@ -352,15 +354,14 @@ _Track: Integration & reporting API_
 31. P3-T5
 
 ## Recommended Next Step
-- Start with: **P2-T1 — Entity candidate resolution (pipeline stage 2)**
-- Why this is next: Phase 1 (MVP vertical slice) is complete — a submission flows
-  through the pipeline (normalize → registries → domain → consistency → score) to a
-  stored, viewable report an operator can sign in to review and mark reviewed. Phase
-  2 deepens the tracks; P2-T1 adds the entity-candidate resolution stage that was
-  deferred in Phase 1, disambiguating registry lookups and unblocking fuller
-  evidence coverage (P2-T2 IP intel, P2-T3 more Tier-1 sources, P2-T4 public web).
-- Note: Open Decision #5 (OpenCorporates licensing) still blocks *production* use of
-  the Tier-1 adapter; resolve before relying on it beyond the public API.
+- Start with: **P2-T3 — Additional Tier-1 sources (gov registries, sanctions/watchlist)**
+- Why this is next: P2-T1 and P2-T2 are complete.  P2-T3 extends the Tier-1
+  evidence coverage with government registries and sanctions/watchlist lookups.
+  Blocked on Open Decision #5 (data-source licensing) for production use; can
+  be scoped as stub/injectable adapters following the OpenCorporates pattern.
+- Note: Open Decision #5 (OpenCorporates + additional Tier-1 licensing) still
+  blocks *production* use of Tier-1 adapters; resolve before enabling live queries.
+  IPINFO_TOKEN production plan is also unresolved; free tier is operational.
 
 ## Deferred / Out of Scope
 - **Auto-approval / full automation of compliance decisions** — PRD § Non-Goals
