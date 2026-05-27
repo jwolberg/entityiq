@@ -59,7 +59,7 @@
 ## Current Status
 - Overall status: In Progress
 - Current phase: Phase 2 — Deepen the Tracks
-- Current ticket: P2-T3 — Additional Tier-1 sources (gov registries, sanctions/watchlist)
+- Current ticket: P2-T6 — Full four-layer scoring + signal catalog
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
   core schema runnable (SQLite-verified; Postgres verification pending P1-T1 setup).
@@ -255,12 +255,12 @@ _Track: Evidence & enrichment pipeline_
   - Depends on: P1-T2 · AC: PRD § Network & IP Intelligence (report + flags);
     ARCHITECTURE § 2 stage 5 · Status: Complete (2026-05-27)
 - P2-T3 — Additional Tier-1 sources (gov registries, sanctions/watchlist)
-  - Depends on: P1-T4; **Open decision #5** · AC: PRD § Tier 1 (sanctions/registries) · Status: Todo
+  - Depends on: P1-T4; **Open decision #5** · AC: PRD § Tier 1 (sanctions/registries) · Status: Complete (2026-05-27) — OFAC SDN screening implemented; gov registries deferred per Open Decision #5.
 - P2-T4 — Tier-3 public web evidence (Playwright fallback)
   - Objective: site, contacts, directories, press footprint; contact extraction.
-  - Depends on: P1-T3 · AC: PRD § Tier 3; § FE § Contact Information · Status: Todo
+  - Depends on: P1-T3 · AC: PRD § Tier 3; § FE § Contact Information · Status: Complete (2026-05-27) — httpx fetcher + lazy Playwright; contacts (email/phone/address) + branding + footprint signals.
 - P2-T5 — Adapter robustness: caching, rate-limiting, typed failures, degradation
-  - Depends on: P1-T4 · AC: ARCHITECTURE § 4 · Status: Todo
+  - Depends on: P1-T4 · AC: ARCHITECTURE § 4 · Status: Complete (2026-05-27) — AdapterCache (per-source TTL, FIFO eviction), RateLimiter (token bucket + backoff), SourceAvailabilityTracker, CachedAdapter + RateLimitedAdapter wrappers.
 
 _Track: Risk scoring & explainability_
 - P2-T6 — Full four-layer scoring + signal catalog
@@ -354,14 +354,16 @@ _Track: Integration & reporting API_
 31. P3-T5
 
 ## Recommended Next Step
-- Start with: **P2-T3 — Additional Tier-1 sources (gov registries, sanctions/watchlist)**
-- Why this is next: P2-T1 and P2-T2 are complete.  P2-T3 extends the Tier-1
-  evidence coverage with government registries and sanctions/watchlist lookups.
-  Blocked on Open Decision #5 (data-source licensing) for production use; can
-  be scoped as stub/injectable adapters following the OpenCorporates pattern.
+- Start with: **P2-T6 — Full four-layer scoring + signal catalog**
+- Why this is next: P2-T3, P2-T4, P2-T5 are complete.  The new sanctions,
+  web, caching, and rate-limiting layers have added signals and a
+  SourceAvailabilityTracker that the scoring engine needs to consume.  P2-T6
+  adds the full entity/infrastructure/representation/risk layer weights and
+  the per-signal catalog, consuming the new evidence types.
 - Note: Open Decision #5 (OpenCorporates + additional Tier-1 licensing) still
   blocks *production* use of Tier-1 adapters; resolve before enabling live queries.
   IPINFO_TOKEN production plan is also unresolved; free tier is operational.
+  Gov registries deferred (part of P2-T3) pending Open Decision #5 resolution.
 
 ## Deferred / Out of Scope
 - **Auto-approval / full automation of compliance decisions** — PRD § Non-Goals

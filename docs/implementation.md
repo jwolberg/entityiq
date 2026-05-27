@@ -1,145 +1,134 @@
 # Implementation
 
 ## Scope Implemented
-- Requested scope: P2-T1 and P2-T2
+- Requested scope: P2-T3, P2-T4, P2-T5
 - Related phase: Phase 2 — Deepen the Tracks
-- Related ticket(s): P2-T1 (entity candidate resolution), P2-T2 (network/IP intelligence enrichment)
+- Related ticket(s): P2-T3, P2-T4, P2-T5
 
 ## Approach
 
-### P2-T1 — Entity candidate resolution
-- Deterministic, offline pipeline stage inserted between NormalizeInputStage and QueryRegistriesStage.
-- Scores candidates by name-token overlap (0.6 weight) + domain match (0.4 weight).
-- Synthesises one candidate from the submitted name + domain for MVP; designed for extension when P2-T3 injects additional registry candidates.
-- Conflict detection: if the top two candidates are within 0.05 of each other and the top is below 0.85, `conflict_signal=True` is emitted (PRD "multiple conflicting company identities" risk signal).
+### P2-T3 — Sanctions/Watchlist Screening (Tier-1)
+- Implemented OFAC SDN list screening in `backend/app/adapters/sanctions.py`.
+- Injectable `SdnListFetcher` protocol; tests use a small deterministic CSV fixture.
+- Name matching: exact after lowercase normalization + legal-suffix stripping (Ltd, Inc, LLC, Corp, GmbH, etc.).
+- On hit: emits `sanctions_hit` + `sanctions_risk_flag` evidence (confidence 0.95, tier=1).
+- On clean: emits `sanctions_screened` evidence (confidence 1.0).
+- On unavailable: `AdapterFailure(kind="unavailable")` — run continues.
+- `SanctionsScreeningStage` registered after `query_registries` in `default_stages()`.
+- **Government registries deferred** — Open Decision #5 (per-country licensing/variance) unresolved.
 
-### P2-T2 — Network/IP intelligence enrichment
-- IPInfoAdapter wraps ipinfo.io with an injectable HTTP client (same pattern as OpenCorporates and Domain adapters).
-- Emits all PRD-specified report fields: ip_country/region/city, ip_asn/isp, ip_organization, ip_hosting/vpn/proxy, ip_country_match/mismatch.
-- Emits PRD risk flags: ip_country_mismatch, ip_anonymized_network, ip_suspicious_asn.
-- Free-tier fallback: when the `privacy` sub-object is absent (free plan), keyword matching on org name detects datacenter/cloud ASNs at 0.70 confidence.
-- IPINFO_TOKEN read from environment — not hard-coded. No token = anonymous free tier.
+### P2-T4 — Public Web Evidence (Tier-3)
+- Implemented in `backend/app/adapters/web.py`.
+- `WebAdapter` fetches the company domain (httpx); extracts brand, emails, phones, addresses, footprint.
+- `_PlaywrightFetcher` exists but is lazy-imported inside `__init__` only — never at module level.
+- Tests inject `FakeWebFetcher` (returns canned HTML); no network, no browser in tests.
+- Evidence: `web_brand`, `web_contacts_email`, `web_contacts_phone`, `web_contacts_address`, `web_employee_footprint` / `web_thin_footprint`. All tier=3 with source attribution.
+- `WebEvidenceStage` registered after `enrich_network_ip`, before `consistency_checks`.
+
+### P2-T5 — Adapter Robustness
+- `backend/app/adapters/cache.py`: `AdapterCache` (thread-safe, per-source TTL, FIFO eviction at max_size). `CachedAdapter` wrapper is transparent to callers.
+- `backend/app/adapters/ratelimit.py`: `RateLimiter` (token bucket per source, jittered exponential backoff). `RateLimitedAdapter` wrapper. `SourceAvailabilityTracker` records available/unavailable per source per run.
+- No Redis dependency — in-process stdlib only.
 
 ### Key decisions
-- `source_ip` added to `context["normalized"]` by `NormalizeInputStage` (avoid a second DB query in EnrichNetworkIPStage).
-- Conflict-detection tests patch `_score_and_rank` (not `_build_candidates`) because the scoring function re-scores every raw candidate; the boundary that controls the conflict window is the ranked output.
-- No Evidence rows from ResolveEntityCandidatesStage — candidates are pipeline inputs, not source-attributable findings.
-- ASN reuse (repeated submissions from same IP/ASN) is a scoring/consistency concern (P2-T6) — the adapter emits the raw `ip_asn` field on every run.
+- Gov registries are deferred per Open Decision #5 (documented in implementation-notes).
+- Playwright is lazy-imported inside `_PlaywrightFetcher.__init__` only; `playwright` is not added to pyproject.toml since tests use fakes.
+- Cache key defaults to `company_name|domain` (lowercased). Custom key functions are injectable.
+- Rate limiter blocks with jittered backoff up to `max_wait_seconds`, then returns `AdapterFailure(rate_limited)`.
 
 ---
 
 ## Implementation Plan
 
-1. Read all source-of-truth docs and existing code.
-2. Create `backend/app/pipeline/resolve.py` with scoring helpers, `resolve_candidates()`, and `ResolveEntityCandidatesStage`.
-3. Update `NormalizeInputStage` to include `source_ip` in `context["normalized"]`.
-4. Update `orchestrator.default_stages()` to insert both new stages at correct positions.
-5. Write `backend/tests/pipeline/test_resolve.py` (22 offline tests).
-6. Create `backend/app/adapters/ipinfo.py` with `IPInfoAdapter` and `EnrichNetworkIPStage`.
-7. Write `backend/tests/adapters/test_ipinfo.py` (26 offline tests).
-8. Run full lint + format + test gate; fix issues.
-9. Commit P2-T1, then P2-T2 separately.
-10. Update docs.
+1. Read base adapter + orchestrator + existing adapter patterns.
+2. P2-T3: Write `sanctions.py` with injectable fetcher + `SanctionsScreeningStage`. Update orchestrator. Write 25 tests.
+3. P2-T4: Write `web.py` with httpx fetcher, lazy Playwright, HTML extractors, `WebEvidenceStage`. Write 29 tests including playwright isolation check.
+4. P2-T5: Write `cache.py` (AdapterCache + CachedAdapter) and `ratelimit.py` (RateLimiter + RateLimitedAdapter + SourceAvailabilityTracker). Write 31 tests.
+5. Run full gate before each commit.
 
 ---
 
 ## Code Changes
 
-### File: backend/app/pipeline/resolve.py (new)
-- Change summary: Entity candidate resolution stage (P2-T1). Scoring helpers `_name_score`, `_domain_score`, `_overall_score`; `_build_candidates` synthesises from submission; `_score_and_rank` filters/ranks; `resolve_candidates` runs conflict detection; `ResolveEntityCandidatesStage` wraps as pipeline stage.
+### File: backend/app/adapters/sanctions.py
+- New file: OFAC SDN adapter with injectable fetcher, name normalization, evidence emission.
+- `SanctionsScreeningStage` pipeline wrapper.
 
-### File: backend/app/pipeline/normalize.py (modified)
-- Change summary: Adds `source_ip` key to `context["normalized"]` so EnrichNetworkIPStage can read it without a second DB query.
+### File: backend/app/adapters/web.py
+- New file: Tier-3 web evidence adapter. `WebAdapter` + `WebEvidenceStage`. Playwright lazy-imported only inside `_PlaywrightFetcher.__init__`.
 
-### File: backend/app/pipeline/orchestrator.py (modified)
-- Change summary: Updated `default_stages()` to insert `ResolveEntityCandidatesStage` at position 2 and `EnrichNetworkIPStage` at position 5; updated docstring to reflect 8-stage order.
+### File: backend/app/adapters/cache.py
+- New file: `AdapterCache` (thread-safe, per-source TTL, FIFO eviction). `CachedAdapter` wrapper.
 
-### File: backend/tests/pipeline/test_resolve.py (new)
-- Change summary: 22 offline tests — scoring helpers, resolve_candidates core logic (single-match, no-match, ambiguous/conflict, strong-match no-conflict, large-gap no-conflict), and stage contract.
+### File: backend/app/adapters/ratelimit.py
+- New file: `RateLimiter` (token bucket + backoff). `RateLimitedAdapter` wrapper. `SourceAvailabilityTracker`.
 
-### File: backend/app/adapters/ipinfo.py (new)
-- Change summary: IPInfoAdapter + EnrichNetworkIPStage. Injectable HTTP client, free-tier keyword fallback, all PRD report fields + risk flags, IPINFO_TOKEN env var.
+### File: backend/app/pipeline/orchestrator.py
+- Updated `default_stages()` to include `SanctionsScreeningStage` (after `query_registries`) and `WebEvidenceStage` (after `enrich_network_ip`).
 
-### File: backend/tests/adapters/test_ipinfo.py (new)
-- Change summary: 26 offline tests — residential IP (no flags), datacenter/VPN (anonymized flag), country mismatch, ASN evidence, typed failures, evidence contract, stage persist + context pass-through.
+### File: backend/tests/adapters/test_sanctions.py
+- New file: 25 tests for SanctionsAdapter and SanctionsScreeningStage.
+
+### File: backend/tests/adapters/test_web.py
+- New file: 29 tests for WebAdapter and WebEvidenceStage (including Playwright isolation check).
+
+### File: backend/tests/adapters/test_cache.py
+- New file: cache hit/miss/TTL/eviction/capacity tests + CachedAdapter.
+
+### File: backend/tests/adapters/test_ratelimit.py
+- New file: rate limiter backoff/exhaustion, RateLimitedAdapter, SourceAvailabilityTracker tests.
+
+### File: docs/implementation-notes.md
+- Appended entries for P2-T3, P2-T4, P2-T5.
+
+### File: docs/BUILD_PLAN.md
+- Updated P2-T3/T4/T5 statuses to Complete; current ticket updated to P2-T6.
 
 ---
 
 ## Acceptance Criteria Mapping
 
-### P2-T1
-
-- Criterion: ARCHITECTURE § 2 stage 2 — resolve entity candidates before authoritative registry lookup.
-  Implementation: `ResolveEntityCandidatesStage` inserted at position 2 in `default_stages()`, before `QueryRegistriesStage`.
-  Files: `backend/app/pipeline/resolve.py`, `backend/app/pipeline/orchestrator.py`
-
-- Criterion: PRD § Risk Signals — "multiple conflicting company identities" is a risk signal.
-  Implementation: `conflict_signal=True` emitted when top-two candidates are within `_CONFLICT_GAP` and below `_STRONG_MATCH_THRESHOLD`.
-  Files: `backend/app/pipeline/resolve.py`
-
-- Criterion: Tests — clear name+domain → single high-confidence candidate; ambiguous → multiple candidates flagged; deterministic/offline.
-  Implementation: `test_single_clear_name_and_domain`, `test_ambiguous_input_sets_conflict_signal`, all tests use no DB or network.
-  Files: `backend/tests/pipeline/test_resolve.py`
-
-### P2-T2
-
-- Criterion: PRD § Network & IP Intelligence — IP country/region/city, ASN/ISP, organization, hosting/VPN/proxy, distance/mismatch, reuse patterns.
-  Implementation: `ip_country`, `ip_region`, `ip_city`, `ip_asn`, `ip_isp`, `ip_organization`, `ip_hosting`, `ip_vpn`, `ip_proxy`, `ip_country_match` evidence fields.
-  Files: `backend/app/adapters/ipinfo.py`
-
-- Criterion: PRD risk flags — IP-country mismatch, datacenter/anonymized, repeated IP/ASN, suspicious network ownership, unusual geography.
-  Implementation: `ip_country_mismatch`, `ip_anonymized_network`, `ip_suspicious_asn` emitted; `ip_asn` available for cross-submission reuse (P2-T6).
-  Files: `backend/app/adapters/ipinfo.py`
-
-- Criterion: Insert after AnalyzeDomainStage (stage 5).
-  Implementation: `EnrichNetworkIPStage` at position 5 in `default_stages()`.
-  Files: `backend/app/pipeline/orchestrator.py`
-
-- Criterion: HTTP client injectable; tests offline; no hard-coded token.
-  Implementation: `IPInfoAdapter(http_client=...)` constructor injection; IPINFO_TOKEN from env var.
-  Files: `backend/app/adapters/ipinfo.py`, `backend/tests/adapters/test_ipinfo.py`
-
-- Criterion: Provider unavailable → typed `unavailable` section, run continues.
-  Implementation: All errors return `AdapterFailure`; stage records `status=result.kind` and returns context (no raise).
-  Files: `backend/app/adapters/ipinfo.py`
+- **PRD § Tier 1 (sanctions/registries)**: SanctionsAdapter screens against OFAC SDN. Gov registries deferred (Open Decision #5).
+- **PRD § Tier 3 (public web)**: WebAdapter fetches domain, extracts contacts + branding + footprint.
+- **PRD § FE § Contact Information**: web_contacts_email / phone / address emitted with attribution.
+- **ARCHITECTURE § 4 (adapter contract)**: All adapters return typed AdapterResult; never raise. CachedAdapter + RateLimitedAdapter are transparent wrappers. SourceAvailabilityTracker records coverage.
+- **ARCHITECTURE § 4 (caching)**: AdapterCache keyed by (source, lookup_key) with per-source TTL.
+- **ARCHITECTURE § 4 (rate limiting)**: RateLimiter token bucket with backoff per source.
+- **ARCHITECTURE § 4 (graceful degradation)**: Unavailable sources yield AdapterFailure, not failed runs.
 
 ---
 
 ## Build Plan Mapping
 
-- Ticket: P2-T1 — Entity candidate resolution (pipeline stage 2)
-  Status: Complete
-  What was completed: resolve.py stage + tests; normalize.py source_ip; orchestrator stage insertion.
-  Remaining work: None. When P2-T3 adds registry results, additional candidates can be injected.
-
-- Ticket: P2-T2 — Network/IP intelligence enrichment (IPinfo)
-  Status: Complete
-  What was completed: ipinfo.py adapter + stage; test suite; orchestrator stage insertion.
-  Remaining work: Production IPINFO_TOKEN unresolved (free tier operational). Full privacy flags require paid plan. Cross-submission ASN reuse flag is P2-T6.
+- **P2-T3**: Complete (2026-05-27) — OFAC SDN sanctions screening; gov registries deferred.
+- **P2-T4**: Complete (2026-05-27) — Web evidence adapter + 29 offline tests.
+- **P2-T5**: Complete (2026-05-27) — Cache + rate limiter + availability tracker + 31 offline tests.
 
 ---
 
 ## Validation
 
-- `ruff check .` → All checks passed
-- `ruff format --check .` → 68 files already formatted
-- `pytest -q` → 217 passed in 5.11s (172 prior + 45 new; 22 in test_resolve.py + 26 in test_ipinfo.py = 48 new; 3 delta from module-scope DB fixture count)
+- `.venv/bin/ruff check .` — All checks passed
+- `.venv/bin/ruff format --check .` — 76 files already formatted
+- `.venv/bin/pytest -q` — **302 passed** (217 existing + 25 P2-T3 + 29 P2-T4 + 31 P2-T5)
+- No browser installed; `playwright` not imported at module level (verified by `test_playwright_not_imported_at_module_level`).
 
 ---
 
 ## Open Issues
 
-- IPINFO_TOKEN production plan is unresolved. Free tier: geo + org only; no explicit `privacy` sub-object. Keyword fallback at 0.70 confidence operational but lower precision.
-- Cross-submission IP/ASN reuse detection requires querying other submissions' evidence — deferred to P2-T6.
-- ResolveEntityCandidatesStage currently produces one candidate. Multiple distinct candidates surface when P2-T3 injects registry search results.
+- **Gov registries (P2-T3 partial)**: Open Decision #5 blocks per-country registry adapters. Deferred explicitly.
+- **Playwright as optional dep**: Not added to pyproject.toml. A future ticket should add `playwright` as an optional dep and document the `playwright install chromium` step for production.
+- **Cache not applied to existing adapters in default_stages()**: The wrappers exist but are not yet wired into `default_stages()`. Wiring them requires the P2-T6 scoring integration (which reads `SourceAvailabilityTracker`) to be in place first.
+- **IPINFO_TOKEN production plan**: Unresolved (same class as Open Decision #5). Free tier operational.
 
 ---
 
 ## BUILD_PLAN Update
 
 - Current phase: Phase 2 — Deepen the Tracks
-- Current ticket: P2-T3 — Additional Tier-1 sources (gov registries, sanctions/watchlist)
-- P2-T1 status: Complete (2026-05-27)
-- P2-T2 status: Complete (2026-05-27)
-- Blockers: Open Decision #5 (Tier-1 source licensing) blocks production use; IPINFO_TOKEN production plan unresolved (free tier operational).
-- Recommended next: P2-T3
+- Current ticket: P2-T6 — Full four-layer scoring + signal catalog
+- P2-T3 status: Complete
+- P2-T4 status: Complete
+- P2-T5 status: Complete
+- Recommended next: P2-T6

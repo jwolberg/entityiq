@@ -2,6 +2,48 @@
 
 ---
 
+## 2026-05-27 — P2-T5: Adapter robustness — caching, rate-limiting, graceful degradation
+
+**In-process dict cache with no Redis dependency.** `AdapterCache` is a
+thread-safe in-memory dict keyed by `(source, lookup_key)` with per-source TTL
+and FIFO eviction at `max_size`.  Redis-backed distributed caching is a P3
+upgrade; the interface (`get`/`set`/`invalidate`/`clear`) is intentionally
+minimal to make that swap trivial.
+
+**Per-source TTL table is defined in `cache.py` as `DEFAULT_TTLS`.**  Sources
+with stable data (OpenCorporates: 24h) have long TTLs; sources with higher
+freshness requirements (web: 30min) have short TTLs.  Callers can override
+per-source TTLs at construction time.
+
+**`DEFAULT_TTLS` takes precedence over `default_ttl` constructor arg.** The
+`AdapterCache` merges `DEFAULT_TTLS` with the caller-supplied `ttls` dict.  A
+test that used `default_ttl=0` with `"opencorporates"` as the source was hitting
+the `DEFAULT_TTLS` value (86400s) rather than the override.  Tests use a custom
+source name not in `DEFAULT_TTLS` when testing TTL expiry.  This is documented
+in the test file.
+
+**Token-bucket rate limiter with jittered exponential backoff.** `RateLimiter`
+uses a token bucket per source.  When the bucket is empty, `acquire()` sleeps
+with jitter (base * [0.5, 1.0]) rather than failing immediately — this matches
+ARCHITECTURE § 4: "a source that stays down is recorded as unavailable, not a
+failed run".  Max-wait per source is configurable.
+
+**`SourceAvailabilityTracker` is the run-level coverage summary.**  Records
+`available` / `unavailable` per source after each adapter result.  The scoring
+stage (P2-T6) reads this to adjust confidence when coverage is reduced.  The
+tracker is instantiated per run; it is not persisted to the DB in this ticket —
+that integration is deferred to P2-T6 where the scoring engine reads it.
+
+**Wrappers are transparent — no change to public evidence output.**  Both
+`CachedAdapter` and `RateLimitedAdapter` proxy `name`, `tier`, and `fetch()`.
+Callers that wrap an existing adapter see the same `AdapterResult` contract.
+Applying these wrappers to existing adapters (opencorporates, domain, ipinfo,
+sanctions, web) is left to the caller's wiring (e.g. `default_stages()`) and
+is deferred to when the scoring/pipeline integration ticket (P2-T6) adds the
+full run-level coverage model.
+
+---
+
 ## 2026-05-27 — P2-T4: Tier-3 public web evidence + contact extraction
 
 **Playwright is lazy-imported inside `_PlaywrightFetcher.__init__` only.**
