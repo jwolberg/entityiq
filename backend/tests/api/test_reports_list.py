@@ -121,8 +121,12 @@ def _make_report(
     report = Report(
         verification_run_id=run.id,
         status=report_status,
-        section_statuses={"scores": "complete", "evidence": "complete",
-                          "mismatches": "complete", "sources": "complete"},
+        section_statuses={
+            "scores": "complete",
+            "evidence": "complete",
+            "mismatches": "complete",
+            "sources": "complete",
+        },
         summary=summary,
         generated_at=datetime.now(tz=timezone.utc),
     )
@@ -213,8 +217,11 @@ def test_list_no_score(list_client, list_engine):
     db = TestingSessionLocal()
     try:
         run_id, _ = _make_report(
-            db, "Pending Co", "pending.example", overall_score=None,
-            report_status="pending"
+            db,
+            "Pending Co",
+            "pending.example",
+            overall_score=None,
+            report_status="pending",
         )
     finally:
         db.close()

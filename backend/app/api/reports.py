@@ -163,11 +163,7 @@ def list_reports(
     This is a thin list — it does NOT return evidence, mismatches, or
     full scores.  Use GET /reports/{run_id} for the full report.
     """
-    reports = (
-        db.query(Report)
-        .order_by(Report.created_at.desc())
-        .all()
-    )
+    reports = db.query(Report).order_by(Report.created_at.desc()).all()
 
     items: list[ReportListItemSchema] = []
     for report in reports:
@@ -194,9 +190,7 @@ def list_reports(
         )
         review_status = review.status if review is not None else None
 
-        generated_at = (
-            report.generated_at.isoformat() if report.generated_at else None
-        )
+        generated_at = report.generated_at.isoformat() if report.generated_at else None
 
         items.append(
             ReportListItemSchema(
