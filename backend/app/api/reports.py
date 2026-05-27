@@ -21,10 +21,14 @@ from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.models.report import Report
+from app.models.review import Review
+from app.models.submission import Submission
 from app.models.verification_run import VerificationRun
 from app.schemas.report import (
     EvidenceItemSchema,
     MismatchItemSchema,
+    ReportListItemSchema,
+    ReportListResponse,
     ReportResponse,
     ScoresSchema,
     SectionStatuses,
@@ -140,6 +144,74 @@ def _serialize_report(report: Report) -> ReportResponse:
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
+
+@router.get(
+    "",
+    response_model=ReportListResponse,
+    summary="List all reports (operator dashboard)",
+)
+def list_reports(
+    db: Session = Depends(_get_db),
+) -> ReportListResponse:
+    """Return a summary list of all reports for the operator dashboard.
+
+    Each item includes company name, domain, report status, overall risk
+    score, review status, and analysis date.  Results are ordered newest
+    first by generated_at (falling back to created_at).
+
+    This is a thin list — it does NOT return evidence, mismatches, or
+    full scores.  Use GET /reports/{run_id} for the full report.
+    """
+    reports = (
+        db.query(Report)
+        .order_by(Report.created_at.desc())
+        .all()
+    )
+
+    items: list[ReportListItemSchema] = []
+    for report in reports:
+        # Resolve company info from submission via verification_run
+        run = db.get(VerificationRun, report.verification_run_id)
+        company_name = ""
+        domain = ""
+        if run is not None:
+            sub = db.get(Submission, run.submission_id)
+            if sub is not None:
+                company_name = sub.company_name
+                domain = sub.domain
+
+        # Overall score from summary JSON
+        summary = report.summary or {}
+        scores_data = summary.get("scores") or {}
+        overall_score = scores_data.get("overall_score")
+
+        # Review status — None if no review row exists
+        review = (
+            db.query(Review)
+            .filter(Review.verification_run_id == report.verification_run_id)
+            .first()
+        )
+        review_status = review.status if review is not None else None
+
+        generated_at = (
+            report.generated_at.isoformat() if report.generated_at else None
+        )
+
+        items.append(
+            ReportListItemSchema(
+                run_id=report.verification_run_id,
+                report_id=report.id,
+                company_name=company_name,
+                domain=domain,
+                status=report.status,
+                overall_score=overall_score,
+                review_status=review_status,
+                generated_at=generated_at,
+            )
+        )
+
+    return ReportListResponse(items=items, total=len(items))
 
 
 @router.get(

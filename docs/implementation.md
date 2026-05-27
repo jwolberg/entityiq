@@ -1,241 +1,202 @@
 # Implementation
 
 ## Scope Implemented
-- Requested scope: P1-T7, P1-T8, P1-T9
-- Related phase: Phase 1 — MVP Vertical Slice (walking skeleton)
-- Related ticket(s): P1-T7, P1-T8, P1-T9
+- Requested scope: P1-T10 — Operator app: list + detail + mark reviewed
+- Related phase: Phase 1 — MVP Vertical Slice
+- Related ticket(s): P1-T10 (depends on P1-T8, P1-T9)
 
 ## Approach
-- Three tickets implemented in order, each as an atomic commit.
-- Deterministic v1 scoring engine: four layer scores + overall score, advisory-only
-  (no approve/reject decision). Missing sources → reduced confidence, NOT low risk.
-- Report assembly is idempotent: `assemble_report()` create-or-updates the Report row.
-- Per-section statuses derived from `VerificationRun.source_availability` for partial
-  result readability.
-- Operator auth uses stdlib-only PBKDF2-HMAC-SHA256 (no new dependencies).
-- In-memory session store (MVP single-process); designed behind an interface for
-  OIDC/SSO replacement without touching route code.
-- Security tests (unauthorized/forbidden) written first per P1-T9 spec.
-- Audit log is append-only at both model and recorder layers.
+- Added a minimal `GET /reports/` list endpoint to the backend (not in P1-T8).
+- Built a typed API client (`frontend/src/api/client.ts`) wrapping all four
+  required backend calls: sign-in, list reports, get report, mark reviewed.
+- Built an `AuthProvider` + `SignInForm` gating the app behind a session token.
+- Built `Dashboard` (list view) and `CompanyDetail` (detail + diff + action) pages.
+- Built `RegistrationDiff` component for submitted-vs-discovered comparison.
+- Wired everything in `App.tsx` with hash-based routing (no react-router).
+- All validation passes: backend ruff + pytest (172 tests), frontend lint + vitest (10 tests).
 
-### Key decisions
-1. `ScoringResult` has no `decision`/`approved`/`rejected` field — enforced by
-   invariant. Advisory-only `triage_tier` values are only pre_clear/review/escalate.
-2. Missing evidence → baseline scores of 60 (entity) and 40 (infra), both above
-   TRIAGE_PRE_CLEAR_MAX=30 — missing data cannot yield a pre_clear tier.
-3. `record_event()` calls `db.commit()` internally for audit durability — even if
-   the caller raises after the call, the audit row persists.
-4. Each router has its own `_get_db` dependency so tests can override independently
-   (auth_get_db, reviews_get_db, reports._get_db).
-5. Password hashing uses 260,000 PBKDF2 iterations (NIST SP 800-132 recommendation).
-6. `_clear_all_sessions()` exposed as test-only helper; called in `auth_client` fixture
-   teardown to prevent token leakage across tests.
+### Key Decisions
+1. **Hash routing over react-router** — two views, no dependency needed.
+2. **Token in React state** — avoids XSS persistence; re-sign-in on refresh is
+   acceptable for MVP.
+3. **N+1 in list endpoint** — queries submission per report row; fine at MVP scale.
+4. **`eslint-disable react-refresh/only-export-components`** — AuthContext and
+   hooks in one file; suppressed per-file to avoid splitting for no functional gain.
 
 ### Assumptions
-- `ruff check` / `ruff format --check` / `pytest -q` are the validation commands.
-- No new third-party dependencies introduced for P1-T7, P1-T8, or P1-T9.
+- Backend auth and reviews endpoints remain unchanged from P1-T9.
+- The vite proxy (`/api` → `localhost:8000`) is already configured (confirmed).
+- No Tailwind or CSS framework in the project — inline styles used throughout.
 
 ---
 
-## Implementation Plan (executed)
+## Implementation Plan
 
-### P1-T7
-1. Create `backend/app/scoring/__init__.py`
-2. Create `backend/app/scoring/engine.py` — Signal, ScoringResult, ScoringEngine,
-   ScoringStage, TRIAGE_PRE_CLEAR_MAX, TRIAGE_ESCALATE_MIN
-3. Create `backend/app/scoring/report.py` — assemble_report(), StoreReportStage,
-   _build_section_statuses, _build_summary
-4. Update `backend/app/pipeline/orchestrator.py` to register ScoringStage +
-   StoreReportStage in default_stages()
-5. Create `backend/tests/scoring/__init__.py`,
-   `backend/tests/scoring/test_engine.py` (16 tests)
-6. Append P1-T7 entry to `docs/implementation-notes.md`
-7. Update `docs/BUILD_PLAN.md`
-8. Lint + test → commit
-
-### P1-T8
-1. Create `backend/app/schemas/report.py` — Pydantic v2 schemas
-2. Create `backend/app/api/reports.py` — GET /{run_id} endpoint + _get_db
-3. Update `backend/app/main.py` to include reports_router
-4. Create `backend/tests/api/__init__.py`,
-   `backend/tests/api/test_reports.py` (4 tests)
-5. Append P1-T8 entry to `docs/implementation-notes.md`
-6. Update `docs/BUILD_PLAN.md`
-7. Lint + test → commit
-
-### P1-T9
-1. Add `password_hash` column to `backend/app/models/operator.py`
-2. Create `backend/app/auth/operator.py` — hash_password, verify_password,
-   session store, sign_in, get_current_operator, require_lead, auth_router
-3. Create `backend/app/audit/recorder.py` — record_event (append-only)
-4. Create `backend/app/api/reviews.py` — POST /{run_id} (requires auth)
-5. Update `backend/app/main.py` to include auth_router + reviews_router
-6. Create `backend/tests/auth/__init__.py`,
-   `backend/tests/auth/test_operator.py` (17 tests — security tests first)
-7. Create `backend/tests/audit/__init__.py`,
-   `backend/tests/audit/test_recorder.py` (10 tests)
-8. Append P1-T9 entry to `docs/implementation-notes.md`
-9. Update `docs/BUILD_PLAN.md`
-10. Lint + test → commit
+1. Read all source-of-truth docs and existing backend code (main.py, reports.py,
+   submissions.py, operator.py, reviews.py, schemas).
+2. Identify gap: no `GET /reports/` list endpoint.
+3. Add list endpoint + schema to backend; write 4 backend tests.
+4. Run backend ruff + pytest — all green.
+5. Create frontend directory structure.
+6. Write `api/client.ts` — typed wrappers for sign-in, list, get, mark-reviewed.
+7. Write `auth/AuthContext.tsx` — context, hook, sign-in form, provider.
+8. Write `components/RegistrationDiff.tsx` — field comparison with status badges.
+9. Write `pages/Dashboard.tsx` — table with score/status, loading/empty states.
+10. Write `pages/CompanyDetail.tsx` — detail view, diff section, mark-reviewed action.
+11. Update `App.tsx` — AuthProvider + AppShell + hash routing.
+12. Update `App.test.tsx` (sign-in form rendering).
+13. Write `Dashboard.test.tsx` and `CompanyDetail.test.tsx`.
+14. Run frontend lint + vitest — all green.
+15. Update docs.
 
 ---
 
 ## Code Changes
 
-### File: backend/app/scoring/__init__.py
-- Change summary: New package init (empty).
+### File: `backend/app/schemas/report.py`
+- Added `ReportListItemSchema` (thin dashboard row) and `ReportListResponse`.
 
-### File: backend/app/scoring/engine.py
-- Change summary: Core scoring engine. Constants TRIAGE_PRE_CLEAR_MAX=30,
-  TRIAGE_ESCALATE_MIN=70. Signal dataclass (signal_type, value, confidence,
-  evidence_ids, description). ScoringResult dataclass (overall_score, triage_tier,
-  entity_legitimacy, infrastructure_legitimacy, representation_confidence,
-  fraud_staging_risk, signals). ScoringEngine.score() computes four layer scores
-  and overall weighted average. ScoringStage pipeline wrapper. Advisory-only:
-  no decision field.
+### File: `backend/app/api/reports.py`
+- Added `GET /reports/` route (`list_reports`) returning `ReportListResponse`.
+- Resolves company name/domain via submission FK; reads score from JSON summary;
+  joins Review table for `review_status`.
+- Route placed before `/{run_id}` to avoid path shadowing.
 
-### File: backend/app/scoring/report.py
-- Change summary: assemble_report(run_id, db) creates or updates Report row with
-  section_statuses and summary JSON. _build_section_statuses derives per-section
-  status from VerificationRun.source_availability. _build_summary builds
-  denormalized JSON with scores, evidence, mismatches, sources. StoreReportStage
-  pipeline wrapper (name="store_report").
+### File: `backend/tests/api/test_reports_list.py` (new)
+- 4 tests: empty list, one report no review, reviewed report, no-score pending report.
 
-### File: backend/app/pipeline/orchestrator.py
-- Change summary: default_stages() now returns 6 stages in order:
-  NormalizeInputStage → QueryRegistriesStage → AnalyzeDomainStage →
-  ConsistencyChecksStage → ScoringStage → StoreReportStage.
+### File: `frontend/src/api/client.ts` (new)
+- Typed interfaces for all API request/response shapes.
+- `apiClient` object with `signIn`, `listReports`, `getReport`, `markReviewed`.
+- Attaches `Authorization: Bearer <token>` when token is provided.
+- All calls use `/api` prefix (proxied by vite).
 
-### File: backend/app/schemas/report.py
-- Change summary: Pydantic v2 schemas: ScoresSchema, EvidenceItemSchema,
-  MismatchItemSchema, SourceSummarySchema, SectionStatuses, ReportResponse.
+### File: `frontend/src/auth/AuthContext.tsx` (new)
+- `AuthContext`, `useAuth` hook, `SignInForm`, `AuthProvider`.
+- Session token in React state (in-memory; cleared on refresh).
+- Sign-in form with email/password fields; error + loading states.
 
-### File: backend/app/api/reports.py
-- Change summary: GET /{run_id} endpoint. Checks VerificationRun exists (404),
-  then Report exists (404 "not been assembled yet"), returns serialized ReportResponse.
-  Own _get_db dependency for independent test override.
+### File: `frontend/src/components/RegistrationDiff.tsx` (new)
+- Renders mismatches table with per-row match/mismatch/unverified badges.
+- Handles `pending` section status (shows notice, no crash).
+- Handles empty mismatches list.
 
-### File: backend/app/models/operator.py
-- Change summary: Added password_hash: Mapped[str | None] = mapped_column(Text,
-  nullable=True). Added Text to SQLAlchemy imports.
+### File: `frontend/src/pages/Dashboard.tsx` (new)
+- Fetches `GET /reports/` on mount.
+- Renders table: company name, domain, analysis date, risk score (color-coded),
+  review status badge.
+- Loading, empty, and error states.
 
-### File: backend/app/auth/operator.py
-- Change summary: Full operator auth module. hash_password / verify_password
-  (PBKDF2-HMAC-SHA256, 260k iterations, stdlib only). _session_store dict + helpers.
-  sign_in() validates credentials, returns token or None. get_current_operator()
-  FastAPI dep (401 on failure). require_lead() FastAPI dep (403 if not lead role).
-  SignInRequest / SignInResponse Pydantic models. auth_router POST /auth/sign-in
-  with audit event recording.
+### File: `frontend/src/pages/CompanyDetail.tsx` (new)
+- Fetches `GET /reports/{run_id}` on mount.
+- Renders risk score, RegistrationDiff, and mark-reviewed button.
+- Mark-reviewed calls `POST /reviews/{run_id}`; success shows a banner; error shown inline.
+- Partial reports (pending sections) render without crashing.
 
-### File: backend/app/audit/recorder.py
-- Change summary: record_event(db, event_type, *, operator_id, verification_run_id,
-  submission_id, payload, description) -> str. Inserts AuditEvent, db.commit(),
-  returns event.id. No update/delete helpers at module level.
+### File: `frontend/src/App.tsx` (modified)
+- Replaced placeholder with `AuthProvider` + `AppShell`.
+- `AppShell` has top nav (logo, operator role, sign out) and hash-based routing.
+- Route state: `{ page: "dashboard" }` or `{ page: "detail"; runId }`.
 
-### File: backend/app/api/reviews.py
-- Change summary: POST /{run_id} endpoint. Requires get_current_operator dep (401
-  if unauthenticated). Checks run exists (404). Checks no existing review (409).
-  Creates Review row. Calls record_event("operator.mark_reviewed", ...).
+### File: `frontend/src/App.test.tsx` (modified)
+- Updated to assert sign-in form renders before auth (not the old plain heading).
 
-### File: backend/app/main.py
-- Change summary: Added include_router calls for reports_router, auth_router,
-  reviews_router.
+### File: `frontend/src/pages/Dashboard.test.tsx` (new)
+- 4 tests: loading state, table with score+status, empty state, error state.
 
-### File: backend/tests/scoring/test_engine.py
-- Change summary: 16 tests. TestLowRiskScenario, TestElevatedRiskScenario,
-  TestMissingSourcesScenario, TestIntegrationNoOrphanSignals, TestNoAutoApproval,
-  TestStoreReport.
+### File: `frontend/src/pages/CompanyDetail.test.tsx` (new)
+- 4 tests: mismatch markers rendered, partial report no crash, mark-reviewed updates
+  status, mark-reviewed error shown.
 
-### File: backend/tests/api/test_reports.py
-- Change summary: 4 tests. Full report for completed run, partial for in-progress
-  run, 404 for unknown run_id, 404 for run with no report yet.
+### File: `docs/implementation-notes.md` (appended)
+- P1-T10 entry with key decisions and Phase 1 exit criteria confirmation.
 
-### File: backend/tests/auth/test_operator.py
-- Change summary: 17 tests. Security tests first: TestUnauthenticated (401 no-token,
-  bad-token, malformed), TestRBAC (403 operator on lead route, lead passes).
-  TestSignIn, TestPasswordHashing (5 pure unit), TestSignInUnit (3 direct tests).
-
-### File: backend/tests/audit/test_recorder.py
-- Change summary: 10 tests. TestAuditImmutability (no update/delete on model or
-  module), TestRecordEvent (persist, correct fields, append-only, system events),
-  TestMarkReviewedAudit (attribution, occurred_at).
+### File: `docs/BUILD_PLAN.md` (updated)
+- P1-T10 → Complete; Phase 1 exit criteria Met; Current ticket → P2-T1.
 
 ---
 
 ## Acceptance Criteria Mapping
 
-- **Four layer scores + overall score**: entity_legitimacy, infrastructure_legitimacy,
-  representation_confidence, fraud_staging_risk all present in ScoringResult — satisfied.
-- **Signals reference evidence rows via risk_assessment_evidence**: Signal.evidence_ids
-  populated from persisted Evidence row IDs; integration test verifies no orphans — satisfied.
-- **Advisory only — NO approve/reject decision**: ScoringResult has no decision field;
-  triage_tier values are only pre_clear/review/escalate — verified by TestNoAutoApproval.
-- **Missing sources → reduced confidence, not low risk**: baseline scores above 30 when
-  no evidence → cannot yield pre_clear tier — verified by TestMissingSourcesScenario.
-- **Per-section status so partial results are readable**: _build_section_statuses derives
-  pending/complete/unavailable from source_availability — verified in test_reports.py.
-- **GET /reports/{run_id}**: returns ReportResponse with section_statuses + summary JSON
-  — verified by 4 API tests.
-- **Operator sign-in → scoped session token**: POST /auth/sign-in returns session_token,
-  operator_id, role — verified by TestSignIn.
-- **Unauthorized requests → 401**: no token, bad token, malformed header all return 401
-  — verified by TestUnauthenticated.
-- **Operator attempting lead-only action → 403**: require_lead() raises HTTP 403 for
-  operator role — verified by TestRBAC.
-- **Audit events are append-only**: AuditEvent has no update/delete methods; recorder has
-  no update_event/delete_event — verified by TestAuditImmutability.
-- **mark-reviewed writes attributable audit_event**: POST /reviews/{run_id} calls
-  record_event with operator_id — verified by TestMarkReviewedAudit.
+- **Criterion:** Dashboard list — company name, analysis date, risk score, review status
+  **Implementation:** `Dashboard.tsx` renders all four columns from `GET /reports/` list items.
+  **Files:** `pages/Dashboard.tsx`, `api/client.ts`, `backend/app/api/reports.py`
+
+- **Criterion:** Company detail — submitted-vs-discovered with match/mismatch indicators
+  **Implementation:** `RegistrationDiff.tsx` renders a table per `mismatches[]` with
+  color-coded badges (match=green/checkmark, mismatch=red/x, unverified=amber/?).
+  `data-status` attribute on each row enables programmatic assertion.
+  **Files:** `components/RegistrationDiff.tsx`, `pages/CompanyDetail.tsx`
+
+- **Criterion:** Mark reviewed — action on detail view calls backend, writes audited review
+  **Implementation:** "Mark Reviewed" button calls `POST /reviews/{run_id}` with
+  `Authorization: Bearer <token>`. Backend writes `Review` row + `audit_event`.
+  On success, the button is replaced by a confirmation banner.
+  **Files:** `pages/CompanyDetail.tsx`, `api/client.ts`, `backend/app/api/reviews.py` (existing)
+
+- **Criterion:** Operator sign-in (audited)
+  **Implementation:** `AuthProvider` renders `SignInForm` when no token; calls
+  `POST /auth/sign-in`; stores token in React state. Backend records audit event on
+  successful sign-in (existing P1-T9 behavior).
+  **Files:** `auth/AuthContext.tsx`, `api/client.ts`
+
+- **Criterion:** Partial/in-progress reports render without breaking
+  **Implementation:** `RegistrationDiff` checks `sectionStatus === "pending"` and shows
+  a notice. `CompanyDetail` checks `section_statuses.scores === "pending"` and shows
+  a pending notice. Tested explicitly in `CompanyDetail.test.tsx`.
+  **Files:** `components/RegistrationDiff.tsx`, `pages/CompanyDetail.tsx`
 
 ---
 
 ## Build Plan Mapping
 
-- P1-T7: Complete (2026-05-26). Deterministic v1 scoring engine + report assembly.
-- P1-T8: Complete (2026-05-26). Report retrieval endpoint with per-section statuses.
-- P1-T9: Complete (2026-05-26). Operator auth + RBAC + append-only audit foundation.
+- Ticket: P1-T10 — Operator app: list + detail + mark reviewed
+- Status: Complete
+- What was completed: backend list endpoint (GET /reports/), typed API client,
+  auth (sign-in form + session), dashboard list, company detail view with
+  registration diff + risk score, mark-reviewed action. All tests green.
+- Remaining work: None for P1-T10.
 
 ---
 
 ## Validation
 
-### P1-T7
-- `ruff check .` → All checks passed
-- `ruff format --check .` → All files already formatted
-- `pytest -q` → 137 passed (16 new scoring tests)
+### Frontend
+- `npm run lint` — PASSED (0 errors, 0 warnings)
+- `npm run test` — PASSED (10 tests: App x2, Dashboard x4, CompanyDetail x4)
 
-### P1-T8
-- `ruff check .` → All checks passed
-- `ruff format --check .` → All files already formatted
-- `pytest -q` → 141 passed (4 new API tests)
+### Backend
+- `.venv/bin/ruff check .` — PASSED (All checks passed!)
+- `.venv/bin/pytest -q` — PASSED (172 tests; 168 pre-existing + 4 new list-endpoint tests)
 
-### P1-T9
-- `ruff check .` → All checks passed
-- `ruff format --check .` → All files already formatted
-- `pytest -q` → 168 passed (27 new auth/audit tests)
+### Manual verification path
+1. `cd backend && uvicorn app.main:app --reload`
+2. Create an operator account (via psql or a seed script) with a hashed password.
+3. `cd frontend && npm run dev`
+4. Open http://localhost:5173 — sign-in form appears.
+5. Sign in → dashboard renders (empty if no submissions yet).
+6. Submit a registration via `POST /submissions` — pipeline runs.
+7. Refresh dashboard → report row appears with score + "Pending Review".
+8. Click row → detail view shows submitted-vs-discovered diff.
+9. Click "Mark Reviewed" → banner confirms; re-opening detail shows reviewed state.
 
-All tests run offline (SQLite StaticPool + in-memory session store). No live Redis,
-Postgres, or network required.
+### Phase 1 exit criteria
+All criteria are met end-to-end (backend tests verify stored report path;
+frontend tests verify view → diff → mark-reviewed with mocked fetch):
+- A submitted registration produces a stored, viewable report. (P1-T1 through T8)
+- An operator can sign in (audited). (P1-T9 + AuthContext.tsx)
+- Operator can see submitted-vs-discovered fields. (RegistrationDiff.tsx)
+- Operator can mark it reviewed (audited). (CompanyDetail.tsx + reviews.py)
 
 ---
 
 ## Open Issues
 
-- **In-memory session store is single-process only**: _session_store dict is not
-  shared across processes. Replacement path documented in module docstring: swap for
-  Redis-backed store or JWT validation. Acceptable for MVP.
-- **PBKDF2 is suitable for MVP; upgrade path noted**: Module docstring notes argon2/
-  bcrypt as P3 upgrade. No action required now.
-- **Open Decision #5 (OpenCorporates licensing)** — UNRESOLVED from P1-T4. Inherited.
-- **Domain adapter optional deps (python-whois, dnspython)** not in pyproject.toml.
-  Deferred from P1-T5.
-
----
-
-## BUILD_PLAN Update
-
-- P1-T7: Complete (2026-05-26)
-- P1-T8: Complete (2026-05-26)
-- P1-T9: Complete (2026-05-26)
-- Current ticket updated to: P1-T10 — Operator app: list + detail + mark reviewed
-- Recommended next: P1-T10 (depends on P1-T8 and P1-T9, both now complete)
+- **N+1 query in `GET /reports/`** — resolves company name via individual
+  `db.get()` calls per report row. Acceptable at MVP scale; batching is P3.
+- **Token is in-memory only** — re-sign-in required on page refresh. Low priority
+  for MVP; could be sessionStorage in a follow-up.
+- **No pagination on dashboard** — `GET /reports/` returns all rows. Fine for MVP;
+  add limit/offset when queue grows (P2-T10 adds filters/search).
+- **Inline styles throughout** — no CSS framework; works but scales poorly.
+  P2-T8 (detail view completeness) is a natural point to add Tailwind.

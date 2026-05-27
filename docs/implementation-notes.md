@@ -2,6 +2,39 @@
 
 ---
 
+## 2026-05-26 — P1-T10: Operator app — list + detail + mark reviewed
+
+**Added `GET /reports/` list endpoint to backend** (not present in P1-T8).  The
+dashboard required a list; P1-T8 only exposed `GET /reports/{run_id}`.  Added a
+minimal `list_reports` route that resolves company name/domain via the
+submission FK chain, reads `overall_score` from the JSON summary, and joins to
+the Review table for `review_status`.  N+1 queries per report row are acceptable
+for MVP scale.  Batching (JOIN or subquery) is a P3 optimization.
+
+**Hash-based routing instead of react-router.**  The task instructions said
+"prefer minimal routing" and specifically noted react-router "only if needed."
+The operator app has two views (dashboard and detail), so a simple `useState`
+with a discriminated union route covers it without adding a dependency.
+
+**No localStorage for session token.**  Token is stored in React state only
+(clears on page refresh).  This is intentional for the MVP — avoids XSS
+persistence risk.  The tradeoff is that refreshing forces re-sign-in.  A
+future ticket (P2+) can persist to sessionStorage or use a cookie.
+
+**`AuthContext` exported alongside components in one file.**  ESLint's
+`react-refresh/only-export-components` rule triggers when a non-component is
+exported from the same file.  Suppressed at file level with
+`eslint-disable react-refresh/only-export-components`.  The alternative —
+splitting AuthContext into its own file — adds indirection with no functional
+benefit for MVP.  Revisit if fast-refresh issues surface in local dev.
+
+**Phase 1 exit criteria met.**  The full MVP vertical slice is now in place:
+submitted registration → pipeline → stored report → operator sign-in (audited)
+→ list view → detail view (submitted vs. discovered diff with match/mismatch
+indicators + risk score) → mark reviewed (audited audit_event).
+
+---
+
 ## 2026-05-26 — P1-T9: Operator auth + append-only audit foundation
 
 **Session store is in-memory (dict) for MVP.** A single `_session_store: dict`

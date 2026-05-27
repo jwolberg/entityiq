@@ -111,3 +111,32 @@ class ReportResponse(BaseModel):
     sources: list[SourceSummarySchema] = []
 
     generated_at: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# List endpoint schema (GET /reports/)
+# ---------------------------------------------------------------------------
+
+
+class ReportListItemSchema(BaseModel):
+    """Thin summary row for the dashboard list (GET /reports/).
+
+    Contains enough to render the operator queue: company name, run status,
+    overall risk score, review status, and analysis date.
+    """
+
+    run_id: str
+    report_id: str
+    company_name: str
+    domain: str
+    status: str  # report status: "pending" | "partial" | "complete" | "failed"
+    overall_score: float | None = None
+    review_status: str | None = None  # None = not yet reviewed
+    generated_at: str | None = None
+
+
+class ReportListResponse(BaseModel):
+    """Response for GET /reports/."""
+
+    items: list[ReportListItemSchema]
+    total: int

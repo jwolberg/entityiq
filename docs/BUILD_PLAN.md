@@ -58,11 +58,14 @@
 
 ## Current Status
 - Overall status: In Progress
-- Current phase: Phase 1 — MVP Vertical Slice (walking skeleton)
-- Current ticket: P1-T10 — Operator app: list + detail + mark reviewed
+- Current phase: Phase 2 — Deepen the Tracks
+- Current ticket: P2-T1 — Entity candidate resolution (pipeline stage 2)
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
   core schema runnable (SQLite-verified; Postgres verification pending P1-T1 setup).
+- Phase 1 exit criteria: Met (2026-05-26) — a submitted registration produces a
+  stored, viewable report; an operator can sign in (audited), see
+  submitted-vs-discovered fields, and mark it reviewed.
 - Blockers: Open Decision #5 (data-source licensing for OpenCorporates) remains
   UNRESOLVED. Production use of the OpenCorporates adapter requires a license
   agreement. #4/#7 deferred to their tickets.
@@ -228,7 +231,7 @@
   - Depends on: P1-T8, P1-T9
   - Acceptance criteria covered: PRD § FE § Dashboard, § Company Detail §
     Registration Data, § Operator Actions (mark reviewed); USERS § 1
-  - Status: Todo
+  - Status: Complete (2026-05-26)
 
 ### Phase 2 — Deepen the Tracks
 **Goal**
