@@ -2,6 +2,32 @@
 
 ---
 
+## 2026-05-26 — P1-T5: Tier-2 domain/infrastructure signals adapter
+
+**Three injectable clients (WHOIS, DNS, SSL) allow fully offline tests.** No
+new runtime dependencies are added — the default WHOIS client looks for the
+optional `python-whois` package; the default DNS client looks for `dnspython`.
+If either is absent, the default client raises `RuntimeError` (so a real
+production deployment would need them installed, but tests inject fakes).
+The SSL client uses stdlib `ssl` + `socket` — no extra dep.
+
+**DKIM probe uses `_domainkey.<domain>` as a presence signal only.** A real
+implementation iterates known selectors (google, default, selector1, etc.).
+This is a presence probe — "DKIM record exists at the common base selector" —
+which is sufficient for a Tier-2 signal. Full selector enumeration is deferred.
+
+**`had_any_data` flag ensures we distinguish "all failed" from "no evidence".**
+If all three lookups (WHOIS, DNS, SSL) raise, `had_any_data` stays False and the
+adapter returns `AdapterFailure(kind='unavailable')`. If any one succeeded, we
+return `AdapterSuccess` — even if some lookups failed — so partial results are
+preserved.
+
+**recently_registered threshold is 180 days.** This matches PRD § Risk Signals
+("recently registered domain"). The constant `_RECENTLY_REGISTERED_DAYS = 180`
+is module-level so it can be overridden in testing.
+
+---
+
 ## 2026-05-26 — P1-T4: Source adapter interface + OpenCorporates Tier-1 adapter
 
 **Open Decision #5 (data-source licensing) remains OPEN.** The OpenCorporates
