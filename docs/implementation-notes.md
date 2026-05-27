@@ -2,6 +2,40 @@
 
 ---
 
+## 2026-05-27 — P2-T4: Tier-3 public web evidence + contact extraction
+
+**Playwright is lazy-imported inside `_PlaywrightFetcher.__init__` only.**
+It is never imported at module level.  Tests verify this via
+`test_playwright_not_imported_at_module_level` which checks `sys.modules`
+after importing `app.adapters.web`.  CI without `playwright install` passes
+freely; `playwright` is not added to pyproject.toml deps at this time because
+tests use a fake fetcher and the production path uses httpx first.  Adding
+`playwright` as an optional dep (e.g. `[extras]`) is a P3 consideration.
+
+**Contact extraction uses regex over stripped HTML (no BeautifulSoup).**
+Email, phone, and street-address patterns cover the common cases.  BeautifulSoup
+would be more robust for malformed HTML; it is not added as a dep to keep scope
+minimal.  The regex approach is sufficient for the Tier-3 "supporting evidence"
+use case — these contacts are treated as lower-confidence signals (0.55–0.70)
+and always have source attribution for operator review.
+
+**Branding extraction priority: og:site_name → og:title → <title> → <h1>.**
+og:site_name is the most reliable brand signal; title tags often include
+page-specific suffixes ("— Blog") so og:site_name is preferred.
+
+**Employee footprint is a proxy count (emails on page), not a real headcount.**
+The `web_employee_footprint` field records the count of unique email addresses
+found on the page.  A thin site with no emails emits `web_thin_footprint`.
+This is an MVP-level approximation; a richer footprint analysis (LinkedIn,
+job boards) is deferred to a future ticket.
+
+**`WebEvidenceStage` was pre-registered in orchestrator in P2-T3 commit.**
+The orchestrator already imports `WebEvidenceStage` as of P2-T3 (to avoid an
+import error when both the sanctions and web stages were wired together).  This
+commit adds the full test suite; no orchestrator change needed.
+
+---
+
 ## 2026-05-27 — P2-T3: Sanctions/watchlist screening via public OFAC SDN list
 
 **Government business registries are explicitly deferred (Open Decision #5).**
