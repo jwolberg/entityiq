@@ -2,6 +2,45 @@
 
 ---
 
+## 2026-05-27 — P2-T3: Sanctions/watchlist screening via public OFAC SDN list
+
+**Government business registries are explicitly deferred (Open Decision #5).**
+The P2-T3 ticket covers both "gov registries" and "sanctions/watchlist".  Gov
+registries require per-country licensing and variance resolution (#5) before any
+adapter can be built safely; building stubs would be misleading about coverage.
+Only the sanctions/watchlist portion is implemented here; the gov-registry half is
+a follow-on ticket once Open Decision #5 is resolved.
+
+**OFAC SDN list chosen as the concrete sanctions source.** The OFAC SDN list
+(https://www.treasury.gov/ofac/downloads/sdn.csv) is free, publicly downloadable
+with no licensing barrier, and is the canonical US sanctions list.  The fetcher
+is injectable so tests use a small deterministic fixture — no live download in tests
+or CI.
+
+**Name matching is exact after normalization (suffix-stripping + lowercase), not
+fuzzy.** Substring matching would produce false positives ("IRAN LLC" would match
+"Iran").  Legal-suffix stripping (Ltd, Inc, LLC, Corp, GmbH, etc.) + lowercase
+normalization is applied to both the query and each list entry before comparison.
+Full fuzzy/phonetic matching (Levenshtein, Soundex) is deferred — conservative
+by design to minimize false positives on a sanctions list.
+
+**The SDN list is fetched once and cached per adapter instance.** The production
+pipeline creates one adapter instance per run; the list is fetched once at first
+call and cached in-memory.  A production deployment should implement a shared
+cache (e.g. Redis-backed with a TTL of ~24h) to avoid re-downloading on every
+run.  This is a P3 optimization.
+
+**`SanctionsScreeningStage` registered after `query_registries`, before
+`analyze_domain`.** This maintains ARCHITECTURE § 2 ordering: all Tier-1
+authoritative sources (registries + sanctions) run before Tier-2 infrastructure.
+The orchestrator `default_stages()` comment is updated to reflect the new order.
+
+**`WebEvidenceStage` stub also registered in orchestrator for P2-T4.** The
+orchestrator imports both new stages.  The web adapter is created in the same
+commit to avoid import errors during the P2-T3 test run.
+
+---
+
 ## 2026-05-27 — P2-T2: Network/IP intelligence enrichment
 
 **Production IPINFO_TOKEN is unresolved — free tier is the default.** The
