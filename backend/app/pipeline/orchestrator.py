@@ -54,24 +54,30 @@ def default_stages() -> list[PipelineStage]:
       b) tests can register their own stages without touching this function.
 
     Current order (ARCHITECTURE § 2):
-      1. normalize_input       — canonicalize submitted fields (P1-T3)
-      2. query_registries      — Tier-1 authoritative lookup (P1-T4)
-      3. analyze_domain        — Tier-2 domain/infrastructure signals (P1-T5)
-      4. consistency_checks    — submitted-vs-discovered comparisons (P1-T6)
-      5. scoring               — risk assessment v1 (P1-T7)
-      6. store_report          — assemble queryable report (P1-T7)
+      1. normalize_input              — canonicalize submitted fields (P1-T3)
+      2. resolve_entity_candidates    — rank candidate entities (P2-T1)
+      3. query_registries             — Tier-1 authoritative lookup (P1-T4)
+      4. analyze_domain               — Tier-2 domain/infrastructure signals (P1-T5)
+      5. enrich_network_ip            — IPinfo geo/ASN/VPN enrichment (P2-T2)
+      6. consistency_checks           — submitted-vs-discovered comparisons (P1-T6)
+      7. scoring                      — risk assessment v1 (P1-T7)
+      8. store_report                 — assemble queryable report (P1-T7)
     """
     from app.adapters.domain import AnalyzeDomainStage  # noqa: PLC0415
+    from app.adapters.ipinfo import EnrichNetworkIPStage  # noqa: PLC0415
     from app.adapters.opencorporates import QueryRegistriesStage  # noqa: PLC0415
     from app.pipeline.consistency import ConsistencyChecksStage  # noqa: PLC0415
     from app.pipeline.normalize import NormalizeInputStage  # noqa: PLC0415
+    from app.pipeline.resolve import ResolveEntityCandidatesStage  # noqa: PLC0415
     from app.scoring.engine import ScoringStage  # noqa: PLC0415
     from app.scoring.report import StoreReportStage  # noqa: PLC0415
 
     return [
         NormalizeInputStage(),
+        ResolveEntityCandidatesStage(),
         QueryRegistriesStage(),
         AnalyzeDomainStage(),
+        EnrichNetworkIPStage(),
         ConsistencyChecksStage(),
         ScoringStage(),
         StoreReportStage(),

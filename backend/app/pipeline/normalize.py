@@ -211,6 +211,8 @@ class NormalizeInputStage:
             "company_name": (
                 sub.company_name.strip() if sub and sub.company_name else None
             ),
+            # Network metadata — captured server-side; used by EnrichNetworkIPStage.
+            "source_ip": (sub.source_ip if sub else None),
         }
 
         return {**context, "normalized": normalized}
