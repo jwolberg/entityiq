@@ -1,5 +1,41 @@
 # Implementation Notes
 
+---
+
+## 2026-05-26 — P1-T4: Source adapter interface + OpenCorporates Tier-1 adapter
+
+**Open Decision #5 (data-source licensing) remains OPEN.** The OpenCorporates
+adapter targets the public API (https://api.opencorporates.com/v0.4).  A
+prominent warning in the module docstring states that production use requires a
+license agreement.  No API key is hard-coded.  Resolution of #5 is required
+before this adapter is enabled in production.
+
+**HTTP client is injectable via constructor parameter.** `OpenCorporatesAdapter`
+accepts an optional `http_client` argument (any object satisfying the `HttpClient`
+protocol).  Tests inject a `_FakeHttpClient` with a pre-configured `_FakeResponse`
+— zero network calls.  Production path uses `httpx.Client()` (already present as
+a transitive dep of FastAPI; not a new dependency).
+
+**Typed failures via `AdapterResult` union.** All four failure kinds (timeout /
+unavailable / not-found / rate-limited) are returned as `AdapterFailure(kind=...)`
+dataclasses — never as raised exceptions.  The pipeline stage wrapper
+(`QueryRegistriesStage.run`) checks `isinstance(result, AdapterSuccess)` and logs
+the failure kind into `context["registries"]["status"]`.
+
+**Placeholder stubs for domain.py and consistency.py.** `orchestrator.default_stages()`
+imports all four stage classes at call time.  To keep P1-T4 self-contained and
+passing, minimal placeholder classes (`AnalyzeDomainStage`, `ConsistencyChecksStage`)
+were created.  They will be replaced by full implementations in P1-T5 and P1-T6
+respectively.  This is expected and noted here to avoid confusion.
+
+**Evidence rows are not persisted in unit tests for the adapter-only tests.**
+The `test_base.py` and the pure fetch() tests in `test_opencorporates.py` do not
+persist to a DB — they test the adapter contract in isolation.  The
+`test_stage_persists_evidence_on_match` test uses a full SQLite session and
+verifies DB persistence via `QueryRegistriesStage`.
+
+---
+
 Running log of decisions, deviations, tradeoffs, and surprises during
 implementation. Written for human review, tied to build-plan tickets.
 

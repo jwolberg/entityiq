@@ -52,10 +52,24 @@ def default_stages() -> list[PipelineStage]:
     Stages are imported lazily here so that:
       a) the orchestrator doesn't need to import every stage at module load, and
       b) tests can register their own stages without touching this function.
+
+    Current order (ARCHITECTURE § 2):
+      1. normalize_input       — canonicalize submitted fields (P1-T3)
+      2. query_registries      — Tier-1 authoritative lookup (P1-T4)
+      3. analyze_domain        — Tier-2 domain/infrastructure signals (P1-T5)
+      4. consistency_checks    — submitted-vs-discovered comparisons (P1-T6)
     """
+    from app.adapters.domain import AnalyzeDomainStage  # noqa: PLC0415
+    from app.adapters.opencorporates import QueryRegistriesStage  # noqa: PLC0415
+    from app.pipeline.consistency import ConsistencyChecksStage  # noqa: PLC0415
     from app.pipeline.normalize import NormalizeInputStage  # noqa: PLC0415
 
-    return [NormalizeInputStage()]
+    return [
+        NormalizeInputStage(),
+        QueryRegistriesStage(),
+        AnalyzeDomainStage(),
+        ConsistencyChecksStage(),
+    ]
 
 
 class Orchestrator:
