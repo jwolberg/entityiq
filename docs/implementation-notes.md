@@ -833,3 +833,22 @@ locking down operator-only report reads.
 - Scope: dev-server only; production build/output is unchanged. Verified login +
   the verification queue work end-to-end through the proxy after the change.
 - Validation: `npm run lint` (0 warnings) and `npm run build` both pass.
+
+---
+
+## 2026-05-31 — Fix: dashboard "Failed to fetch" (trailing-slash 307 → CORS)
+
+- Bug: the Verification Queue showed "Failed to fetch" / 0 reports even though
+  the backend `/reports` returned data. `client.ts` called `/reports/` (trailing
+  slash) but the backend route is exactly `/reports`. FastAPI answered the slash
+  with a **307 redirect to the absolute URL** `http://localhost:8000/reports`.
+  In the browser (origin :5173) that cross-origin hop is CORS-blocked, surfacing
+  as "Failed to fetch". curl/server-side checks passed because they ignore CORS
+  and/or follow the redirect — which is why it looked healthy from the shell.
+- Fix: `listReports` now requests `/reports` (no trailing slash) — same-origin
+  200, no redirect. Verified from the browser: `fetch('/api/reports')` →
+  `200 http://localhost:5173/api/reports`, count=6.
+- Note: other client endpoints already use no trailing slash; only the list call
+  had one. A more general guard would be `redirect: "error"` in the fetch plus a
+  backend `redirect_slashes=False`, but the one-line path fix is the minimal
+  change.

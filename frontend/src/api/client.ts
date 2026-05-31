@@ -236,9 +236,12 @@ export const apiClient = {
     });
   },
 
-  /** GET /reports/ — dashboard list */
+  /** GET /reports — dashboard list */
   listReports(token: string): Promise<ReportListResponse> {
-    return request<ReportListResponse>("/reports/", {}, token);
+    // No trailing slash: the backend route is exactly "/reports". A trailing
+    // slash triggers a 307 redirect to the absolute backend URL, which the
+    // browser can't follow cross-origin (CORS) → "Failed to fetch".
+    return request<ReportListResponse>("/reports", {}, token);
   },
 
   /** GET /reports/{run_id} — full report for detail view */
