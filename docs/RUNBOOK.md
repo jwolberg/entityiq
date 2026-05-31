@@ -1,7 +1,8 @@
 # Dev Runbook
 
 Local setup and run instructions for EntityIQ (backend + frontend monorepo).
-Reflects the codebase as of Phase 1 (MVP vertical slice).
+Reflects the codebase as of Phase 2 (operator workbench, reporting + integration
+API, service-credential auth).
 
 For what the system is and how it's structured, see [ARCHITECTURE.md](./ARCHITECTURE.md);
 for build status see [BUILD_PLAN.md](./BUILD_PLAN.md).
@@ -88,7 +89,40 @@ print("created operator@example.com / changeme")
 PY
 ```
 
-### 3. Frontend
+### 3. Seed a service credential (needed to submit via the API)
+
+`POST /submissions` and `GET /reports/{id}/export` require a **service credential**
+(API key) — integrating systems authenticate at the API boundary (P2-T12). The
+operator UI does not submit, so this is only needed for direct API testing
+(curl / Swagger). With the venv active and the same `DATABASE_URL` exported, from
+`backend/`:
+
+```bash
+python - <<'PY'
+from app.db.session import SessionLocal
+from app.auth.service import create_api_client
+
+db = SessionLocal()
+client, key = create_api_client("local-dev", db)   # plaintext shown ONCE
+print(f"X-API-Key: {key}")
+PY
+```
+
+Send the printed key as the `X-API-Key` header:
+
+```bash
+curl -s -X POST http://localhost:8000/submissions \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: <key-from-above>" \
+  -d '{"company_name":"Acme","work_email":"cto@acme.example",
+       "company_domain":"acme.example","country":"US"}'
+# 202 Accepted → {"submission_id": "...", "run_id": "...", "status": "pending", ...}
+```
+
+Without the key the endpoint returns **401**. The report export endpoint accepts
+either an `X-API-Key` (integrating system) or an operator `Bearer` token.
+
+### 4. Frontend
 
 In a second terminal:
 
@@ -204,10 +238,14 @@ CI (`.gitlab-ci.yml`) runs all of the above on push.
 | --- | --- | --- |
 | GET | `/health` | Liveness check |
 | GET | `/docs` | Interactive OpenAPI (Swagger) UI |
-| POST | `/submissions` | Submit a registration (captures network metadata, enqueues a run) |
+| POST | `/submissions` | Submit a registration (captures network metadata, enqueues a run). **Requires `X-API-Key`.** |
 | GET | `/reports` | List analyzed companies (dashboard) |
 | GET | `/reports/{id}` | Retrieve a report (partial-result aware) |
+| GET | `/reports/{id}/export` | Machine-readable export. **Requires `X-API-Key` or operator Bearer token.** |
 | POST | `/auth/sign-in` | Operator sign-in → Bearer token |
-| POST | `/reviews` | Mark reviewed (operator auth required; audited) |
+| POST | `/reanalysis/{run_id}` | Re-trigger analysis (operator auth; audited) |
+| POST | `/workflow/runs/{run_id}/correct` | Correct fields + re-run (operator auth; audited) |
+| POST | `/workflow/runs/{run_id}/notes` | Add review notes (operator auth; audited) |
+| POST | `/reviews/{run_id}` | Mark reviewed (operator auth required; audited) |
 
 Exact request/response shapes are in the live `/docs`.

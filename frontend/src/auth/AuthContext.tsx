@@ -23,7 +23,10 @@ interface AuthState {
 }
 
 interface AuthContextValue {
-  auth: AuthState | null;
+  // Non-null by construction: AuthProvider renders the sign-in form (not the
+  // context) until a session exists, so any consumer of this context is
+  // guaranteed an authenticated session.
+  auth: AuthState;
   signOut: () => void;
 }
 
