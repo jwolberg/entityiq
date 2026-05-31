@@ -31,6 +31,26 @@ export interface SignInResponse {
   message: string;
 }
 
+export interface SubmissionRequest {
+  company_name: string;
+  work_email: string;
+  company_domain: string;
+  country: string;
+  tax_id?: string;
+  billing_address?: string;
+  phone?: string;
+  requester_full_name?: string;
+  linkedin_url?: string;
+}
+
+export interface SubmissionResponse {
+  submission_id: string;
+  run_id: string;
+  status: string;
+  is_free_email_domain: boolean;
+  message: string;
+}
+
 // ---------------------------------------------------------------------------
 // Reports list
 // ---------------------------------------------------------------------------
@@ -300,5 +320,17 @@ export const apiClient = {
   /** GET /reports/{run_id}/export — machine-readable report (for download) */
   exportReport(runId: string, token: string): Promise<ReportResponse> {
     return request<ReportResponse>(`/reports/${runId}/export`, {}, token);
+  },
+
+  /** POST /submissions — submit a new company for verification */
+  submitCompany(
+    body: SubmissionRequest,
+    token: string,
+  ): Promise<SubmissionResponse> {
+    return request<SubmissionResponse>(
+      "/submissions",
+      { method: "POST", body: JSON.stringify(body) },
+      token,
+    );
   },
 };

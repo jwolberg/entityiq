@@ -3,9 +3,14 @@
 All tests run against SQLite in-memory — no live Postgres or Redis required.
 """
 
+import unittest.mock as mock
+
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import sessionmaker
 
+from app.api.submissions import _get_db
+from app.main import app
 from app.models.submission import Submission
 from app.models.verification_run import VerificationRun
 
@@ -215,3 +220,90 @@ def test_domain_with_https_scheme_is_normalized(api_client: TestClient, db_sessi
     sub = db_session.get(Submission, body["submission_id"])
     assert sub is not None
     assert sub.domain == "acme.example"
+
+
+# ---------------------------------------------------------------------------
+# Test: operators may submit via Bearer token (no API key), attributed to them
+# ---------------------------------------------------------------------------
+
+
+def test_operator_can_submit_with_bearer_token(sqlite_engine, db_session):
+    """An operator (Bearer token, no X-API-Key) can submit a registration.
+
+    /submissions accepts an operator OR an integrating system (get_principal).
+    The submission has no api_client_id and is attributed to the operator.
+    """
+    from app.auth.operator import _clear_all_sessions, hash_password, sign_in
+    from app.auth.operator import _get_db as operator_get_db
+    from app.auth.service import _get_db as service_get_db
+    from app.models.operator import Operator
+
+    SessionMaker = sessionmaker(bind=sqlite_engine, autocommit=False, autoflush=False)
+
+    def override_get_db():
+        db = SessionMaker()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    # Seed an operator and mint a session token.
+    seed = SessionMaker()
+    try:
+        seed.add(
+            Operator(
+                email="submitter@acme.example",
+                full_name="Submitter Op",
+                role="operator",
+                password_hash=hash_password("pw"),
+            )
+        )
+        seed.commit()
+        token = sign_in("submitter@acme.example", "pw", seed)
+    finally:
+        seed.close()
+    assert token is not None
+
+    app.dependency_overrides[_get_db] = override_get_db
+    app.dependency_overrides[service_get_db] = override_get_db
+    app.dependency_overrides[operator_get_db] = override_get_db
+    try:
+        with mock.patch("app.pipeline.orchestrator.enqueue_run") as _enq:
+            _enq.return_value = None
+            client = TestClient(app, raise_server_exceptions=True)
+            resp = client.post(
+                "/submissions",
+                json={**_VALID_PAYLOAD, "idempotency_key": "operator-submit-001"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        assert resp.status_code == 202, resp.text
+        body = resp.json()
+        sub = db_session.get(Submission, body["submission_id"])
+        assert sub is not None
+        assert sub.api_client_id is None  # operator submission, not a system
+    finally:
+        app.dependency_overrides.clear()
+        _clear_all_sessions()
+
+
+def test_submission_without_auth_returns_401(sqlite_engine):
+    """No API key and no Bearer token → 401."""
+    from app.auth.service import _get_db as service_get_db
+
+    SessionMaker = sessionmaker(bind=sqlite_engine, autocommit=False, autoflush=False)
+
+    def override_get_db():
+        db = SessionMaker()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[_get_db] = override_get_db
+    app.dependency_overrides[service_get_db] = override_get_db
+    try:
+        client = TestClient(app, raise_server_exceptions=True)
+        resp = client.post("/submissions", json=_VALID_PAYLOAD)
+        assert resp.status_code == 401, resp.text
+    finally:
+        app.dependency_overrides.clear()

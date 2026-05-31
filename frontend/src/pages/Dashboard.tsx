@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import { apiClient, ReportListItem } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { NewCompanyForm } from "../components/NewCompanyForm";
 
 interface DashboardProps {
   onSelect: (runId: string) => void;
@@ -77,6 +78,10 @@ export function Dashboard({ onSelect }: DashboardProps) {
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
 
+  // New-company form modal + queue refresh trigger
+  const [showForm, setShowForm] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -98,7 +103,7 @@ export function Dashboard({ onSelect }: DashboardProps) {
     return () => {
       cancelled = true;
     };
-  }, [auth.token]);
+  }, [auth.token, refreshKey]);
 
   const query = search.trim().toLowerCase();
   const filtered = items.filter((item) => {
@@ -128,7 +133,26 @@ export function Dashboard({ onSelect }: DashboardProps) {
               ? `${filtered.length} of ${items.length} report${items.length !== 1 ? "s" : ""}`
               : `${items.length} report${items.length !== 1 ? "s" : ""}`}
         </span>
+        <button
+          type="button"
+          onClick={() => setShowForm(true)}
+          style={styles.newBtn}
+          data-testid="open-new-company-form"
+        >
+          + Check New Company
+        </button>
       </div>
+
+      {showForm && (
+        <NewCompanyForm
+          token={auth.token}
+          onClose={() => setShowForm(false)}
+          onSuccess={() => {
+            setShowForm(false);
+            setRefreshKey((k) => k + 1);
+          }}
+        />
+      )}
 
       {!loading && !error && items.length > 0 && (
         <div style={styles.filterBar} data-testid="dashboard-filters">
@@ -284,6 +308,17 @@ const styles: Record<string, React.CSSProperties> = {
   count: {
     color: "#6b7280",
     fontSize: "0.875rem",
+  },
+  newBtn: {
+    marginLeft: "auto",
+    padding: "0.5rem 1rem",
+    border: "none",
+    borderRadius: "0.375rem",
+    backgroundColor: "#2563eb",
+    color: "#ffffff",
+    fontWeight: 600,
+    fontSize: "0.875rem",
+    cursor: "pointer",
   },
   filterBar: {
     display: "flex",

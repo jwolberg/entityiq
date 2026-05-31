@@ -17,9 +17,8 @@ from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from app.audit.recorder import record_event
-from app.auth.service import get_current_api_client
+from app.auth.service import Principal, get_principal
 from app.db.session import SessionLocal
-from app.models.api_client import ApiClient
 from app.models.entity import Entity
 from app.models.submission import Submission
 from app.models.verification_run import VerificationRun
@@ -159,14 +158,14 @@ def submit(
     body: SubmissionRequest,
     request: Request,
     db: Session = Depends(_get_db),
-    client: ApiClient = Depends(get_current_api_client),
+    principal: Principal = Depends(get_principal),
 ) -> SubmissionResponse:
     """Accept a registration submission and enqueue a verification run.
 
-    Requires a valid service credential (X-API-Key) — integrating systems
-    authenticate at the API boundary (ARCHITECTURE § 5).  The submission and a
-    `system.submission_received` audit event are attributed to the calling
-    system (P2-T12).
+    Requires an authenticated principal — an integrating system (X-API-Key) or
+    an operator (Bearer token), matching the report-export endpoint.  The
+    submission and a `submission_received` audit event are attributed to the
+    calling principal (P2-T12).
 
     Returns 202 with the submission_id, run_id, and a pending status.
     Idempotent on idempotency_key: a duplicate key returns the original run
@@ -227,7 +226,7 @@ def submit(
         linkedin_url=str(body.linkedin_url) if body.linkedin_url else None,
         extra_metadata=body.extra_metadata,
         entity_id=entity.id,
-        api_client_id=client.id,
+        api_client_id=principal.api_client_id,
         source_ip=source_ip,
         user_agent=user_agent,
         forwarded_headers=forwarded_headers if forwarded_headers else None,
@@ -248,21 +247,22 @@ def submit(
 
     db.commit()
 
-    # --- Attribute the ingest to the calling system (P2-T12) ---
+    # --- Attribute the ingest to the calling principal (P2-T12) ---
     record_event(
         db=db,
-        event_type="system.submission_received",
-        api_client_id=client.id,
+        event_type=f"{principal.kind}.submission_received",
+        operator_id=principal.operator_id,
+        api_client_id=principal.api_client_id,
         submission_id=submission.id,
         verification_run_id=run.id,
         payload={
-            "system": client.name,
+            principal.kind: principal.name,
             "endpoint": endpoint,
             "submitted_at": submitted_at.isoformat(),
         },
         description=(
-            f"Integrating system {client.name!r} submitted registration "
-            f"{submission.id!r}; run {run.id!r} enqueued."
+            f"{principal.kind.capitalize()} {principal.name!r} submitted "
+            f"registration {submission.id!r}; run {run.id!r} enqueued."
         ),
     )
 

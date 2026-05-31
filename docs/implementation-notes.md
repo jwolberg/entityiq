@@ -852,3 +852,31 @@ locking down operator-only report reads.
   had one. A more general guard would be `redirect: "error"` in the fetch plus a
   backend `redirect_slashes=False`, but the one-line path fix is the minimal
   change.
+
+---
+
+## 2026-05-31 — Feature: "Check New Company" form on the Verification Queue
+
+- Goal: let an operator submit a new company to verify directly from the queue
+  UI, then have the pipeline collect all data it can and produce a report.
+- Backend: `POST /submissions` auth changed from `get_current_api_client`
+  (X-API-Key only) to `get_principal` (operator Bearer token OR X-API-Key),
+  matching the `/reports/{id}/export` precedent. Non-breaking — existing API-key
+  integrators still work. `api_client_id` now comes from
+  `principal.api_client_id` (None for operator submissions; column already
+  nullable). Audit event type/attribution is per-principal
+  (`operator.submission_received` vs `system.submission_received`).
+- Frontend: new `components/NewCompanyForm.tsx` (modal: 4 required + 5 optional
+  fields, empty optionals omitted so URL validation doesn't 422); `client.ts`
+  gains `submitCompany()` + `SubmissionRequest`/`SubmissionResponse` types;
+  `Dashboard.tsx` gets a "+ Check New Company" button and re-fetches the queue
+  on success (refreshKey bump).
+- Scope: "find all data" = the existing verification pipeline (registries,
+  domain/infra, network/IP, web). No new data sources. In eager mode the run
+  completes inline, so the new row appears as `complete` on refresh.
+- Gotcha: a running uvicorn does NOT auto-reload on code change — the old
+  process kept rejecting operator submissions ("Invalid or missing API key")
+  until restarted. Restart the backend after auth changes.
+- Tests: added operator-Bearer submit + no-auth-401 cases to
+  `tests/test_submissions.py`. Backend 385 passed; frontend lint + 18 tests +
+  build all pass.
