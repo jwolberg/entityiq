@@ -55,11 +55,27 @@ function formatDate(iso: string | null): string {
   }
 }
 
+type ReviewFilter = "all" | "pending" | "reviewed";
+type RiskFilter = "all" | "low" | "medium" | "high";
+
+/** Risk band for a score: low < 40 ≤ medium < 70 ≤ high. */
+function riskBand(score: number | null): RiskFilter | null {
+  if (score === null) return null;
+  if (score >= 70) return "high";
+  if (score >= 40) return "medium";
+  return "low";
+}
+
 export function Dashboard({ onSelect }: DashboardProps) {
   const { auth } = useAuth();
   const [items, setItems] = useState<ReportListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Filters / search (client-side over the fetched list)
+  const [search, setSearch] = useState("");
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
+  const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -84,14 +100,72 @@ export function Dashboard({ onSelect }: DashboardProps) {
     };
   }, [auth.token]);
 
+  const query = search.trim().toLowerCase();
+  const filtered = items.filter((item) => {
+    if (query) {
+      const haystack = `${item.company_name} ${item.domain}`.toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    if (reviewFilter === "pending" && item.review_status !== null) return false;
+    if (reviewFilter === "reviewed" && item.review_status === null) return false;
+    if (riskFilter !== "all" && riskBand(item.overall_score) !== riskFilter) {
+      return false;
+    }
+    return true;
+  });
+
+  const filtersActive =
+    query !== "" || reviewFilter !== "all" || riskFilter !== "all";
+
   return (
     <div>
       <div style={styles.header}>
         <h2 style={styles.heading}>Verification Queue</h2>
         <span style={styles.count}>
-          {loading ? "" : `${items.length} report${items.length !== 1 ? "s" : ""}`}
+          {loading
+            ? ""
+            : filtersActive
+              ? `${filtered.length} of ${items.length} report${items.length !== 1 ? "s" : ""}`
+              : `${items.length} report${items.length !== 1 ? "s" : ""}`}
         </span>
       </div>
+
+      {!loading && !error && items.length > 0 && (
+        <div style={styles.filterBar} data-testid="dashboard-filters">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search company or domain…"
+            aria-label="Search company or domain"
+            style={styles.searchInput}
+            data-testid="dashboard-search"
+          />
+          <select
+            value={reviewFilter}
+            onChange={(e) => setReviewFilter(e.target.value as ReviewFilter)}
+            aria-label="Filter by review status"
+            style={styles.select}
+            data-testid="filter-review"
+          >
+            <option value="all">All statuses</option>
+            <option value="pending">Pending review</option>
+            <option value="reviewed">Reviewed</option>
+          </select>
+          <select
+            value={riskFilter}
+            onChange={(e) => setRiskFilter(e.target.value as RiskFilter)}
+            aria-label="Filter by risk level"
+            style={styles.select}
+            data-testid="filter-risk"
+          >
+            <option value="all">All risk levels</option>
+            <option value="high">High (70+)</option>
+            <option value="medium">Medium (40–69)</option>
+            <option value="low">Low (&lt;40)</option>
+          </select>
+        </div>
+      )}
 
       {loading && (
         <div style={styles.state} data-testid="dashboard-loading">
@@ -112,7 +186,13 @@ export function Dashboard({ onSelect }: DashboardProps) {
         </div>
       )}
 
-      {!loading && !error && items.length > 0 && (
+      {!loading && !error && items.length > 0 && filtered.length === 0 && (
+        <div style={styles.state} data-testid="dashboard-no-matches">
+          No reports match the current filters.
+        </div>
+      )}
+
+      {!loading && !error && filtered.length > 0 && (
         <table style={styles.table} data-testid="dashboard-table">
           <thead>
             <tr>
@@ -124,7 +204,7 @@ export function Dashboard({ onSelect }: DashboardProps) {
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
+            {filtered.map((item) => (
               <tr
                 key={item.run_id}
                 style={styles.row}
@@ -204,6 +284,28 @@ const styles: Record<string, React.CSSProperties> = {
   count: {
     color: "#6b7280",
     fontSize: "0.875rem",
+  },
+  filterBar: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.5rem",
+    marginBottom: "1rem",
+  },
+  searchInput: {
+    flex: "1 1 220px",
+    minWidth: "180px",
+    padding: "0.5rem 0.75rem",
+    border: "1px solid #d1d5db",
+    borderRadius: "0.375rem",
+    fontSize: "0.875rem",
+  },
+  select: {
+    padding: "0.5rem 0.75rem",
+    border: "1px solid #d1d5db",
+    borderRadius: "0.375rem",
+    fontSize: "0.875rem",
+    backgroundColor: "#ffffff",
+    cursor: "pointer",
   },
   state: {
     padding: "2rem",

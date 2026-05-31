@@ -141,6 +141,59 @@ export interface ReviewResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Operator workflow actions (P2-T10 / P2-T11)
+// ---------------------------------------------------------------------------
+
+export interface ReanalysisResponse {
+  new_run_id: string;
+  supersedes_run_id: string;
+  entity_id: string;
+  status: string;
+  triggered_at: string;
+  message: string;
+}
+
+/** Correctable submitted fields (must match backend _CORRECTABLE_FIELDS). */
+export type CorrectableField =
+  | "company_name"
+  | "domain"
+  | "work_email"
+  | "country"
+  | "tax_id"
+  | "billing_address"
+  | "phone"
+  | "requester_full_name"
+  | "linkedin_url";
+
+export interface CorrectAndRerunRequest {
+  corrections: Partial<Record<CorrectableField, string | null>>;
+  notes?: string;
+}
+
+export interface CorrectAndRerunResponse {
+  new_run_id: string;
+  supersedes_run_id: string;
+  submission_id: string;
+  corrections_applied: Record<string, string | null>;
+  triggered_at: string;
+  message: string;
+}
+
+export interface AddNotesRequest {
+  notes: string;
+  review_status?: string;
+}
+
+export interface AddNotesResponse {
+  review_id: string;
+  run_id: string;
+  notes: string;
+  review_status: string;
+  updated_at: string;
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
 // Client implementation
 // ---------------------------------------------------------------------------
 
@@ -204,5 +257,45 @@ export const apiClient = {
       { method: "POST", body: JSON.stringify(body) },
       token
     );
+  },
+
+  /** POST /reanalysis/{run_id} — re-trigger analysis (new run supersedes prior) */
+  triggerReanalysis(runId: string, token: string): Promise<ReanalysisResponse> {
+    return request<ReanalysisResponse>(
+      `/reanalysis/${runId}`,
+      { method: "POST" },
+      token
+    );
+  },
+
+  /** POST /workflow/runs/{run_id}/correct — correct submitted fields + re-run */
+  correctAndRerun(
+    runId: string,
+    body: CorrectAndRerunRequest,
+    token: string
+  ): Promise<CorrectAndRerunResponse> {
+    return request<CorrectAndRerunResponse>(
+      `/workflow/runs/${runId}/correct`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  },
+
+  /** POST /workflow/runs/{run_id}/notes — add/append review notes */
+  addNotes(
+    runId: string,
+    body: AddNotesRequest,
+    token: string
+  ): Promise<AddNotesResponse> {
+    return request<AddNotesResponse>(
+      `/workflow/runs/${runId}/notes`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  },
+
+  /** GET /reports/{run_id}/export — machine-readable report (for download) */
+  exportReport(runId: string, token: string): Promise<ReportResponse> {
+    return request<ReportResponse>(`/reports/${runId}/export`, {}, token);
   },
 };

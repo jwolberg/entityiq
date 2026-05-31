@@ -728,3 +728,35 @@ gate is `npm run lint` + `vitest`, both green.
 **Validation:**
 - `npm run lint` → clean (0/0).
 - `npm test` → 12 passed (3 files).
+
+---
+
+## 2026-05-31 — P2-T10 Full operator actions + dashboard filters
+
+**Decision: frontend-only.** The backend endpoints already exist (P2-T11):
+`POST /reanalysis/{run_id}`, `POST /workflow/runs/{run_id}/correct`,
+`POST /workflow/runs/{run_id}/notes`, `GET /reports/{run_id}/export`. This ticket
+adds typed client methods + operator UI + client-side dashboard filtering.
+
+**Decisions / tradeoffs:**
+- New `components/OperatorActions.tsx` (re-run, correct + re-run, add note, export)
+  keeps `CompanyDetail` display-focused — mirrors the RegistrationDiff/DetailPanels
+  split.
+- Correct-and-re-run sends **only changed fields**: form prefills from the report's
+  mismatches and diffs on submit, matching the backend's "only listed fields are
+  updated" contract. Empty correction is blocked client-side (no request).
+- Re-run / correct produce a superseding run; UI surfaces the new `run_id` and an
+  `onOpenRun` link. `App` adds `key={runId}` so the detail view remounts cleanly on
+  navigation to the new run.
+- Export = client-side JSON download (Blob + anchor), guarded for environments
+  without `URL.createObjectURL`. Formatted PDF/HTML export is out of scope.
+- Dashboard filters (search company/domain, review status, risk band) are
+  **client-side** over the already-fetched list — smallest change for current
+  scale; server-side pagination/filtering can follow if the queue grows.
+
+**Pattern note:** followed the codebase's existing `auth.token` direct-access
+pattern (AuthProvider guarantees non-null). `tsc` flags the usual pre-existing
+`auth is possibly null` warnings repo-wide; new files add none. Gate is
+`npm run lint` + `vitest`.
+
+**Validation:** `npm run lint` clean; `npm test` → 18 passed (4 files).

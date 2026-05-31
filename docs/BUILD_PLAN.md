@@ -59,8 +59,8 @@
 ## Current Status
 - Overall status: In Progress
 - Current phase: Phase 2 — Deepen the Tracks
-- Current ticket: P2-T10 — Full operator actions + dashboard filters (next)
-- Last completed: P2-T8 — Detail view completeness (2026-05-31)
+- Current ticket: P2-T12 — API auth for integrating systems (next)
+- Last completed: P2-T10 — Full operator actions + dashboard filters (2026-05-31)
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
   core schema runnable (SQLite-verified; Postgres verification pending P1-T1 setup).
@@ -287,7 +287,10 @@ _Track: Operator workbench_
   - Objective: correct submitted data + re-run, re-trigger analysis, add notes,
     export report; dashboard filters/search.
   - Depends on: P1-T10, P2-T11 · AC: PRD § Operator Actions; § Dashboard
-    (filters/search) · Status: Todo
+    (filters/search) · Status: Complete (2026-05-31) — frontend-only; new
+    components/OperatorActions.tsx wires the P2-T11 endpoints (re-run, correct +
+    re-run [sends only changed fields], add notes, export JSON); Dashboard gains
+    search + review-status + risk-band filters. lint clean, 18 FE tests pass.
 
 _Track: Integration & reporting API_
 - P2-T11 — Re-analysis + operator workflow endpoints + report export
@@ -356,14 +359,14 @@ _Track: Integration & reporting API_
 31. P3-T5
 
 ## Recommended Next Step
-- Start with: **P2-T10 — Full operator actions + dashboard filters**
-- Why this is next: P2-T6, P2-T7, P2-T8, and P2-T11 are complete. The detail view
-  now renders all PRD panels, and the re-analysis / workflow / export endpoints
-  (P2-T11) already exist on the backend — P2-T10 wires the remaining operator
-  actions (correct submitted data + re-run, re-trigger analysis, add notes, export
-  report) and dashboard filters/search into the frontend. P2-T9 (HQ map) is
-  deferred behind Open Decision #4 (map provider); P2-T12 (API auth for
-  integrating systems) is independent and can follow.
+- Start with: **P2-T12 — API auth for integrating systems**
+- Why this is next: P2-T6, P2-T7, P2-T8, P2-T10, and P2-T11 are complete — the
+  operator workbench and reporting API are now full-featured. P2-T12 adds
+  service-credential auth at the API boundary with per-system attribution
+  (ARCHITECTURE § 5; USERS § 2), enabling integrating systems to call the
+  submission/report endpoints non-interactively. It is independent of the
+  remaining blocked work. P2-T9 (HQ map) remains deferred behind Open Decision #4
+  (map provider); after P2-T12, Phase 2 is complete except P2-T9.
 - Note: Open Decision #5 (OpenCorporates + additional Tier-1 licensing) still
   blocks *production* use of Tier-1 adapters; resolve before enabling live queries.
   IPINFO_TOKEN production plan is also unresolved; free tier is operational.

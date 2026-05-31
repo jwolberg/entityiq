@@ -54,8 +54,10 @@ function AppShell() {
         )}
         {route.page === "detail" && (
           <CompanyDetail
+            key={route.runId}
             runId={route.runId}
             onBack={() => navigate({ page: "dashboard" })}
+            onOpenRun={(runId) => navigate({ page: "detail", runId })}
           />
         )}
       </main>

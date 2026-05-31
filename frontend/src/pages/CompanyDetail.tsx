@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { apiClient, ReportResponse } from "../api/client";
+import { apiClient, CorrectableField, ReportResponse } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { RegistrationDiff } from "../components/RegistrationDiff";
 import {
@@ -16,10 +16,37 @@ import {
   RegistryPanel,
   RiskAssessmentPanel,
 } from "../components/DetailPanels";
+import { OperatorActions } from "../components/OperatorActions";
 
 interface CompanyDetailProps {
   runId: string;
   onBack: () => void;
+  /** Open another run (e.g. a re-analysis run that supersedes this one). */
+  onOpenRun?: (runId: string) => void;
+}
+
+/** Pull prefill values for the correction form from the report's mismatches. */
+function submittedValuesFromReport(
+  report: ReportResponse
+): Partial<Record<CorrectableField, string>> {
+  const correctable = new Set<string>([
+    "company_name",
+    "domain",
+    "work_email",
+    "country",
+    "tax_id",
+    "billing_address",
+    "phone",
+    "requester_full_name",
+    "linkedin_url",
+  ]);
+  const out: Partial<Record<CorrectableField, string>> = {};
+  for (const m of report.mismatches) {
+    if (correctable.has(m.field_name) && m.submitted_value) {
+      out[m.field_name as CorrectableField] = m.submitted_value;
+    }
+  }
+  return out;
 }
 
 function ScoreDisplay({ score }: { score: number | null }) {
@@ -46,7 +73,7 @@ function ScoreDisplay({ score }: { score: number | null }) {
   );
 }
 
-export function CompanyDetail({ runId, onBack }: CompanyDetailProps) {
+export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) {
   const { auth } = useAuth();
   const [report, setReport] = useState<ReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -260,6 +287,17 @@ export function CompanyDetail({ runId, onBack }: CompanyDetailProps) {
                 )}
               </div>
             )}
+          </section>
+
+          {/* Operator Actions (re-run, correct + re-run, notes, export) */}
+          <section style={styles.section}>
+            <h3 style={styles.sectionTitle}>Operator Actions</h3>
+            <OperatorActions
+              runId={runId}
+              token={auth.token}
+              submittedValues={submittedValuesFromReport(report)}
+              onOpenRun={onOpenRun}
+            />
           </section>
         </div>
       )}

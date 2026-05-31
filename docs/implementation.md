@@ -1,178 +1,172 @@
 # Implementation
 
 ## Scope Implemented
-- Requested scope: Detail view completeness — DNS & domain panel, registry info,
-  contact info with source attribution, and a risk-assessment panel (flags +
-  operator notes) on the operator Company Detail view.
+- Requested scope: Full operator actions (re-run analysis, correct submitted data
+  + re-run, add notes, export report) and dashboard filters/search.
 - Related phase: Phase 2 — Deepen the Tracks (Track: Operator workbench)
-- Related ticket(s): **P2-T8 — Detail view completeness**
+- Related ticket(s): **P2-T10 — Full operator actions + dashboard filters**
 
 ## Approach
-- High-level strategy: **Frontend-only.** `GET /reports/{run_id}` already returns
-  everything the panels need — Tier-2 domain evidence, Tier-1 registry evidence,
-  Tier-3 web contact evidence (each with `source`/`field`/`attribution`), the
-  four-layer scores, and `contributing_signals` (risk flags / trust signals).
-  The panels are pure presentational components that read from the existing
-  `ReportResponse`; no backend, schema, or pipeline changes were required.
+- High-level strategy: **Frontend-only.** The backend endpoints already exist from
+  P2-T11 (`POST /reanalysis/{run_id}`, `POST /workflow/runs/{run_id}/correct`,
+  `POST /workflow/runs/{run_id}/notes`, `GET /reports/{run_id}/export`). This ticket
+  adds typed client methods and the operator UI that drives them, plus client-side
+  dashboard filtering. No backend/schema/pipeline changes.
 - Key decisions:
-  - Added four content components in a single shared file
-    (`components/DetailPanels.tsx`) with shared `FieldRow` / pending / empty
-    primitives, rather than four near-duplicate files. Matches the existing
-    "one focused component module" pattern (`RegistrationDiff.tsx`) while staying DRY.
-  - Each panel handles the three partial-result states already used elsewhere:
-    `pending` (section still computing), no-relevant-evidence (graceful "not
-    available" notice), and populated. This preserves the codebase's
-    partial-result-safe rendering contract.
-  - "Operator notes" (part of the P2-T8 risk panel requirement) is delivered by
-    adding an optional notes textarea to the **existing** Mark-Reviewed action,
-    which already accepts `notes` via `MarkReviewedRequest`. The broader operator
-    actions (correct data, re-run, export, dashboard filters) remain P2-T10.
-  - "DNS risk score" (PRD § DNS & Domain Intelligence) is surfaced as the
-    `infrastructure_score` line plus inline `recently_registered` / `no_mx`
-    flag badges, since there is no separate per-DNS score in the model.
+  - New `components/OperatorActions.tsx` holds the four run-level actions, keeping
+    `CompanyDetail` focused on display. Mirrors the existing presentational-
+    component split (`RegistrationDiff`, `DetailPanels`).
+  - Correct-and-re-run sends **only changed fields**: the form prefills from the
+    report's mismatches (submitted values) and diffs against them on submit, so the
+    backend receives a minimal `corrections` map (matching its "only listed fields
+    are updated" semantics). Empty submission is blocked client-side.
+  - Re-run and correct-and-re-run both create a superseding run; on success the UI
+    surfaces the new `run_id` and offers `onOpenRun` to navigate to it. `App` passes
+    `key={runId}` so the detail view cleanly remounts/reloads for the new run.
+  - Export downloads the `/export` JSON as a file via a Blob + anchor, guarded for
+    environments without `URL.createObjectURL`.
+  - Dashboard filters (search over company/domain, review-status, risk-band) are
+    **client-side** over the already-fetched list — smallest change that delivers
+    the value for the current list size; no new query params on the API.
 - Assumptions:
-  - Evidence `field` / `source` names are stable (verified against the
-    domain / opencorporates / web adapters): e.g. `domain_registrar`,
-    `registration_status`, `web_contacts_email`, etc.
-  - Contact list payloads (full email/phone lists) live in `raw_payload` and are
-    not exposed by the report API; the panel shows the primary discovered value
-    plus its `attribution.source_url`, which satisfies "source attribution".
+  - Correctable field set matches the backend `_CORRECTABLE_FIELDS` (encoded as the
+    `CorrectableField` union in `client.ts`).
+  - Risk bands follow the existing dashboard color thresholds (low < 40 ≤ medium
+    < 70 ≤ high).
 
 ---
 
 ## Implementation Plan
-1. `api/client.ts` — give `contributing_signals` a real type (`ContributingSignal`).
-2. `components/DetailPanels.tsx` (new) — `DomainPanel`, `RegistryPanel`,
-   `ContactPanel`, `RiskAssessmentPanel` + shared helpers/styles.
-3. `pages/CompanyDetail.tsx` — render the four panels in new sections; add an
-   optional review-notes textarea wired into the existing `markReviewed` call.
-4. `pages/CompanyDetail.test.tsx` — extend the fixture with evidence + signals +
-   sources; assert panels render (populated and partial/pending states).
+1. `api/client.ts` — add `triggerReanalysis`, `correctAndRerun`, `addNotes`,
+   `exportReport` + request/response types and the `CorrectableField` union.
+2. `components/OperatorActions.tsx` (new) — re-run, correct-and-re-run form,
+   add-notes, export (JSON download).
+3. `pages/CompanyDetail.tsx` — render `OperatorActions`; add `onOpenRun` prop;
+   derive prefill submitted values from mismatches.
+4. `App.tsx` — wire `onOpenRun` to navigation; remount detail via `key`.
+5. `pages/Dashboard.tsx` — search + review-status + risk-band filters, filtered
+   count, and a no-matches state.
+6. Tests — Dashboard filter test; new `OperatorActions.test.tsx`.
 
-Files to modify/create:
-- Create: `frontend/src/components/DetailPanels.tsx`
-- Modify: `frontend/src/api/client.ts`, `frontend/src/pages/CompanyDetail.tsx`,
-  `frontend/src/pages/CompanyDetail.test.tsx`
+Files to create: `components/OperatorActions.tsx`, `components/OperatorActions.test.tsx`
+Files to modify: `api/client.ts`, `pages/CompanyDetail.tsx`, `App.tsx`,
+`pages/Dashboard.tsx`, `pages/Dashboard.test.tsx`
 
 ---
 
 ## Code Changes
 
-### File: frontend/src/components/DetailPanels.tsx  (new)
-- Change summary: Four read-only Company Detail panels built from existing report
-  data, plus shared `FieldRow` / `Pending` / `NotAvailable` primitives and inline
-  styles consistent with the app.
-  - `DomainPanel` — domain age (+ recently-registered flag), registrar, created /
-    expires, MX (+ no-mail flag), SPF, DKIM, SSL issuer/subject/validity,
-    infrastructure score.
-  - `RegistryPanel` — registered name, registration status, jurisdiction,
-    registration number, legal address (Tier-1 `opencorporates`).
-  - `ContactPanel` — brand, email, phone, address, each with source attribution
-    (`attribution.source_url`).
-  - `RiskAssessmentPanel` — four layer-score cells, triage tier, evidence summary
-    (source + evidence counts), elevated-risk flags, and trust signals.
+### File: frontend/src/components/OperatorActions.tsx  (new)
+- Change summary: Operator workbench actions for a run — Re-run Analysis,
+  Correct Data & Re-run (expandable form, sends only changed fields), Add Note,
+  and Export Report (JSON download). Surfaces the new superseding run id with an
+  optional "View new run" link.
 
 ### File: frontend/src/api/client.ts
-- Change summary: Added `ContributingSignal` interface and typed
-  `ScoresData.contributing_signals` as `ContributingSignal[]` (was
-  `Record<string, unknown>[]`).
+- Change summary: Added `ReanalysisResponse`, `CorrectableField`,
+  `CorrectAndRerunRequest/Response`, `AddNotesRequest/Response`, and four client
+  methods (`triggerReanalysis`, `correctAndRerun`, `addNotes`, `exportReport`).
 
 ### File: frontend/src/pages/CompanyDetail.tsx
-- Change summary: Imported and rendered the four panels in new sections (DNS &
-  Domain Intelligence, Registry Information, Contact Information, Risk Assessment)
-  between the Registration Data diff and the Operator Action. Added an optional
-  review-notes textarea to the Mark-Reviewed action; `notes` is sent to
-  `markReviewed` only when non-empty.
+- Change summary: Added an "Operator Actions" section rendering `OperatorActions`;
+  new `onOpenRun?` prop; `submittedValuesFromReport()` derives correction-form
+  prefills from the report's mismatches.
 
-### File: frontend/src/pages/CompanyDetail.test.tsx
-- Change summary: Extended `COMPLETE_REPORT` with domain/registry/web evidence,
-  contributing signals (one elevated, one trust), and source summaries. Added two
-  tests: panels render from a complete report; panels show pending notices for a
-  partial report.
+### File: frontend/src/App.tsx
+- Change summary: Passes `onOpenRun` (navigates to the run) and `key={runId}` so
+  navigating to a superseding run remounts the detail view.
+
+### File: frontend/src/pages/Dashboard.tsx
+- Change summary: Added a filter bar (search over company/domain, review-status
+  select, risk-band select), client-side filtering, a filtered/total count, and a
+  "no matches" state; table now renders the filtered list.
+
+### Files: frontend/src/components/OperatorActions.test.tsx (new),
+### frontend/src/pages/Dashboard.test.tsx
+- Change summary: New tests for re-run, correct-and-re-run (only-changed-fields +
+  empty-block), add-notes, and export; new Dashboard test for search + status +
+  risk filtering and the no-matches state.
 
 ---
 
 ## Acceptance Criteria Mapping
-PRD § Company Detail View:
+PRD § Operator Actions + § Dashboard (filters/search):
 
-- Criterion: **DNS & Domain Intelligence** (domain age, registrar, MX/SPF/DKIM,
-  SSL metadata, DNS risk score)
-  - Implementation: `DomainPanel` renders all fields from Tier-2 `domain` evidence;
-    infrastructure score + recently-registered / no-MX flags cover "DNS risk score".
-  - File(s): `components/DetailPanels.tsx`, `pages/CompanyDetail.tsx`
+- Criterion: **Mark reviewed** — already shipped (P1-T10); unchanged.
+- Criterion: **Re-run analysis** — `OperatorActions` Re-run button →
+  `POST /reanalysis/{run_id}`; surfaces the superseding run.
+  - File(s): `components/OperatorActions.tsx`, `api/client.ts`
+- Criterion: **Correct submitted data (+ re-run)** — correction form →
+  `POST /workflow/runs/{run_id}/correct` with only changed fields.
+  - File(s): `components/OperatorActions.tsx`, `pages/CompanyDetail.tsx`
+- Criterion: **Add review notes** — note field → `POST /workflow/runs/{run_id}/notes`.
+  - File(s): `components/OperatorActions.tsx`
+- Criterion: **Export report** — `GET /reports/{run_id}/export` downloaded as JSON.
+  - File(s): `components/OperatorActions.tsx`, `api/client.ts`
+- Criterion: **Dashboard filters/search** — search + review-status + risk-band
+  filters with filtered count and no-matches state.
+  - File(s): `pages/Dashboard.tsx`
 
-- Criterion: **Registry Information** (registration status, jurisdiction,
-  registration identifiers, legal address)
-  - Implementation: `RegistryPanel` from Tier-1 `opencorporates` evidence.
-  - File(s): `components/DetailPanels.tsx`, `pages/CompanyDetail.tsx`
-
-- Criterion: **Contact Information** (names, phones, emails, addresses, source
-  attribution)
-  - Implementation: `ContactPanel` from Tier-3 `web` evidence with
-    `attribution.source_url` shown per value.
-  - File(s): `components/DetailPanels.tsx`, `pages/CompanyDetail.tsx`
-
-- Criterion: **Risk Assessment** (overall score, evidence summary, risk flags,
-  operator notes)
-  - Implementation: `RiskAssessmentPanel` (layer scores, triage tier, evidence
-    summary, elevated + trust signals) + review-notes textarea on the existing
-    Mark-Reviewed action.
-  - File(s): `components/DetailPanels.tsx`, `pages/CompanyDetail.tsx`
+All write actions are audited server-side (existing P2-T11 endpoints).
 
 ---
 
 ## Build Plan Mapping
-- Ticket: **P2-T8 — Detail view completeness**
+- Ticket: **P2-T10 — Full operator actions + dashboard filters**
   - Status: **Complete**
-  - What was completed: All four detail panels (DNS/domain, registry, contact with
-    attribution, risk assessment with flags) plus operator-notes capture, driven by
-    the existing report API. Partial-result-safe. Lint + tests green.
-  - Remaining work: None for this ticket. The map/address-confidence visualization
-    is **P2-T9** (blocked on Open Decision #4); full operator actions (correct data,
-    re-run, export, dashboard filters) are **P2-T10**.
+  - What was completed: All operator actions (re-run, correct + re-run, notes,
+    export) wired to the existing P2-T11 endpoints, plus dashboard search/filters.
+    Lint + tests green.
+  - Remaining work: None for this ticket. P2-T9 (HQ map) remains blocked on Open
+    Decision #4; P2-T12 (API auth for integrating systems) is independent and next.
 
 ---
 
 ## Validation
-- How the feature was tested: Vitest component tests render `CompanyDetail` with a
-  full report fixture (domain/registry/web evidence + signals + sources) and assert
-  each panel's content (registrar, recently-registered flag, registration status,
-  contact email + source attribution, risk flag/trust lists, evidence summary);
-  a second test asserts pending notices for a partial report.
+- How the feature was tested:
+  - `OperatorActions.test.tsx`: re-run posts to `/reanalysis` and exposes the new
+    run id (+ onOpenRun); correct-and-re-run posts only changed fields to
+    `/workflow/.../correct`; empty correction is blocked with no fetch; add-note
+    posts to `/workflow/.../notes` and confirms; export hits
+    `/reports/{run_id}/export` and triggers the download anchor.
+  - `Dashboard.test.tsx`: search narrows results, review-status and risk-band
+    filters select the right rows, and an impossible combination shows the
+    no-matches notice.
 - Lint/test results:
-  - `npm run lint` → clean (0 errors/warnings).
-  - `npm test` → **12 passed (3 files)**.
-  - `tsc --noEmit`: production files added **zero** new errors; the only
-    `CompanyDetail.tsx` errors are the pre-existing `auth is possibly null` pattern
-    (present at baseline, lines 59/75/85 → shifted to 66/82/95). The repo has a
-    pre-existing strict-null backlog validated via lint + vitest.
-- Manual verification steps: `cd frontend && npm run dev`, open a completed run in
-  the dashboard → the detail view now shows DNS & Domain Intelligence, Registry
-  Information, Contact Information, and Risk Assessment panels, plus a notes field
-  on Mark Reviewed.
-- Visible user outcome: Operators get the full PRD Company Detail View — domain/DNS
-  signals, authoritative registry data, attributed public contacts, and an
-  explainable risk panel with flags — instead of just score + registration diff.
+  - `npm run lint` → clean (0/0).
+  - `npm test` → **18 passed (4 files)**.
+  - `tsc --noEmit`: new files (`OperatorActions.tsx`, `client.ts`) add **zero**
+    errors. The only related errors are the pre-existing `auth is possibly null`
+    pattern used throughout the app (AuthProvider guarantees non-null); the gate is
+    lint + vitest, both green.
+- Manual verification steps: `cd frontend && npm run dev`; on the dashboard, use the
+  search box and the status/risk dropdowns to filter the queue; open a run → the
+  Operator Actions section offers Re-run, Correct Data & Re-run, Add Note, and
+  Export Report (JSON). Re-running opens the new superseding run.
+- Visible user outcome: Operators can now act on a run end-to-end (correct + re-run,
+  re-trigger, note, export) and triage the queue with search + filters — completing
+  the operator workbench.
 
 ---
 
 ## Open Issues
 - Known limitations:
-  - Contact panel shows the primary discovered value per type; full extracted lists
-    live in `raw_payload` and are not exposed by the report API (out of scope).
-  - "DNS risk score" is represented by the infrastructure layer score + flags;
-    there is no standalone per-DNS subscore in the data model.
-- Unresolved edge cases: None observed; panels degrade gracefully to "not
-  available" / pending notices.
-- Blockers: None for P2-T8. (Pre-existing project blockers unchanged: Open
-  Decision #5 Tier-1 licensing; IPINFO_TOKEN production plan.)
+  - Dashboard filtering is client-side over the fetched list; server-side
+    pagination/filtering can follow if the queue grows large (not required now).
+  - Correction-form prefill only covers fields present in the report's mismatches
+    (company_name, domain, country, tax_id, billing_address, phone); work_email,
+    requester_full_name, linkedin_url start blank (operator enters new values).
+  - Export downloads raw JSON; a formatted PDF/HTML export is out of scope.
+- Unresolved edge cases: None observed.
+- Blockers: None for P2-T10. (Project blockers unchanged: Open Decision #5 Tier-1
+  licensing; IPINFO_TOKEN production plan; #4 blocks P2-T9; #7 blocks P3-T3.)
 
 ---
 
 ## BUILD_PLAN Update
 - Current phase: Phase 2 — Deepen the Tracks
-- Current ticket: P2-T8 — Complete
-- Updated ticket status: P2-T8 → Complete
+- Current ticket: P2-T10 — Complete
+- Updated ticket status: P2-T10 → Complete
 - Blockers: unchanged (#5 licensing, IPINFO_TOKEN; #4 blocks P2-T9, #7 blocks P3-T3)
-- Recommended next ticket: **P2-T10 — Full operator actions + dashboard filters**
-  (P2-T9 is blocked on Open Decision #4 — map provider).
+- Recommended next ticket: **P2-T12 — API auth for integrating systems**
+  (P2-T9 — HQ visualization — remains blocked on Open Decision #4, map provider).
