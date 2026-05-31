@@ -59,7 +59,8 @@
 ## Current Status
 - Overall status: In Progress
 - Current phase: Phase 2 — Deepen the Tracks
-- Current ticket: P2-T8 — Detail view completeness
+- Current ticket: P2-T10 — Full operator actions + dashboard filters (next)
+- Last completed: P2-T8 — Detail view completeness (2026-05-31)
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
   core schema runnable (SQLite-verified; Postgres verification pending P1-T1 setup).
@@ -278,7 +279,7 @@ _Track: Operator workbench_
 - P2-T8 — Detail view completeness
   - Objective: DNS & domain panel, registry info, contact info w/ attribution, risk
     assessment panel (flags + operator notes).
-  - Depends on: P1-T10, P2-T6 · AC: PRD § Company Detail View (all subsections) · Status: Todo
+  - Depends on: P1-T10, P2-T6 · AC: PRD § Company Detail View (all subsections) · Status: Complete (2026-05-31) — frontend-only; DomainPanel/RegistryPanel/ContactPanel (w/ source attribution)/RiskAssessmentPanel in components/DetailPanels.tsx, driven by existing report API; operator-notes textarea added to Mark-Reviewed; lint clean, 12 FE tests pass.
 - P2-T9 — HQ visualization (map + address confidence)
   - Depends on: P2-T8; **Open decision #4 (map provider)** · AC: PRD § FE § HQ
     Visualization · Status: Todo
@@ -355,12 +356,14 @@ _Track: Integration & reporting API_
 31. P3-T5
 
 ## Recommended Next Step
-- Start with: **P2-T6 — Full four-layer scoring + signal catalog**
-- Why this is next: P2-T3, P2-T4, P2-T5 are complete.  The new sanctions,
-  web, caching, and rate-limiting layers have added signals and a
-  SourceAvailabilityTracker that the scoring engine needs to consume.  P2-T6
-  adds the full entity/infrastructure/representation/risk layer weights and
-  the per-signal catalog, consuming the new evidence types.
+- Start with: **P2-T10 — Full operator actions + dashboard filters**
+- Why this is next: P2-T6, P2-T7, P2-T8, and P2-T11 are complete. The detail view
+  now renders all PRD panels, and the re-analysis / workflow / export endpoints
+  (P2-T11) already exist on the backend — P2-T10 wires the remaining operator
+  actions (correct submitted data + re-run, re-trigger analysis, add notes, export
+  report) and dashboard filters/search into the frontend. P2-T9 (HQ map) is
+  deferred behind Open Decision #4 (map provider); P2-T12 (API auth for
+  integrating systems) is independent and can follow.
 - Note: Open Decision #5 (OpenCorporates + additional Tier-1 licensing) still
   blocks *production* use of Tier-1 adapters; resolve before enabling live queries.
   IPINFO_TOKEN production plan is also unresolved; free tier is operational.

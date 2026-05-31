@@ -55,6 +55,16 @@ export interface ReportListResponse {
 // Full report (detail view)
 // ---------------------------------------------------------------------------
 
+/** One contributing signal behind a layer score (a risk flag or trust signal). */
+export interface ContributingSignal {
+  name: string;
+  layer: string; // "entity" | "infrastructure" | "representation" | "risk"
+  direction: string; // "elevated" (risk) | "trust"
+  weight: number;
+  description: string;
+  evidence_ids?: string[];
+}
+
 export interface ScoresData {
   overall_score: number | null;
   entity_score: number | null;
@@ -62,7 +72,7 @@ export interface ScoresData {
   representation_score: number | null;
   risk_score: number | null;
   triage_tier: string | null;
-  contributing_signals: Record<string, unknown>[];
+  contributing_signals: ContributingSignal[];
 }
 
 export interface MismatchItem {

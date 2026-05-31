@@ -694,3 +694,37 @@ trigger) is explicitly deferred to P3-T3 per the build plan.
 - `ruff format --check .` → "20 files already formatted"
 - `pytest -v` → 9 passed in 1.50s (2 health + 7 new model tests)
 - `alembic upgrade head` (SQLite) → "Running upgrade -> c46233bc9881, initial_schema"
+
+---
+
+## 2026-05-31 — P2-T8 Detail view completeness
+
+**Decision: frontend-only.** `GET /reports/{run_id}` already returns Tier-1/2/3
+evidence (with `source`/`field`/`attribution`), four-layer scores, and
+`contributing_signals`. The four PRD detail panels are pure presentational
+components over the existing payload — no backend/schema/pipeline changes.
+
+**Decisions / tradeoffs:**
+- One shared `components/DetailPanels.tsx` (Domain/Registry/Contact/Risk panels +
+  shared FieldRow/pending/empty primitives) instead of four near-duplicate files —
+  DRY, matches the focused-module pattern of `RegistrationDiff.tsx`.
+- "Operator notes" delivered via an optional notes textarea on the **existing**
+  Mark-Reviewed action (the `markReviewed` API already accepts `notes`). The rest
+  of the operator actions (correct data, re-run, export, dashboard filters) stay
+  in scope for **P2-T10**, not pulled forward.
+- "DNS risk score" (PRD) surfaced as the `infrastructure_score` line + inline
+  `recently_registered` / `no_mx` flag badges — there is no standalone per-DNS
+  subscore in the model.
+- Contact panel shows the primary discovered value per type + `source_url`
+  attribution; full extracted lists live in `raw_payload` and are not exposed by
+  the report API (intentional, out of scope).
+
+**Pre-existing issue noted (not fixed — unrelated):** `tsc --noEmit` reports a
+strict-null backlog across the frontend (incl. `auth is possibly null` in
+CompanyDetail/Dashboard and missing test-runner globals). Present at baseline (85
+errors before this change); my production files added zero new errors. The team's
+gate is `npm run lint` + `vitest`, both green.
+
+**Validation:**
+- `npm run lint` → clean (0/0).
+- `npm test` → 12 passed (3 files).

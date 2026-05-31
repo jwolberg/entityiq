@@ -1,129 +1,178 @@
 # Implementation
 
 ## Scope Implemented
-- Requested scope: P2-T6, P2-T7
-- Related phase: Phase 2 — Deepen the Tracks
-- Related ticket(s): P2-T6 (Full four-layer scoring + signal catalog), P2-T7 (Explainability + triage tiers)
+- Requested scope: Detail view completeness — DNS & domain panel, registry info,
+  contact info with source attribution, and a risk-assessment panel (flags +
+  operator notes) on the operator Company Detail view.
+- Related phase: Phase 2 — Deepen the Tracks (Track: Operator workbench)
+- Related ticket(s): **P2-T8 — Detail view completeness**
 
 ## Approach
-
-### P2-T6
-- `signals.py` contains the full PRD signal catalog for all four scoring layers, called lazily from `engine.py` to avoid circular imports.
-- `engine.py` updated to delegate each layer function to `signals.py` and to accept optional `run_id`+`db` parameters for cross-submission IP/ASN reuse detection (deferred from P2-T2).
-- `_cross_submission_reuse_signals()` in `signals.py` queries Evidence rows from other runs sharing the same ASN — 1 hit → `ip_asn_reuse` (w=0.3); ≥3 hits → `ip_asn_reuse_high` (w=0.6).
-- Absence signals (`no_registry_evidence`, etc.) have `evidence_ids=[]` by design — they document missing sources, not findings.
-- Scoring is advisory only: `ScoringResult` has no `decision`/`approved`/`rejected` attribute.
-
-### P2-T7
-- `triage.py` derives `TriageResult` (tier, reason, critical_signals, advisory_note) from `ScoringResult`. Two paths: (1) critical-signal override (sanctions/ASN-reuse-high → always escalate); (2) score-threshold path.
-- `explain.py` builds `ExplainabilityPayload` with per-layer `LayerExplanation` (score + signals + sources), `MismatchDetail` list, and `source_coverage` map.
-- `report.py` extended: `_build_summary()` adds `triage` and `explainability` top-level keys to the report summary JSON, reconstructing Signal objects from persisted `RiskAssessment.contributing_signals` without re-running the engine.
-
-### Key decisions
-- Lazy imports in `engine.py` layer helpers prevent the `signals.py` → `engine.Signal` → `signals.py` circular import.
-- `report.py` derives triage/explainability from the persisted `RiskAssessment` data rather than re-scoring, keeping `StoreReportStage` idempotent.
-- `TriageResult.advisory_note` is always set on every result; tests assert its presence.
-- No new endpoints or UI changes — downstream FE/API reads the new fields from the existing `GET /reports/{run_id}` summary.
+- High-level strategy: **Frontend-only.** `GET /reports/{run_id}` already returns
+  everything the panels need — Tier-2 domain evidence, Tier-1 registry evidence,
+  Tier-3 web contact evidence (each with `source`/`field`/`attribution`), the
+  four-layer scores, and `contributing_signals` (risk flags / trust signals).
+  The panels are pure presentational components that read from the existing
+  `ReportResponse`; no backend, schema, or pipeline changes were required.
+- Key decisions:
+  - Added four content components in a single shared file
+    (`components/DetailPanels.tsx`) with shared `FieldRow` / pending / empty
+    primitives, rather than four near-duplicate files. Matches the existing
+    "one focused component module" pattern (`RegistrationDiff.tsx`) while staying DRY.
+  - Each panel handles the three partial-result states already used elsewhere:
+    `pending` (section still computing), no-relevant-evidence (graceful "not
+    available" notice), and populated. This preserves the codebase's
+    partial-result-safe rendering contract.
+  - "Operator notes" (part of the P2-T8 risk panel requirement) is delivered by
+    adding an optional notes textarea to the **existing** Mark-Reviewed action,
+    which already accepts `notes` via `MarkReviewedRequest`. The broader operator
+    actions (correct data, re-run, export, dashboard filters) remain P2-T10.
+  - "DNS risk score" (PRD § DNS & Domain Intelligence) is surfaced as the
+    `infrastructure_score` line plus inline `recently_registered` / `no_mx`
+    flag badges, since there is no separate per-DNS score in the model.
+- Assumptions:
+  - Evidence `field` / `source` names are stable (verified against the
+    domain / opencorporates / web adapters): e.g. `domain_registrar`,
+    `registration_status`, `web_contacts_email`, etc.
+  - Contact list payloads (full email/phone lists) live in `raw_payload` and are
+    not exposed by the report API; the panel shows the primary discovered value
+    plus its `attribution.source_url`, which satisfies "source attribution".
 
 ---
 
 ## Implementation Plan
+1. `api/client.ts` — give `contributing_signals` a real type (`ContributingSignal`).
+2. `components/DetailPanels.tsx` (new) — `DomainPanel`, `RegistryPanel`,
+   `ContactPanel`, `RiskAssessmentPanel` + shared helpers/styles.
+3. `pages/CompanyDetail.tsx` — render the four panels in new sections; add an
+   optional review-notes textarea wired into the existing `markReviewed` call.
+4. `pages/CompanyDetail.test.tsx` — extend the fixture with evidence + signals +
+   sources; assert panels render (populated and partial/pending states).
 
-### P2-T6 (committed first)
-1. Add `backend/app/scoring/signals.py` — full PRD signal catalog
-2. Modify `backend/app/scoring/engine.py` — delegate to signals.py, add run_id/db params
-3. Add `backend/tests/scoring/test_signals.py` — 30 new tests
-4. Update docs, commit
-
-### P2-T7
-1. Add `backend/app/scoring/triage.py` — TriageResult + derive_triage()
-2. Add `backend/app/scoring/explain.py` — ExplainabilityPayload + build_explainability()
-3. Modify `backend/app/scoring/report.py` — include triage + explainability in summary
-4. Add `backend/tests/scoring/test_triage.py` — 24 new tests
-5. Update docs, commit
+Files to modify/create:
+- Create: `frontend/src/components/DetailPanels.tsx`
+- Modify: `frontend/src/api/client.ts`, `frontend/src/pages/CompanyDetail.tsx`,
+  `frontend/src/pages/CompanyDetail.test.tsx`
 
 ---
 
 ## Code Changes
 
-### File: `backend/app/scoring/signals.py` (new)
-- Full PRD signal catalog for all four layers.
-- `entity_legitimacy_signals()`, `infrastructure_legitimacy_signals()`, `representation_confidence_signals()`, `fraud_staging_risk_signals()`.
-- `_cross_submission_reuse_signals()` for cross-submission IP/ASN reuse detection.
+### File: frontend/src/components/DetailPanels.tsx  (new)
+- Change summary: Four read-only Company Detail panels built from existing report
+  data, plus shared `FieldRow` / `Pending` / `NotAvailable` primitives and inline
+  styles consistent with the app.
+  - `DomainPanel` — domain age (+ recently-registered flag), registrar, created /
+    expires, MX (+ no-mail flag), SPF, DKIM, SSL issuer/subject/validity,
+    infrastructure score.
+  - `RegistryPanel` — registered name, registration status, jurisdiction,
+    registration number, legal address (Tier-1 `opencorporates`).
+  - `ContactPanel` — brand, email, phone, address, each with source attribution
+    (`attribution.source_url`).
+  - `RiskAssessmentPanel` — four layer-score cells, triage tier, evidence summary
+    (source + evidence counts), elevated-risk flags, and trust signals.
 
-### File: `backend/app/scoring/engine.py` (modified)
-- Docstring updated to document P2-T6 changes.
-- Layer helper functions now delegate to `signals.py` via lazy imports.
-- `ScoringEngine.score()` accepts optional `run_id` + `db` parameters.
+### File: frontend/src/api/client.ts
+- Change summary: Added `ContributingSignal` interface and typed
+  `ScoresData.contributing_signals` as `ContributingSignal[]` (was
+  `Record<string, unknown>[]`).
 
-### File: `backend/app/scoring/triage.py` (new)
-- `TriageResult` dataclass: tier, reason, critical_signals, advisory_note.
-- `derive_triage(result: ScoringResult) -> TriageResult`.
-- Critical signal set: `sanctions_hit`, `sanctions_hit_fraud_flag`, `ip_asn_reuse_high`.
+### File: frontend/src/pages/CompanyDetail.tsx
+- Change summary: Imported and rendered the four panels in new sections (DNS &
+  Domain Intelligence, Registry Information, Contact Information, Risk Assessment)
+  between the Registration Data diff and the Operator Action. Added an optional
+  review-notes textarea to the Mark-Reviewed action; `notes` is sent to
+  `markReviewed` only when non-empty.
 
-### File: `backend/app/scoring/explain.py` (new)
-- `ExplainabilityPayload`, `LayerExplanation`, `SignalDetail`, `MismatchDetail` dataclasses.
-- `build_explainability(result, evidence_rows, field_comparisons) -> ExplainabilityPayload`.
-
-### File: `backend/app/scoring/report.py` (modified)
-- `_build_summary()` adds `triage` and `explainability` keys to the summary dict.
-- `_derive_triage_from_assessment()` and `_build_explainability_from_assessment()` reconstruct from persisted JSON.
-
-### File: `backend/tests/scoring/test_signals.py` (new, P2-T6)
-- 30 tests: clean entity, sanctions hit, registry mismatch, fraud stack, confidence, IP/ASN reuse, IP country mismatch, trust catalog, no-orphan integration.
-
-### File: `backend/tests/scoring/test_triage.py` (new, P2-T7)
-- 24 tests: pre_clear with full explanation, sanctions escalate, mismatch escalate, no auto-approval invariant, explainability payload integrity, report summary inclusion.
+### File: frontend/src/pages/CompanyDetail.test.tsx
+- Change summary: Extended `COMPLETE_REPORT` with domain/registry/web evidence,
+  contributing signals (one elevated, one trust), and source summaries. Added two
+  tests: panels render from a complete report; panels show pending notices for a
+  partial report.
 
 ---
 
 ## Acceptance Criteria Mapping
+PRD § Company Detail View:
 
-- PRD § Core Verification Philosophy (four layers): All four layer scores computed with full signal catalog.
-- PRD § Risk Signals (elevated + trust): Full catalog in `signals.py` covering all PRD-listed signals.
-- PRD § Risk Scoring (overall 0-100 + confidence breakdown): `ScoringEngine` produces overall + four layer scores + confidence.
-- PRD § Explainability Requirements (evidence, source attribution, contributing signals, mismatches): `ExplainabilityPayload` surfaces all four.
-- PRD § Non-Goals (no auto-approval): `TriageResult` has no approval state; advisory_note always present; tests assert invariant.
-- STRATEGY § Our approach (triage): `pre_clear`/`review`/`escalate` tiers feed the operator queue.
-- ARCHITECTURE § 3 (`risk_assessment` + `risk_assessment_evidence`): All signal evidence_ids reference valid evidence rows; no orphan signals.
+- Criterion: **DNS & Domain Intelligence** (domain age, registrar, MX/SPF/DKIM,
+  SSL metadata, DNS risk score)
+  - Implementation: `DomainPanel` renders all fields from Tier-2 `domain` evidence;
+    infrastructure score + recently-registered / no-MX flags cover "DNS risk score".
+  - File(s): `components/DetailPanels.tsx`, `pages/CompanyDetail.tsx`
+
+- Criterion: **Registry Information** (registration status, jurisdiction,
+  registration identifiers, legal address)
+  - Implementation: `RegistryPanel` from Tier-1 `opencorporates` evidence.
+  - File(s): `components/DetailPanels.tsx`, `pages/CompanyDetail.tsx`
+
+- Criterion: **Contact Information** (names, phones, emails, addresses, source
+  attribution)
+  - Implementation: `ContactPanel` from Tier-3 `web` evidence with
+    `attribution.source_url` shown per value.
+  - File(s): `components/DetailPanels.tsx`, `pages/CompanyDetail.tsx`
+
+- Criterion: **Risk Assessment** (overall score, evidence summary, risk flags,
+  operator notes)
+  - Implementation: `RiskAssessmentPanel` (layer scores, triage tier, evidence
+    summary, elevated + trust signals) + review-notes textarea on the existing
+    Mark-Reviewed action.
+  - File(s): `components/DetailPanels.tsx`, `pages/CompanyDetail.tsx`
 
 ---
 
 ## Build Plan Mapping
-
-- Ticket: P2-T6
-  - Status: Complete (2026-05-27)
-  - What was completed: signals.py with full PRD catalog; engine.py delegates + cross-submission reuse; test_signals.py; 332 tests pass.
-  - Remaining: none
-
-- Ticket: P2-T7
-  - Status: Complete (2026-05-27)
-  - What was completed: triage.py + explain.py; report.py updated; test_triage.py; 356 tests pass.
-  - Remaining: none
+- Ticket: **P2-T8 — Detail view completeness**
+  - Status: **Complete**
+  - What was completed: All four detail panels (DNS/domain, registry, contact with
+    attribution, risk assessment with flags) plus operator-notes capture, driven by
+    the existing report API. Partial-result-safe. Lint + tests green.
+  - Remaining work: None for this ticket. The map/address-confidence visualization
+    is **P2-T9** (blocked on Open Decision #4); full operator actions (correct data,
+    re-run, export, dashboard filters) are **P2-T10**.
 
 ---
 
 ## Validation
-
-- `backend/.venv/bin/ruff check .` → All checks passed!
-- `backend/.venv/bin/ruff format --check .` → 81 files already formatted
-- `backend/.venv/bin/pytest -q` → 356 passed in 7.75s
+- How the feature was tested: Vitest component tests render `CompanyDetail` with a
+  full report fixture (domain/registry/web evidence + signals + sources) and assert
+  each panel's content (registrar, recently-registered flag, registration status,
+  contact email + source attribution, risk flag/trust lists, evidence summary);
+  a second test asserts pending notices for a partial report.
+- Lint/test results:
+  - `npm run lint` → clean (0 errors/warnings).
+  - `npm test` → **12 passed (3 files)**.
+  - `tsc --noEmit`: production files added **zero** new errors; the only
+    `CompanyDetail.tsx` errors are the pre-existing `auth is possibly null` pattern
+    (present at baseline, lines 59/75/85 → shifted to 66/82/95). The repo has a
+    pre-existing strict-null backlog validated via lint + vitest.
+- Manual verification steps: `cd frontend && npm run dev`, open a completed run in
+  the dashboard → the detail view now shows DNS & Domain Intelligence, Registry
+  Information, Contact Information, and Risk Assessment panels, plus a notes field
+  on Mark Reviewed.
+- Visible user outcome: Operators get the full PRD Company Detail View — domain/DNS
+  signals, authoritative registry data, attributed public contacts, and an
+  explainable risk panel with flags — instead of just score + registration diff.
 
 ---
 
 ## Open Issues
-
-- IPINFO_TOKEN (free tier in use; paid plan unresolved — same class as Open Decision #5).
-- OpenCorporates production licensing (Open Decision #5) still unresolved; adapter has warning in docstring.
-- No new API endpoints expose triage/explainability directly — downstream FE (P2-T8) and API (P2-T11) consume from `report.summary`.
+- Known limitations:
+  - Contact panel shows the primary discovered value per type; full extracted lists
+    live in `raw_payload` and are not exposed by the report API (out of scope).
+  - "DNS risk score" is represented by the infrastructure layer score + flags;
+    there is no standalone per-DNS subscore in the data model.
+- Unresolved edge cases: None observed; panels degrade gracefully to "not
+  available" / pending notices.
+- Blockers: None for P2-T8. (Pre-existing project blockers unchanged: Open
+  Decision #5 Tier-1 licensing; IPINFO_TOKEN production plan.)
 
 ---
 
 ## BUILD_PLAN Update
-
 - Current phase: Phase 2 — Deepen the Tracks
-- Current ticket: P2-T8 — Detail view completeness
-- P2-T6: Complete (2026-05-27)
-- P2-T7: Complete (2026-05-27)
-- Blockers: Open Decision #5, IPINFO_TOKEN (both pre-existing; unblocked for P2-T8)
-- Recommended next ticket: P2-T8 — Detail view completeness
+- Current ticket: P2-T8 — Complete
+- Updated ticket status: P2-T8 → Complete
+- Blockers: unchanged (#5 licensing, IPINFO_TOKEN; #4 blocks P2-T9, #7 blocks P3-T3)
+- Recommended next ticket: **P2-T10 — Full operator actions + dashboard filters**
+  (P2-T9 is blocked on Open Decision #4 — map provider).

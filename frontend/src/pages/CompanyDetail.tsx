@@ -10,6 +10,12 @@ import { useEffect, useState } from "react";
 import { apiClient, ReportResponse } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { RegistrationDiff } from "../components/RegistrationDiff";
+import {
+  ContactPanel,
+  DomainPanel,
+  RegistryPanel,
+  RiskAssessmentPanel,
+} from "../components/DetailPanels";
 
 interface CompanyDetailProps {
   runId: string;
@@ -50,6 +56,7 @@ export function CompanyDetail({ runId, onBack }: CompanyDetailProps) {
   const [reviewStatus, setReviewStatus] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [notes, setNotes] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -81,7 +88,10 @@ export function CompanyDetail({ runId, onBack }: CompanyDetailProps) {
     try {
       const resp = await apiClient.markReviewed(
         runId,
-        { review_status: "reviewed" },
+        {
+          review_status: "reviewed",
+          ...(notes.trim() ? { notes: notes.trim() } : {}),
+        },
         auth.token
       );
       setReviewStatus(resp.review_status);
@@ -165,6 +175,47 @@ export function CompanyDetail({ runId, onBack }: CompanyDetailProps) {
             />
           </section>
 
+          {/* DNS & Domain Intelligence */}
+          <section style={styles.section}>
+            <h3 style={styles.sectionTitle}>DNS &amp; Domain Intelligence</h3>
+            <DomainPanel
+              evidence={report.evidence}
+              status={report.section_statuses.evidence}
+              infrastructureScore={report.scores?.infrastructure_score ?? null}
+            />
+          </section>
+
+          {/* Registry Information */}
+          <section style={styles.section}>
+            <h3 style={styles.sectionTitle}>Registry Information</h3>
+            <RegistryPanel
+              evidence={report.evidence}
+              status={report.section_statuses.evidence}
+            />
+          </section>
+
+          {/* Contact Information */}
+          <section style={styles.section}>
+            <h3 style={styles.sectionTitle}>Contact Information</h3>
+            <p style={styles.sectionNote}>
+              Public-web contacts shown with their source attribution.
+            </p>
+            <ContactPanel
+              evidence={report.evidence}
+              status={report.section_statuses.evidence}
+            />
+          </section>
+
+          {/* Risk Assessment */}
+          <section style={styles.section}>
+            <h3 style={styles.sectionTitle}>Risk Assessment</h3>
+            <RiskAssessmentPanel
+              scores={report.scores}
+              status={report.section_statuses.scores}
+              sources={report.sources}
+            />
+          </section>
+
           {/* Mark Reviewed */}
           <section style={styles.section}>
             <h3 style={styles.sectionTitle}>Operator Action</h3>
@@ -177,6 +228,19 @@ export function CompanyDetail({ runId, onBack }: CompanyDetailProps) {
               </div>
             ) : (
               <div>
+                <label htmlFor="review-notes" style={styles.notesLabel}>
+                  Review notes (optional)
+                </label>
+                <textarea
+                  id="review-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  disabled={reviewing}
+                  rows={3}
+                  style={styles.notesInput}
+                  placeholder="Add context for your decision…"
+                  data-testid="review-notes-input"
+                />
                 <button
                   onClick={handleMarkReviewed}
                   disabled={reviewing}
@@ -307,6 +371,24 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "0.375rem",
     color: "#166534",
     fontSize: "0.875rem",
+  },
+  notesLabel: {
+    display: "block",
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    color: "#374151",
+    marginBottom: "0.35rem",
+  },
+  notesInput: {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "0.5rem 0.75rem",
+    border: "1px solid #d1d5db",
+    borderRadius: "0.375rem",
+    fontSize: "0.875rem",
+    fontFamily: "inherit",
+    marginBottom: "0.75rem",
+    resize: "vertical",
   },
   reviewBtn: {
     padding: "0.625rem 1.25rem",

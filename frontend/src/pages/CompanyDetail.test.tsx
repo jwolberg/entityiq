@@ -42,9 +42,82 @@ const COMPLETE_REPORT = {
     representation_score: 60,
     risk_score: 65,
     triage_tier: "review",
-    contributing_signals: [],
+    contributing_signals: [
+      {
+        name: "recently_registered",
+        layer: "infrastructure",
+        direction: "elevated",
+        weight: 0.3,
+        description: "Domain registered within the last 180 days",
+        evidence_ids: ["ev-dom-1"],
+      },
+      {
+        name: "registry_confirmed",
+        layer: "entity",
+        direction: "trust",
+        weight: 0.4,
+        description: "Entity found in authoritative registry",
+        evidence_ids: ["ev-reg-1"],
+      },
+    ],
   },
-  evidence: [],
+  evidence: [
+    {
+      id: "ev-dom-1",
+      source: "domain",
+      tier: 2,
+      field: "domain_age_days",
+      raw_value: "42",
+      normalized_value: "42",
+      confidence: 0.8,
+      attribution: { provider: "domain", domain: "acme.com" },
+      fetched_at: "2026-05-26T09:00:00Z",
+    },
+    {
+      id: "ev-dom-flag",
+      source: "domain",
+      tier: 2,
+      field: "recently_registered",
+      raw_value: "true",
+      normalized_value: "true",
+      confidence: 0.9,
+      attribution: { provider: "domain", domain: "acme.com" },
+      fetched_at: "2026-05-26T09:00:00Z",
+    },
+    {
+      id: "ev-dom-2",
+      source: "domain",
+      tier: 2,
+      field: "domain_registrar",
+      raw_value: "NameCheap, Inc.",
+      normalized_value: "NameCheap, Inc.",
+      confidence: 0.75,
+      attribution: { provider: "domain", domain: "acme.com" },
+      fetched_at: "2026-05-26T09:00:00Z",
+    },
+    {
+      id: "ev-reg-1",
+      source: "opencorporates",
+      tier: 1,
+      field: "registration_status",
+      raw_value: "Active",
+      normalized_value: "Active",
+      confidence: 0.9,
+      attribution: { provider: "opencorporates" },
+      fetched_at: "2026-05-26T09:00:00Z",
+    },
+    {
+      id: "ev-web-1",
+      source: "web",
+      tier: 3,
+      field: "web_contacts_email",
+      raw_value: "hello@acme.com",
+      normalized_value: "hello@acme.com",
+      confidence: 0.7,
+      attribution: { provider: "web", source_url: "https://acme.com/contact" },
+      fetched_at: "2026-05-26T09:00:00Z",
+    },
+  ],
   mismatches: [
     {
       id: "fc-1",
@@ -71,7 +144,11 @@ const COMPLETE_REPORT = {
       evidence_id: null,
     },
   ],
-  sources: [],
+  sources: [
+    { source: "domain", tier: 2, evidence_count: 2, attribution: null },
+    { source: "opencorporates", tier: 1, evidence_count: 1, attribution: null },
+    { source: "web", tier: 3, evidence_count: 1, attribution: null },
+  ],
   generated_at: "2026-05-26T10:00:00Z",
 };
 
@@ -137,6 +214,74 @@ describe("CompanyDetail", () => {
 
     // Overall score rendered
     expect(screen.getByTestId("detail-overall-score").textContent).toBe("65");
+  });
+
+  it("renders the four detail panels from report evidence and scores", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => COMPLETE_REPORT,
+      })
+    );
+
+    render(
+      <Wrapper>
+        <CompanyDetail runId="run-abc" onBack={vi.fn()} />
+      </Wrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("domain-panel")).toBeDefined();
+    });
+
+    // Domain panel: registrar + recently-registered flag
+    expect(screen.getByText("NameCheap, Inc.")).toBeDefined();
+    expect(screen.getByText("Recently registered")).toBeDefined();
+
+    // Registry panel: registration status
+    expect(screen.getByTestId("registry-panel")).toBeDefined();
+    expect(screen.getByText("Active")).toBeDefined();
+
+    // Contact panel: email + source attribution
+    expect(screen.getByTestId("contact-panel")).toBeDefined();
+    expect(screen.getByText("hello@acme.com")).toBeDefined();
+    expect(
+      screen.getByText("source: https://acme.com/contact")
+    ).toBeDefined();
+
+    // Risk panel: flags + trust signals + evidence summary
+    expect(screen.getByTestId("risk-flag-list")).toBeDefined();
+    expect(screen.getByTestId("risk-trust-list")).toBeDefined();
+    expect(screen.getByTestId("risk-evidence-summary").textContent).toContain(
+      "3 sources"
+    );
+    expect(screen.getByTestId("risk-evidence-summary").textContent).toContain(
+      "4 evidence items"
+    );
+  });
+
+  it("detail panels show pending/empty notices for a partial report", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => PARTIAL_REPORT,
+      })
+    );
+
+    render(
+      <Wrapper>
+        <CompanyDetail runId="run-partial" onBack={vi.fn()} />
+      </Wrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("domain-pending")).toBeDefined();
+    });
+    expect(screen.getByTestId("registry-pending")).toBeDefined();
+    expect(screen.getByTestId("contact-pending")).toBeDefined();
+    expect(screen.getByTestId("risk-pending")).toBeDefined();
   });
 
   it("partial/in-progress report renders without crashing", async () => {

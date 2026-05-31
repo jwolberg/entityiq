@@ -1,0 +1,523 @@
+/**
+ * DetailPanels — read-only Company Detail panels (P2-T8).
+ *
+ * Renders the four PRD § Company Detail View panels from data already
+ * exposed by GET /reports/{run_id}:
+ *   - DomainPanel          (Tier-2 "domain" evidence + infrastructure score)
+ *   - RegistryPanel        (Tier-1 "opencorporates" evidence)
+ *   - ContactPanel         (Tier-3 "web" contact evidence + source attribution)
+ *   - RiskAssessmentPanel  (four-layer scores, triage tier, risk flags, summary)
+ *
+ * Each panel is a CONTENT component: CompanyDetail wraps it in a <section>
+ * with a heading.  Panels handle the three partial-result states themselves:
+ *   - status "pending"      → "still computing" notice
+ *   - no relevant evidence  → "not available" notice
+ *   - otherwise             → field rows
+ *
+ * No backend changes are required for this ticket.
+ */
+
+import { EvidenceItem, ScoresData, SourceSummary } from "../api/client";
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+/** Find the first evidence row for a field (optionally restricted to a source). */
+function findEvidence(
+  evidence: EvidenceItem[],
+  field: string,
+  source?: string
+): EvidenceItem | undefined {
+  return evidence.find(
+    (e) => e.field === field && (source === undefined || e.source === source)
+  );
+}
+
+/** Preferred display value for an evidence row (normalized, falling back to raw). */
+function evValue(item: EvidenceItem | undefined): string | null {
+  if (!item) return null;
+  return item.normalized_value ?? item.raw_value ?? null;
+}
+
+interface Row {
+  label: string;
+  value: string | null;
+  /** Optional small badge shown after the value (e.g. a risk flag). */
+  flag?: { text: string; tone: "warn" | "ok" };
+  /** Optional attribution line shown under the value. */
+  attribution?: string | null;
+}
+
+function FieldRow({ row }: { row: Row }) {
+  return (
+    <div style={styles.row} data-testid={`field-${row.label.replace(/\s+/g, "-").toLowerCase()}`}>
+      <div style={styles.rowLabel}>{row.label}</div>
+      <div style={styles.rowValue}>
+        <span>{row.value ?? "—"}</span>
+        {row.flag && (
+          <span
+            style={{
+              ...styles.flag,
+              ...(row.flag.tone === "warn" ? styles.flagWarn : styles.flagOk),
+            }}
+          >
+            {row.flag.text}
+          </span>
+        )}
+        {row.attribution && (
+          <div style={styles.attribution}>source: {row.attribution}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Pending({ testId }: { testId: string }) {
+  return (
+    <div style={styles.pending} data-testid={testId}>
+      Still being gathered — check back shortly.
+    </div>
+  );
+}
+
+function NotAvailable({ label, testId }: { label: string; testId: string }) {
+  return (
+    <div style={styles.empty} data-testid={testId}>
+      {label}
+    </div>
+  );
+}
+
+function FieldRows({ rows }: { rows: Row[] }) {
+  return (
+    <div style={styles.rows}>
+      {rows.map((r) => (
+        <FieldRow key={r.label} row={r} />
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DNS & Domain Intelligence (Tier-2)
+// ---------------------------------------------------------------------------
+
+interface DomainPanelProps {
+  evidence: EvidenceItem[];
+  status: string; // section_statuses.evidence
+  infrastructureScore: number | null;
+}
+
+export function DomainPanel({
+  evidence,
+  status,
+  infrastructureScore,
+}: DomainPanelProps) {
+  if (status === "pending") return <Pending testId="domain-pending" />;
+
+  const get = (f: string) => evValue(findEvidence(evidence, f, "domain"));
+  const recentlyRegistered = findEvidence(evidence, "recently_registered", "domain");
+  const noMx = findEvidence(evidence, "no_mx", "domain");
+
+  const ageDays = get("domain_age_days");
+  const mx = get("mx_records");
+  const sslBefore = get("ssl_not_before");
+  const sslAfter = get("ssl_not_after");
+
+  const rows: Row[] = [
+    {
+      label: "Domain Age",
+      value: ageDays !== null ? `${ageDays} days` : null,
+      flag: recentlyRegistered
+        ? { text: "Recently registered", tone: "warn" }
+        : undefined,
+    },
+    { label: "Registrar", value: get("domain_registrar") },
+    { label: "Created", value: get("domain_creation_date") },
+    { label: "Expires", value: get("domain_expiry_date") },
+    {
+      label: "MX Records",
+      value: noMx ? "None" : mx,
+      flag: noMx ? { text: "No mail records", tone: "warn" } : undefined,
+    },
+    { label: "SPF", value: get("spf_record") },
+    { label: "DKIM", value: get("dkim_present") },
+    { label: "SSL Issuer", value: get("ssl_issuer") },
+    { label: "SSL Subject", value: get("ssl_subject") },
+    {
+      label: "SSL Validity",
+      value:
+        sslBefore || sslAfter ? `${sslBefore ?? "?"} → ${sslAfter ?? "?"}` : null,
+    },
+    {
+      label: "Infrastructure Score",
+      value:
+        infrastructureScore !== null
+          ? `${infrastructureScore.toFixed(0)} / 100`
+          : null,
+    },
+  ];
+
+  const hasData = rows.some((r) => r.value !== null);
+  if (!hasData) {
+    return (
+      <NotAvailable
+        label="No domain/DNS evidence available for this report."
+        testId="domain-empty"
+      />
+    );
+  }
+
+  return (
+    <div data-testid="domain-panel">
+      <FieldRows rows={rows} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Registry Information (Tier-1)
+// ---------------------------------------------------------------------------
+
+interface RegistryPanelProps {
+  evidence: EvidenceItem[];
+  status: string;
+}
+
+export function RegistryPanel({ evidence, status }: RegistryPanelProps) {
+  if (status === "pending") return <Pending testId="registry-pending" />;
+
+  const get = (f: string) => evValue(findEvidence(evidence, f, "opencorporates"));
+
+  const rows: Row[] = [
+    { label: "Registered Name", value: get("company_name") },
+    { label: "Registration Status", value: get("registration_status") },
+    { label: "Jurisdiction", value: get("jurisdiction") },
+    { label: "Registration Number", value: get("registration_number") },
+    { label: "Legal Address", value: get("legal_address") },
+  ];
+
+  const hasData = rows.some((r) => r.value !== null);
+  if (!hasData) {
+    return (
+      <NotAvailable
+        label="No authoritative registry record found for this entity."
+        testId="registry-empty"
+      />
+    );
+  }
+
+  return (
+    <div data-testid="registry-panel">
+      <FieldRows rows={rows} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Contact Information (Tier-3, with source attribution)
+// ---------------------------------------------------------------------------
+
+interface ContactPanelProps {
+  evidence: EvidenceItem[];
+  status: string;
+}
+
+/** Pull the human-readable source attribution (source_url) off an evidence row. */
+function attributionOf(item: EvidenceItem | undefined): string | null {
+  if (!item) return null;
+  const url = item.attribution?.["source_url"];
+  if (typeof url === "string") return url;
+  return item.source;
+}
+
+export function ContactPanel({ evidence, status }: ContactPanelProps) {
+  if (status === "pending") return <Pending testId="contact-pending" />;
+
+  const brand = findEvidence(evidence, "web_brand", "web");
+  const email = findEvidence(evidence, "web_contacts_email", "web");
+  const phone = findEvidence(evidence, "web_contacts_phone", "web");
+  const address = findEvidence(evidence, "web_contacts_address", "web");
+
+  const rows: Row[] = [
+    {
+      label: "Brand / Site Name",
+      value: evValue(brand),
+      attribution: attributionOf(brand),
+    },
+    {
+      label: "Email",
+      value: evValue(email),
+      attribution: attributionOf(email),
+    },
+    {
+      label: "Phone",
+      value: evValue(phone),
+      attribution: attributionOf(phone),
+    },
+    {
+      label: "Address",
+      value: evValue(address),
+      attribution: attributionOf(address),
+    },
+  ];
+
+  const hasData = rows.some((r) => r.value !== null);
+  if (!hasData) {
+    return (
+      <NotAvailable
+        label="No public contact information was extracted."
+        testId="contact-empty"
+      />
+    );
+  }
+
+  return (
+    <div data-testid="contact-panel">
+      <FieldRows rows={rows.filter((r) => r.value !== null)} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Risk Assessment (scores, triage, flags, evidence summary)
+// ---------------------------------------------------------------------------
+
+interface RiskAssessmentPanelProps {
+  scores: ScoresData | null;
+  status: string; // section_statuses.scores
+  sources: SourceSummary[];
+}
+
+const LAYER_LABELS: Record<string, string> = {
+  entity: "Entity Legitimacy",
+  infrastructure: "Infrastructure Legitimacy",
+  representation: "Representation Confidence",
+  risk: "Fraud / Staging Risk",
+};
+
+function ScoreCell({ label, value }: { label: string; value: number | null }) {
+  return (
+    <div style={styles.scoreCell}>
+      <div style={styles.scoreCellValue}>
+        {value !== null ? value.toFixed(0) : "—"}
+      </div>
+      <div style={styles.scoreCellLabel}>{label}</div>
+    </div>
+  );
+}
+
+export function RiskAssessmentPanel({
+  scores,
+  status,
+  sources,
+}: RiskAssessmentPanelProps) {
+  if (status === "pending") return <Pending testId="risk-pending" />;
+  if (!scores) {
+    return (
+      <NotAvailable
+        label="Risk assessment has not been computed yet."
+        testId="risk-empty"
+      />
+    );
+  }
+
+  const signals = scores.contributing_signals ?? [];
+  const elevated = signals.filter((s) => s.direction === "elevated");
+  const trust = signals.filter((s) => s.direction === "trust");
+
+  const evidenceCount = sources.reduce((n, s) => n + s.evidence_count, 0);
+
+  return (
+    <div data-testid="risk-panel">
+      {/* Layer score breakdown */}
+      <div style={styles.scoreGrid}>
+        <ScoreCell label="Entity" value={scores.entity_score} />
+        <ScoreCell label="Infrastructure" value={scores.infrastructure_score} />
+        <ScoreCell label="Representation" value={scores.representation_score} />
+        <ScoreCell label="Fraud/Staging" value={scores.risk_score} />
+      </div>
+
+      {scores.triage_tier && (
+        <div style={styles.triageRow} data-testid="risk-triage">
+          Triage tier: <strong>{scores.triage_tier}</strong>
+        </div>
+      )}
+
+      {/* Evidence summary */}
+      <div style={styles.evidenceSummary} data-testid="risk-evidence-summary">
+        {sources.length} source{sources.length === 1 ? "" : "s"} ·{" "}
+        {evidenceCount} evidence item{evidenceCount === 1 ? "" : "s"}
+      </div>
+
+      {/* Risk flags */}
+      <div style={styles.flagsSection}>
+        <div style={styles.flagsHeading}>Risk Flags</div>
+        {elevated.length === 0 ? (
+          <div style={styles.noFlags} data-testid="risk-no-flags">
+            No elevated-risk signals.
+          </div>
+        ) : (
+          <ul style={styles.flagList} data-testid="risk-flag-list">
+            {elevated.map((s) => (
+              <li key={s.name} style={styles.flagItem}>
+                <span style={{ ...styles.flag, ...styles.flagWarn }}>
+                  {LAYER_LABELS[s.layer] ?? s.layer}
+                </span>{" "}
+                <strong>{s.name}</strong>
+                {s.description ? ` — ${s.description}` : ""}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {trust.length > 0 && (
+        <div style={styles.flagsSection}>
+          <div style={styles.flagsHeading}>Trust Signals</div>
+          <ul style={styles.flagList} data-testid="risk-trust-list">
+            {trust.map((s) => (
+              <li key={s.name} style={styles.flagItem}>
+                <span style={{ ...styles.flag, ...styles.flagOk }}>
+                  {LAYER_LABELS[s.layer] ?? s.layer}
+                </span>{" "}
+                <strong>{s.name}</strong>
+                {s.description ? ` — ${s.description}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Styles (inline, consistent with the rest of the app)
+// ---------------------------------------------------------------------------
+
+const styles: Record<string, React.CSSProperties> = {
+  rows: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.5rem",
+  },
+  row: {
+    display: "grid",
+    gridTemplateColumns: "10rem 1fr",
+    gap: "0.75rem",
+    alignItems: "start",
+    paddingBottom: "0.5rem",
+    borderBottom: "1px solid #f3f4f6",
+  },
+  rowLabel: {
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    color: "#6b7280",
+  },
+  rowValue: {
+    fontSize: "0.875rem",
+    color: "#111827",
+    wordBreak: "break-word",
+  },
+  attribution: {
+    fontSize: "0.7rem",
+    color: "#9ca3af",
+    marginTop: "0.15rem",
+  },
+  flag: {
+    display: "inline-block",
+    marginLeft: "0.4rem",
+    padding: "0.05rem 0.4rem",
+    borderRadius: "9999px",
+    fontSize: "0.7rem",
+    fontWeight: 600,
+  },
+  flagWarn: {
+    color: "#92400e",
+    backgroundColor: "#fffbeb",
+    border: "1px solid #fcd34d",
+  },
+  flagOk: {
+    color: "#166534",
+    backgroundColor: "#f0fdf4",
+    border: "1px solid #86efac",
+  },
+  pending: {
+    padding: "0.75rem 1rem",
+    backgroundColor: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    borderRadius: "0.375rem",
+    color: "#1e40af",
+    fontSize: "0.875rem",
+  },
+  empty: {
+    padding: "0.75rem 1rem",
+    backgroundColor: "#f9fafb",
+    border: "1px solid #e5e7eb",
+    borderRadius: "0.375rem",
+    color: "#6b7280",
+    fontSize: "0.875rem",
+  },
+  scoreGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, 1fr)",
+    gap: "0.75rem",
+    marginBottom: "1rem",
+  },
+  scoreCell: {
+    textAlign: "center",
+    padding: "0.5rem",
+    backgroundColor: "#f9fafb",
+    border: "1px solid #e5e7eb",
+    borderRadius: "0.375rem",
+  },
+  scoreCellValue: {
+    fontSize: "1.5rem",
+    fontWeight: 700,
+    color: "#111827",
+    lineHeight: 1.1,
+  },
+  scoreCellLabel: {
+    fontSize: "0.7rem",
+    color: "#6b7280",
+    marginTop: "0.2rem",
+  },
+  triageRow: {
+    fontSize: "0.875rem",
+    color: "#374151",
+    marginBottom: "0.5rem",
+    textTransform: "capitalize" as React.CSSProperties["textTransform"],
+  },
+  evidenceSummary: {
+    fontSize: "0.8rem",
+    color: "#6b7280",
+    marginBottom: "1rem",
+  },
+  flagsSection: {
+    marginTop: "0.75rem",
+  },
+  flagsHeading: {
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    color: "#111827",
+    marginBottom: "0.4rem",
+  },
+  noFlags: {
+    fontSize: "0.85rem",
+    color: "#16a34a",
+  },
+  flagList: {
+    margin: 0,
+    paddingLeft: "1rem",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.4rem",
+  },
+  flagItem: {
+    fontSize: "0.85rem",
+    color: "#374151",
+    lineHeight: 1.4,
+  },
+};
