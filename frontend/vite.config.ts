@@ -10,7 +10,7 @@ export default defineConfig({
       // Backend mounts routes at the root (e.g. /auth/sign-in), so strip the
       // /api prefix the frontend client adds before forwarding.
       "/api": {
-        target: "http://localhost:8000",
+        target: process.env.VITE_API_TARGET ?? "http://localhost:8000",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
