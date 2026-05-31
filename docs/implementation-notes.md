@@ -816,3 +816,20 @@ locking down operator-only report reads.
   before any real deployment. Sign-in is not functional yet: no operator is
   seeded and EntityIQ's backend isn't running (port 8000 in use by another
   project; Python 3.11+ not installed).
+
+---
+
+## 2026-05-31 — Fix: Vite dev proxy strips /api prefix
+
+- Bug: the operator app calls `/api/...` (see `frontend/src/api/client.ts`),
+  but the Vite proxy was `"/api": "http://localhost:8000"` with no rewrite, so
+  requests were forwarded verbatim to `http://localhost:8000/api/...`. The
+  backend mounts routes at the root (`/auth/sign-in`, `/reports`, ...), so every
+  call 404'd. Sign-in surfaced this as "Not Found". This path was never
+  exercised end-to-end before (RUNBOOK flagged FE↔BE wiring as unverified).
+- Fix: `frontend/vite.config.ts` now uses the object proxy form with
+  `rewrite: (path) => path.replace(/^\/api/, "")` (and `changeOrigin: true`),
+  matching the behavior `client.ts` already documented ("the proxy strips it").
+- Scope: dev-server only; production build/output is unchanged. Verified login +
+  the verification queue work end-to-end through the proxy after the change.
+- Validation: `npm run lint` (0 warnings) and `npm run build` both pass.
