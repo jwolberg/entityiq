@@ -53,6 +53,12 @@ class Submission(Base):
         String(36), ForeignKey("entity.id"), nullable=True, index=True
     )
 
+    # FK — integrating system (service credential) that submitted this, if any
+    # (P2-T12).  Null for submissions not created via an authenticated API client.
+    api_client_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("api_client.id"), nullable=True, index=True
+    )
+
     submitted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

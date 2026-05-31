@@ -58,9 +58,10 @@
 
 ## Current Status
 - Overall status: In Progress
-- Current phase: Phase 2 — Deepen the Tracks
-- Current ticket: P2-T12 — API auth for integrating systems (next)
-- Last completed: P2-T10 — Full operator actions + dashboard filters (2026-05-31)
+- Current phase: Phase 2 complete (except blocked P2-T9) → entering Phase 3
+- Current ticket: P3-T1 — Performance & partial-result UX (next)
+- Last completed: P2-T12 — API auth for integrating systems (2026-05-31)
+- Phase 2 status: complete except P2-T9 (blocked on Open Decision #4 — map provider)
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
   core schema runnable (SQLite-verified; Postgres verification pending P1-T1 setup).
@@ -300,7 +301,13 @@ _Track: Integration & reporting API_
 - P2-T12 — API auth for integrating systems
   - Objective: service-credential auth at the API boundary with per-system
     attribution.
-  - Depends on: P1-T1 · AC: ARCHITECTURE § 5; USERS § 2 · Status: Todo
+  - Depends on: P1-T1 · AC: ARCHITECTURE § 5; USERS § 2 · Status: Complete (2026-05-31) —
+    backend-only; ApiClient service-credential table (keys hashed at rest, X-API-Key
+    header); POST /submissions now requires a key; report export accepts a Principal
+    (system key OR operator token); per-system attribution via submission.api_client_id
+    + audit events (system.submission_received, report.exported). 383 tests pass;
+    migration verified up/down on SQLite. Follow-ups: mTLS, key-provisioning UI,
+    locking operator-only report reads.
 
 ### Phase 3 — Hardening & Polish
 **Goal**
@@ -359,14 +366,14 @@ _Track: Integration & reporting API_
 31. P3-T5
 
 ## Recommended Next Step
-- Start with: **P2-T12 — API auth for integrating systems**
-- Why this is next: P2-T6, P2-T7, P2-T8, P2-T10, and P2-T11 are complete — the
-  operator workbench and reporting API are now full-featured. P2-T12 adds
-  service-credential auth at the API boundary with per-system attribution
-  (ARCHITECTURE § 5; USERS § 2), enabling integrating systems to call the
-  submission/report endpoints non-interactively. It is independent of the
-  remaining blocked work. P2-T9 (HQ map) remains deferred behind Open Decision #4
-  (map provider); after P2-T12, Phase 2 is complete except P2-T9.
+- Start with: **P3-T1 — Performance & partial-result UX** (start of Phase 3)
+- Why this is next: Phase 2 is complete except P2-T9, which is blocked on Open
+  Decision #4 (map provider). The pipeline, scoring, operator workbench, reporting
+  API, and integration auth are all in place, so the natural next step is the
+  Phase-3 hardening bar: the < 2h analysis target with viewable partial results and
+  robust timeouts/retries (PRD § Performance Expectations). P3-T2 (auditability
+  completeness + lead audit views) is a strong follow-on — it builds directly on the
+  per-system attribution just added in P2-T12.
 - Note: Open Decision #5 (OpenCorporates + additional Tier-1 licensing) still
   blocks *production* use of Tier-1 adapters; resolve before enabling live queries.
   IPINFO_TOKEN production plan is also unresolved; free tier is operational.

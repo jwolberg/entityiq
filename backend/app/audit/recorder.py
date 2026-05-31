@@ -44,6 +44,7 @@ def record_event(
     event_type: str,
     *,
     operator_id: str | None = None,
+    api_client_id: str | None = None,
     verification_run_id: str | None = None,
     submission_id: str | None = None,
     payload: dict | None = None,
@@ -55,6 +56,8 @@ def record_event(
         db:                  Open SQLAlchemy session.
         event_type:          Dotted event name, e.g. "operator.sign_in".
         operator_id:         FK to operator who triggered the event (None for system).
+        api_client_id:       FK to integrating system that triggered the event
+                             (None for operator/system-internal events) — P2-T12.
         verification_run_id: FK to related run (if applicable).
         submission_id:       FK to related submission (if applicable).
         payload:             Structured event-specific data (JSON).
@@ -70,6 +73,7 @@ def record_event(
     event = AuditEvent(
         event_type=event_type,
         operator_id=operator_id,
+        api_client_id=api_client_id,
         verification_run_id=verification_run_id,
         submission_id=submission_id,
         payload=payload or {},
@@ -80,9 +84,10 @@ def record_event(
     db.commit()
 
     logger.info(
-        "audit: %s op=%s run=%s",
+        "audit: %s op=%s sys=%s run=%s",
         event_type,
         operator_id,
+        api_client_id,
         verification_run_id,
     )
     return event.id

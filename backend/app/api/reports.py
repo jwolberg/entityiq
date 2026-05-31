@@ -19,6 +19,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.audit.recorder import record_event
+from app.auth.service import Principal, get_principal
 from app.db.session import SessionLocal
 from app.models.report import Report
 from app.models.review import Review
@@ -216,12 +218,17 @@ def list_reports(
 def export_report(
     run_id: str,
     db: Session = Depends(_get_db),
+    principal: Principal = Depends(get_principal),
 ) -> ReportResponse:
     """Return the full normalized report for automated extraction.
 
     Identical payload to GET /reports/{run_id} but signals intent for
     programmatic consumption by integrating systems (PRD § API Requirements).
     Wraps the same _serialize_report() helper.
+
+    Requires an authenticated principal — an integrating system (X-API-Key) or
+    an operator (Bearer token).  Every pull is audited and attributed to the
+    caller (P2-T12).
 
     Returns 404 if the run or report does not exist.
     """
@@ -241,6 +248,20 @@ def export_report(
                 "The pipeline may still be in early stages."
             ),
         )
+
+    # Attribute the report pull to the calling principal (ARCHITECTURE § 5).
+    record_event(
+        db=db,
+        event_type="report.exported",
+        operator_id=principal.operator_id,
+        api_client_id=principal.api_client_id,
+        verification_run_id=run_id,
+        payload={"by": principal.kind, "principal": principal.name},
+        description=(
+            f"Report for run {run_id!r} exported by "
+            f"{principal.kind} {principal.name!r}."
+        ),
+    )
 
     return _serialize_report(report)
 

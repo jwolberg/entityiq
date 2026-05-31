@@ -63,16 +63,41 @@ def db_session(sqlite_engine):
     connection.close()
 
 
+@pytest.fixture(scope="session")
+def service_credential(sqlite_engine):
+    """Seed one ApiClient (service credential) into the shared SQLite DB.
+
+    Session-scoped: seeded once so the unique name/prefix don't collide across
+    tests.  Returns {"id", "key", "name"} — the plaintext key is used as the
+    default X-API-Key for the `api_client` TestClient.
+    """
+    from app.auth.service import create_api_client
+
+    SessionMaker = sessionmaker(bind=sqlite_engine, autocommit=False, autoflush=False)
+    sess = SessionMaker()
+    try:
+        client, key = create_api_client("test-system", sess)  # commits
+        info = {"id": client.id, "key": key, "name": client.name}
+    finally:
+        sess.close()
+    return info
+
+
 @pytest.fixture
-def api_client(sqlite_engine):
+def api_client(sqlite_engine, service_credential):
     """FastAPI TestClient backed by the SQLite in-memory database.
 
-    Two overrides are applied:
-    1. _get_db: replaced with SQLite-backed sessions (no live Postgres).
+    Overrides applied:
+    1. _get_db (submissions) + service._get_db: SQLite-backed sessions.
     2. enqueue_run: patched to a no-op so the submission endpoint does not
        attempt to connect to a Redis broker.  Orchestrator behaviour is tested
        separately in tests/pipeline/test_orchestrator.py via run_sync().
+
+    A valid X-API-Key (the seeded service credential) is attached by default so
+    the now-authenticated submission endpoint accepts requests (P2-T12).
     """
+    from app.auth.service import _get_db as service_get_db
+
     TestingSessionLocal = sessionmaker(
         bind=sqlite_engine,
         autocommit=False,
@@ -87,8 +112,13 @@ def api_client(sqlite_engine):
             db.close()
 
     app.dependency_overrides[_get_db] = override_get_db
+    app.dependency_overrides[service_get_db] = override_get_db
     with mock.patch("app.pipeline.orchestrator.enqueue_run") as _mock_enqueue:
         _mock_enqueue.return_value = None
-        client = TestClient(app, raise_server_exceptions=True)
+        client = TestClient(
+            app,
+            raise_server_exceptions=True,
+            headers={"X-API-Key": service_credential["key"]},
+        )
         yield client
     app.dependency_overrides.clear()

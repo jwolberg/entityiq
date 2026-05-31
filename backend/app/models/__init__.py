@@ -5,6 +5,7 @@ Import all models here so that:
   2. Application code has a single convenient import path.
 """
 
+from app.models.api_client import ApiClient
 from app.models.audit_event import AuditEvent
 from app.models.entity import Entity
 from app.models.evidence import Evidence
@@ -17,6 +18,7 @@ from app.models.submission import Submission
 from app.models.verification_run import VerificationRun
 
 __all__ = [
+    "ApiClient",
     "AuditEvent",
     "Entity",
     "Evidence",

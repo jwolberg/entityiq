@@ -43,6 +43,7 @@ from app.auth.operator import (
 from app.auth.operator import (
     _get_db as auth_get_db,
 )
+from app.auth.service import _get_db as service_get_db
 from app.db.session import Base
 from app.main import app
 from app.models.audit_event import AuditEvent
@@ -96,6 +97,7 @@ def client(wf_engine):
     app.dependency_overrides[workflow_get_db] = override_get_db
     app.dependency_overrides[reports_get_db] = override_get_db
     app.dependency_overrides[auth_get_db] = override_get_db
+    app.dependency_overrides[service_get_db] = override_get_db
 
     with mock.patch("app.pipeline.orchestrator.enqueue_run") as _mock_enqueue:
         _mock_enqueue.return_value = None
@@ -105,6 +107,7 @@ def client(wf_engine):
     app.dependency_overrides.pop(workflow_get_db, None)
     app.dependency_overrides.pop(reports_get_db, None)
     app.dependency_overrides.pop(auth_get_db, None)
+    app.dependency_overrides.pop(service_get_db, None)
     _clear_all_sessions()
 
 
@@ -450,7 +453,11 @@ class TestAddNotes:
 
 class TestReportExport:
     def test_export_returns_normalized_report(self, client, wf_engine):
-        """GET /reports/{run_id}/export returns the full normalized report."""
+        """GET /reports/{run_id}/export returns the full normalized report.
+
+        Export now requires an authenticated principal (P2-T12); an operator
+        Bearer token is accepted.
+        """
         from datetime import datetime, timezone  # noqa: PLC0415
 
         from app.models.evidence import Evidence  # noqa: PLC0415
@@ -508,7 +515,11 @@ class TestReportExport:
         finally:
             setup_db.close()
 
-        resp = client.get(f"/reports/{run_id}/export")
+        token = _sign_in(client, wf_engine, "export-op@example.com")
+        resp = client.get(
+            f"/reports/{run_id}/export",
+            headers={"Authorization": f"Bearer {token}"},
+        )
         assert resp.status_code == 200, resp.text
         data = resp.json()
         assert data["run_id"] == run_id
@@ -518,7 +529,11 @@ class TestReportExport:
         assert isinstance(data["mismatches"], list)
         assert isinstance(data["sources"], list)
 
-    def test_export_unknown_run_returns_404(self, client):
-        """GET /reports/{unknown}/export → 404."""
-        resp = client.get("/reports/00000000-0000-0000-0000-000000000000/export")
+    def test_export_unknown_run_returns_404(self, client, wf_engine):
+        """GET /reports/{unknown}/export → 404 (authenticated principal)."""
+        token = _sign_in(client, wf_engine, "export-op-404@example.com")
+        resp = client.get(
+            "/reports/00000000-0000-0000-0000-000000000000/export",
+            headers={"Authorization": f"Bearer {token}"},
+        )
         assert resp.status_code == 404

@@ -760,3 +760,39 @@ pattern (AuthProvider guarantees non-null). `tsc` flags the usual pre-existing
 `npm run lint` + `vitest`.
 
 **Validation:** `npm run lint` clean; `npm test` → 18 passed (4 files).
+
+---
+
+## 2026-05-31 — P2-T12 API auth for integrating systems
+
+**Decision: backend-only.** Added an `ApiClient` service-credential table + an
+API-key auth module, applied at the two integration endpoints (`POST /submissions`,
+`GET /reports/{id}/export`), with per-system attribution in the audit trail.
+
+**Decisions / tradeoffs:**
+- **`X-API-Key` header for service creds**, kept separate from operator
+  `Authorization: Bearer` so the two schemes never collide.
+- Keys **hashed at rest** (PBKDF2, reusing the operator password primitive — no new
+  dep); a non-secret 12-char `key_prefix` is stored for O(1) lookup before a
+  constant-time full-key verify. Plaintext returned once by `create_api_client`.
+- **Submission requires a key** (401 otherwise) and is attributed via
+  `submission.api_client_id` + a `system.submission_received` audit event.
+- **Export requires a `Principal`** (system key OR operator Bearer) so the operator
+  UI export keeps working while machine pulls are authenticated + attributed
+  (`report.exported` audit event). The operator-only report reads (`/reports/`,
+  `/reports/{id}`) were left open as before — locking the full read surface is
+  Phase-3 hardening, not this ticket (noted as follow-up).
+- **Migration uses Alembic batch mode** so the new `api_client_id` FK columns apply
+  on SQLite (copy-and-move) as well as Postgres — the initial `create_foreign_key`
+  failed on SQLite (no ALTER-constraint support).
+- **Test wiring:** the cross-module `_get_db` pattern means each new auth dependency
+  defines its own `_get_db`; conftest now also overrides `service._get_db`, seeds a
+  session-scoped credential, and sets a default `X-API-Key` header so existing
+  submission tests authenticate unchanged. Two existing export tests were updated to
+  pass an operator token.
+
+**Follow-ups:** mTLS, key-provisioning UI/endpoint, Redis/JWT session store, and
+locking down operator-only report reads.
+
+**Validation:** `ruff check`/`ruff format --check` clean; `pytest` → 383 passed;
+`alembic upgrade/downgrade/upgrade` on SQLite clean.

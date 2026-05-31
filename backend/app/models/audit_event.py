@@ -35,6 +35,11 @@ class AuditEvent(Base):
     operator_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("operator.id"), nullable=True, index=True
     )
+    # Optional FK to the integrating system (service credential) that triggered
+    # the event, for per-system attribution of API actions (P2-T12).
+    api_client_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("api_client.id"), nullable=True, index=True
+    )
     # Optional FK to the verification run this event relates to.
     verification_run_id: Mapped[str | None] = mapped_column(
         String(36),
