@@ -796,3 +796,23 @@ locking down operator-only report reads.
 
 **Validation:** `ruff check`/`ruff format --check` clean; `pytest` → 383 passed;
 `alembic upgrade/downgrade/upgrade` on SQLite clean.
+
+---
+
+## 2026-05-31 — Demo: skyfi.com hero as login backdrop
+
+- Decision (not in spec): for a demo, the operator sign-in screen renders a
+  captured skyfi.com page as a full-width backdrop with the sign-in card pinned
+  centered on top. Requested directly by the user for the demo look.
+- Implementation: `frontend/public/skyfi-bg.png` is a full-page skyfi.com
+  screenshot (cookie banner removed before capture). `SignInForm` in
+  `frontend/src/auth/AuthContext.tsx` renders it via `<img src="/skyfi-bg.png">`
+  inside a fixed, centered overlay (`pointerEvents` lets the page scroll behind
+  the card).
+- Tradeoff: static screenshot, not the live site (avoids X-Frame-Options /
+  framing issues, keeps it self-contained). The ~1.3 MB PNG is committed as a
+  demo asset.
+- Follow-ups: demo-only chrome — revert to the plain card (or gate behind a flag)
+  before any real deployment. Sign-in is not functional yet: no operator is
+  seeded and EntityIQ's backend isn't running (port 8000 in use by another
+  project; Python 3.11+ not installed).

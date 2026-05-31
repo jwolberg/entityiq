@@ -73,9 +73,13 @@ function SignInForm({ onSuccess }: SignInFormProps) {
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>EntityIQ</h1>
+    <div style={styles.page}>
+      {/* Full skyfi.com page captured as the backdrop; scrolls behind the
+          fixed sign-in prompt. */}
+      <img src="/skyfi-bg.png" alt="" style={styles.bg} />
+      <div style={styles.overlay}>
+        <div style={styles.card}>
+          <h1 style={styles.title}>EntityIQ</h1>
         <p style={styles.subtitle}>Operator Sign In</p>
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.field}>
@@ -122,6 +126,7 @@ function SignInForm({ onSuccess }: SignInFormProps) {
             {loading ? "Signing in…" : "Sign In"}
           </button>
         </form>
+        </div>
       </div>
     </div>
   );
@@ -158,18 +163,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
 // ---------------------------------------------------------------------------
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
+  page: {
+    position: "relative",
     minHeight: "100vh",
+    width: "100%",
+    backgroundColor: "#0b0f17",
+  },
+  // The captured skyfi.com page, rendered full-width so its entire content is
+  // visible and scrollable behind the sign-in prompt.
+  bg: {
+    display: "block",
+    width: "100%",
+    height: "auto",
+  },
+  // Fixed, full-viewport layer that keeps the prompt centered while the page
+  // scrolls behind it. pointerEvents:none lets scroll/clicks reach the
+  // background; the card re-enables them for itself.
+  overlay: {
+    position: "fixed",
+    inset: 0,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f3f4f6",
+    padding: "1rem",
+    pointerEvents: "none",
   },
   card: {
+    pointerEvents: "auto",
     backgroundColor: "#ffffff",
     padding: "2rem",
-    borderRadius: "0.5rem",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
+    borderRadius: "0.75rem",
+    boxShadow: "0 12px 48px rgba(0,0,0,0.45)",
     width: "100%",
     maxWidth: "400px",
   },
