@@ -367,6 +367,8 @@ class ScoringStage:
     """
 
     name = "scoring"
+    # Runs even after the run budget is spent, so a report is always produced.
+    always_run = True
 
     def __init__(self, engine: ScoringEngine | None = None) -> None:
         self._engine = engine if engine is not None else ScoringEngine()

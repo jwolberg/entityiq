@@ -33,6 +33,7 @@ from app.pipeline.orchestrator import Orchestrator, default_stages
 from app.pipeline.resolve import ResolveEntityCandidatesStage
 from app.scoring.engine import ScoringStage
 from app.scoring.report import StoreReportStage
+from tests.pipeline._sqlite import enable_sqlite_savepoints
 
 # ---------------------------------------------------------------------------
 # Fakes (network boundary only)
@@ -184,6 +185,7 @@ def e2e_engine():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    enable_sqlite_savepoints(engine)
     Base.metadata.create_all(engine)
     yield engine
     Base.metadata.drop_all(engine)
@@ -222,9 +224,13 @@ def _submit(db: Session, *, domain: str = "acme.com") -> VerificationRun:
     return run
 
 
-def _run(db: Session, stages) -> tuple[VerificationRun, RiskAssessment, set[str]]:
+def _run(
+    db: Session, stages, stage_timeout_seconds: float | None = None
+) -> tuple[VerificationRun, RiskAssessment, set[str]]:
     run = _submit(db)
-    Orchestrator(stages).run_sync(run.id, db)
+    Orchestrator(stages, stage_timeout_seconds=stage_timeout_seconds).run_sync(
+        run.id, db
+    )
     db.refresh(run)
     ra = (
         db.query(RiskAssessment)
@@ -281,6 +287,28 @@ def test_established_company_is_pre_cleared(db):
     assert run.status == "complete"
     assert all(v == "complete" for v in run.source_availability.values())
     assert ra.triage_tier == "pre_clear", (ra.overall_score, ra.contributing_signals)
+
+
+def test_isolated_stage_sessions_produce_the_same_report(db):
+    """With a stage timeout, every stage runs on its own session (ticket 0001).
+
+    The real stages must still see each other's committed rows and produce the
+    same pre-clear report as the shared-session path.
+    """
+    run, ra, names = _run(
+        db,
+        _stages(
+            age_days=4000,
+            mx=["aspmx.l.google.com"],
+            txt=["v=spf1 include:_spf.google.com ~all"],
+            registry=_ACME_REGISTRY,
+        ),
+        stage_timeout_seconds=30.0,
+    )
+    assert run.status == "complete"
+    assert all(v == "complete" for v in run.source_availability.values())
+    assert ra.triage_tier == "pre_clear", (ra.overall_score, ra.contributing_signals)
+    assert {"registry_name_confirmed", "sanctions_cleared"} <= names
 
 
 def test_fresh_shell_domain_is_not_pre_cleared(db):

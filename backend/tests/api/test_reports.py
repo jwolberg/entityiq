@@ -12,7 +12,7 @@ Scenarios:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -418,3 +418,67 @@ def test_reviewed_run_exposes_status_notes_and_reviewer(report_client, reports_e
     assert review["notes"] == "Registry confirmed by phone."
     assert review["reviewer_name"] == "Rita Reviewer"
     assert review["decided_at"] is not None
+
+
+# ---------------------------------------------------------------------------
+# Run timing + per-stage progress (ticket 0001, plan U21)
+# ---------------------------------------------------------------------------
+
+
+def test_report_exposes_run_timing_and_stage_progress(report_client, reports_engine):
+    TestingSessionLocal = sessionmaker(
+        bind=reports_engine, autocommit=False, autoflush=False
+    )
+    setup_db = TestingSessionLocal()
+    try:
+        run_id = _make_run_with_data(setup_db)
+        run = setup_db.get(VerificationRun, run_id)
+        started = datetime(2026, 9, 24, 12, 0, 0, tzinfo=timezone.utc)
+        run.status = "complete"
+        run.started_at = started
+        run.finished_at = started + timedelta(seconds=90)
+        run.source_availability = {
+            "normalize_input": "complete",
+            "query_registries": "unavailable",
+        }
+        setup_db.commit()
+        ScoringStage().run(run_id, setup_db, {})
+        StoreReportStage().run(run_id, setup_db, {})
+    finally:
+        setup_db.close()
+
+    data = report_client.get(f"/reports/{run_id}").json()
+
+    assert data["run"]["status"] == "complete"
+    assert data["run"]["started_at"].startswith("2026-09-24T12:00:00")
+    assert data["run"]["finished_at"].startswith("2026-09-24T12:01:30")
+    assert data["run"]["duration_seconds"] == 90.0
+    assert data["run"]["stages"] == {
+        "normalize_input": "complete",
+        "query_registries": "unavailable",
+    }
+
+
+def test_running_run_has_no_duration_yet(report_client, reports_engine):
+    TestingSessionLocal = sessionmaker(
+        bind=reports_engine, autocommit=False, autoflush=False
+    )
+    setup_db = TestingSessionLocal()
+    try:
+        run_id = _make_run_with_data(setup_db)
+        run = setup_db.get(VerificationRun, run_id)
+        run.status = "running"
+        run.started_at = datetime.now(tz=timezone.utc)
+        run.finished_at = None
+        run.source_availability = {"normalize_input": "complete", "scoring": "pending"}
+        setup_db.commit()
+        StoreReportStage().run(run_id, setup_db, {})
+    finally:
+        setup_db.close()
+
+    data = report_client.get(f"/reports/{run_id}").json()
+
+    assert data["run"]["status"] == "running"
+    assert data["run"]["finished_at"] is None
+    assert data["run"]["duration_seconds"] is None
+    assert data["run"]["stages"]["scoring"] == "pending"

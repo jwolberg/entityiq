@@ -100,6 +100,21 @@ class ReviewSummarySchema(BaseModel):
     decided_at: str | None = None
 
 
+class RunTimingSchema(BaseModel):
+    """Run lifecycle, timing and per-stage progress (ticket 0001).
+
+    ``stages`` maps each pipeline stage to "pending" | "complete" |
+    "unavailable", so clients can show progress while the run is going.
+    ``duration_seconds`` is null until the run finishes.
+    """
+
+    status: str
+    started_at: str | None = None
+    finished_at: str | None = None
+    duration_seconds: float | None = None
+    stages: dict[str, str] = {}
+
+
 class ReportResponse(BaseModel):
     """Full or partial report returned by GET /reports/{run_id}.
 
@@ -125,6 +140,9 @@ class ReportResponse(BaseModel):
 
     # Null until an operator reviews the run.
     review: ReviewSummarySchema | None = None
+
+    # Run lifecycle + timing; null only if the run row is unavailable.
+    run: RunTimingSchema | None = None
 
 
 # ---------------------------------------------------------------------------

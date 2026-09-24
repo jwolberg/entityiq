@@ -187,6 +187,10 @@ The API enqueues verification runs to Redis; the worker executes the pipeline.
 | `OPENCORPORATES_API_TOKEN` | _(unset)_ | OpenCorporates API token. **Required for registry lookups**: the API returns 401 without one, and the registry source then shows as *unavailable* in the report. Production use also needs a license (Open Decision #5). |
 | `SESSION_TTL_HOURS` | `12` | Operator session lifetime. Sessions live in process memory, so they also end when the API restarts. |
 | `IPINFO_TOKEN` | _(unset)_ | Optional ipinfo.io token. The free tier works without one; a paid token adds precise VPN/proxy/hosting flags. |
+| `ENTITYIQ_STAGE_TIMEOUT_SECONDS` | `600` | Per-stage budget in the Celery worker. An overrunning stage is marked unavailable and its writes are discarded. |
+| `ENTITYIQ_RUN_TIMEOUT_SECONDS` | `5400` | Whole-run budget (PRD: under 2h). Once spent, remaining sources are skipped; scoring and the report still run. Celery's soft limit is this + 15 min, the hard limit + 20 min. |
+| `ENTITYIQ_ADAPTER_MAX_ATTEMPTS` | `3` | Total calls per source on `timeout`/`unavailable` (1 = no retry). `not_found` and `rate_limited` are never retried. |
+| `ENTITYIQ_ADAPTER_RETRY_BACKOFF_SECONDS` | `1.0` | First retry delay; doubles each retry. |
 | `TRUSTED_PROXY_DEPTH` | `0` | Hops to walk back from the right of `X-Forwarded-For` to find the client IP. `0` = use the direct connection peer (correct when not behind a proxy). Set to the number of trusted proxies in front of the app. |
 
 ---

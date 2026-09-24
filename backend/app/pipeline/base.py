@@ -9,6 +9,15 @@ Stage contract:
   - run(run_id, db) — execute the stage; may read/write to the DB.
     Returns a dict of arbitrary context (passed to subsequent stages).
     Raises any exception on failure — the orchestrator catches it.
+
+Conventions the orchestrator relies on (ticket 0001):
+  - Return a NEW context dict (``{**context, "key": value}``); never mutate an
+    existing value in place.  Outage detection compares entries by identity,
+    so an in-place mutation would hide a source outage as "complete".
+  - Don't call ``db.rollback()`` to recover from your own errors.  With a
+    stage timeout, the stage's session joins the orchestrator's transaction in
+    "rollback_only" mode, so a rollback discards all of the stage's writes.
+    Raise instead, or return a failure entry in context.
 """
 
 from __future__ import annotations

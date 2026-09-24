@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from typing import Any, Protocol
 
 from app.adapters.base import AdapterFailure
+from app.adapters.retry import RetryingAdapter
 from app.models.evidence import Evidence
 
 logger = logging.getLogger(__name__)
@@ -109,7 +110,9 @@ class GeocodeHQStage:
     name = "geocode_hq"
 
     def __init__(self, adapter: GeocodeAdapter | None = None) -> None:
-        self._adapter = adapter if adapter is not None else GeocodeAdapter()
+        self._adapter = RetryingAdapter(
+            adapter if adapter is not None else GeocodeAdapter()
+        )
 
     def run(self, run_id: str, db: Any, context: dict) -> dict:
         from app.models.field_comparison import FieldComparison  # noqa: PLC0415
