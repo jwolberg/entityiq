@@ -336,6 +336,15 @@ class DomainAdapter:
             mx_value = mx_records[0] if mx_records else "none"
             confidence = 0.9 if mx_records else 0.85
             evidence.append(_ev("mx_records", mx_value, confidence=confidence))
+            # Boolean twin read by the signal catalog (scoring/signals.py);
+            # mx_records above stays the display value for the operator UI.
+            evidence.append(
+                _ev(
+                    "mx_present",
+                    "true" if mx_records else "false",
+                    confidence=confidence,
+                )
+            )
 
             if not mx_records:
                 evidence.append(
@@ -358,6 +367,13 @@ class DomainAdapter:
                 _ev(
                     "spf_record",
                     spf if spf else "none",
+                    confidence=0.85 if spf else 0.7,
+                )
+            )
+            evidence.append(
+                _ev(
+                    "spf_present",
+                    "true" if spf else "false",
                     confidence=0.85 if spf else 0.7,
                 )
             )

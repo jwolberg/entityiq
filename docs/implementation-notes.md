@@ -902,3 +902,19 @@ locking down operator-only report reads.
   overrides the plan's "no new scope" update rule.
 - Identity-corroboration plan is now sequenced after Phase 4 (it depends on the
   P4-T1 field contract).
+
+---
+
+## 2026-09-24 — P4-T1: real-pipeline e2e test + MX/SPF fix
+
+- Added `backend/tests/pipeline/test_pipeline_e2e.py`. It runs the real stage
+  classes in `default_stages()` order with only network clients faked, and a
+  guard test asserts the order matches production. RED before the fix:
+  `has_mx_records` was missing.
+- Fix: the domain adapter now also emits boolean `mx_present` / `spf_present`
+  evidence. `mx_records` / `spf_record` stay as the display values the UI reads.
+- Deviation from plan: no shared field-constants module. The e2e test catches
+  adapter/scoring drift directly without touching ~40 string literals.
+- Noticed, not fixed: both `long_lived_domain` (infrastructure) and
+  `long_lived_domain_trust` (risk) fire off the same evidence. Double-counting
+  may be intended (the layers are separate) — revisit when tuning weights.

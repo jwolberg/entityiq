@@ -371,7 +371,10 @@ _Track: Integration & reporting API_
     drift apart.
   - Files likely involved: backend/app/adapters/domain.py, backend/app/scoring/signals.py,
     backend/tests/pipeline/test_pipeline_e2e.py (new)
-  - Depends on: — · AC: PRD § Tier 2; § Trust Signals · Status: Todo
+  - Depends on: — · AC: PRD § Tier 2; § Trust Signals · Status: Complete (2026-09-24) —
+    tests/pipeline/test_pipeline_e2e.py drives the real stage list with faked clients;
+    domain adapter now emits boolean `mx_present`/`spf_present`. Shared-constants
+    module not added: the e2e test catches drift more cheaply.
 - P4-T2 — Wire computed-but-dropped signals; remove phantom claims
   - Objective: persist resolve-stage `conflict_signal` as evidence and score it
     ("multiple conflicting identities"). Persist free/disposable email as
