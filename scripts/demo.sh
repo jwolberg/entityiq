@@ -31,6 +31,8 @@ echo "==> Migrating database ($DATABASE_URL)"
 migrate_out=$(.venv/bin/alembic upgrade head 2>&1) || { echo "$migrate_out" >&2; exit 1; }
 echo "==> Seeding demo data"
 .venv/bin/python -m app.seed
+echo "==> Loading demo companies"
+.venv/bin/python -m app.demo_data
 
 cd "$ROOT/frontend"
 if [ ! -d node_modules ]; then

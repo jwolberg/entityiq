@@ -40,7 +40,9 @@ docs/       PRD, STRATEGY, ARCHITECTURE, USERS, BUILD_PLAN, this runbook
 
 This creates the backend venv and installs the frontend on the first run,
 migrates a local SQLite database (`backend/entityiq-demo.db`), seeds demo
-accounts and an integration API key, then serves:
+accounts and an integration API key, loads six fictional demo companies that
+span all three triage tiers (`python -m app.demo_data`: real pipeline, recorded
+source responses, no network), then serves:
 
 - UI: http://localhost:5173. Sign in as `operator@demo.entityiq.dev` or
   `lead@demo.entityiq.dev`; the password for both is `entityiq-demo`.

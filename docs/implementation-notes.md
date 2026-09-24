@@ -1024,3 +1024,19 @@ locking down operator-only report reads.
   triage.py re-exports the set.
 - Existing stored assessments are not recomputed; re-running analysis
   corrects them.
+
+---
+
+## 2026-09-24 — P5-T3: demo dataset
+
+- `app/demo_data.py`: six fictional companies go through the real stage
+  classes. Only the network clients are replaced with recorded responses, so
+  the demo is deterministic and offline and never contacts real domains.
+  Tiers: Northwind + Fabrikam → pre_clear; Contoso (no registry match, foreign
+  hosting IP) + Brightpath (young domain, registry outage shown as unavailable)
+  → review; Quantum Ledger (3-week shell on a datacenter IP) + Volga Maritime
+  (fictional sanctions match) → escalate.
+- `tests/test_demo_data.py` pins each scenario's tier, so a scoring change
+  that silently re-tiers the demo fails CI.
+- All names, domains, and sanctions entries are fictional (the SDN CSV is a
+  two-line demo list), so no real company appears as sanctioned.

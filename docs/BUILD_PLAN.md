@@ -447,7 +447,10 @@ _Track: Integration & reporting API_
     `escalate` (including a sanctions hit and a fresh-domain shell). They use
     recorded adapter responses so the demo is deterministic and works offline,
     with realistic source IPs so the network layer shows up.
-  - Depends on: P4-T1, P5-T2 · Status: Todo
+  - Depends on: P4-T1, P5-T2 · Status: Complete (2026-09-24) — `app/demo_data.py`: 6 fictional
+    companies (2 pre_clear, 2 review, 2 escalate incl. a fictional sanctions match) through
+    the real stage list with recorded responses; tiers pinned by tests; loaded by demo.sh.
+    Surfaced and fixed the sanctions→pre_clear tier bug.
 - P5-T4 — GitHub Actions CI
   - Objective: port `.gitlab-ci.yml` (ruff, pytest, eslint, vitest, tsc) to
     `.github/workflows/`. Remove the GitLab config and the untracked bun
