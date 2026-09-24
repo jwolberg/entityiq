@@ -33,6 +33,7 @@ from app.adapters.base import (
     AdapterResult,
     AdapterSuccess,
 )
+from app.adapters.retry import RetryingAdapter
 from app.models.evidence import Evidence
 
 logger = logging.getLogger(__name__)
@@ -442,10 +443,12 @@ class AnalyzeDomainStage:
         dns_client: DnsClient | None = None,
         ssl_client: SslClient | None = None,
     ) -> None:
-        self._adapter = DomainAdapter(
-            whois_client=whois_client,
-            dns_client=dns_client,
-            ssl_client=ssl_client,
+        self._adapter = RetryingAdapter(
+            DomainAdapter(
+                whois_client=whois_client,
+                dns_client=dns_client,
+                ssl_client=ssl_client,
+            )
         )
 
     def run(self, run_id: str, db: Any, context: dict) -> dict:

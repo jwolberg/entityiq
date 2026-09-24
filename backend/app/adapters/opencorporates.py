@@ -34,6 +34,7 @@ from app.adapters.base import (
     AdapterResult,
     AdapterSuccess,
 )
+from app.adapters.retry import RetryingAdapter
 from app.models.evidence import Evidence
 
 logger = logging.getLogger(__name__)
@@ -352,7 +353,9 @@ class QueryRegistriesStage:
     name = "query_registries"
 
     def __init__(self, adapter: OpenCorporatesAdapter | None = None) -> None:
-        self._adapter = adapter if adapter is not None else OpenCorporatesAdapter()
+        self._adapter = RetryingAdapter(
+            adapter if adapter is not None else OpenCorporatesAdapter()
+        )
 
     def run(self, run_id: str, db: "Any", context: dict) -> dict:
         from app.adapters.base import AdapterSuccess  # noqa: PLC0415

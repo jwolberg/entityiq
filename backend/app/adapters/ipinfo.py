@@ -56,6 +56,7 @@ from app.adapters.base import (
     AdapterResult,
     AdapterSuccess,
 )
+from app.adapters.retry import RetryingAdapter
 from app.models.evidence import Evidence
 
 logger = logging.getLogger(__name__)
@@ -414,7 +415,9 @@ class EnrichNetworkIPStage:
     name = "enrich_network_ip"
 
     def __init__(self, adapter: IPInfoAdapter | None = None) -> None:
-        self._adapter = adapter if adapter is not None else IPInfoAdapter()
+        self._adapter = RetryingAdapter(
+            adapter if adapter is not None else IPInfoAdapter()
+        )
 
     def run(self, run_id: str, db: Any, context: dict) -> dict:
         normalized = context.get("normalized", {})
