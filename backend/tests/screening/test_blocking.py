@@ -116,3 +116,11 @@ def test_cap_never_drops_a_record_matching_every_name_token():
 
     assert {f"F{i:03d}" for i in range(250)} <= set(got)
     assert len([g for g in got if g.startswith("P")]) <= 10
+
+
+def test_vowel_initial_skeleton_keeps_its_consonants():
+    """Regression: the skeleton used to drop the first consonant after a
+    leading vowel, reducing 'Iuliia'/'Yulia' to the near-useless key 'sk:i'."""
+    assert "sk:il" in name_keys("Iuliia")
+    assert "sk:il" in name_keys("Yulia")
+    assert "sk:i" not in name_keys("Iuliia")

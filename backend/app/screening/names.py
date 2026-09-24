@@ -74,7 +74,9 @@ def _skeleton(token: str) -> str:
     t = t.replace("y", "i").replace("j", "i").replace("q", "k").replace("c", "k")
     t = re.sub(r"(.)\1+", r"\1", t)
     consonants = re.sub(r"[aeiou]", "", t)
-    return (t[0] + consonants[1:] if t and t[0] in "aeiou" else consonants) or t
+    # Keep a leading vowel so vowel-initial names don't collapse to a
+    # single-letter key ("iulia" -> "il", not "i").
+    return (t[0] + consonants if t and t[0] in "aeiou" else consonants) or t
 
 
 def token_keys(token: str) -> set[str]:

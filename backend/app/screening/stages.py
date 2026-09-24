@@ -104,3 +104,140 @@ class BlockCandidatesStage:
                 "candidate_count": len(matched),
             },
         }
+
+
+def record_dict(record: WatchlistRecord) -> dict:
+    return {
+        "id": record.id,
+        "names": record.names,
+        "dobs": record.dobs,
+        "pobs": record.pobs,
+        "nationalities": record.nationalities,
+        "documents": record.documents,
+    }
+
+
+def _full_name_match(terms: list[dict]) -> bool:
+    return any(
+        t["name"]
+        in ("name_exact_normalized", "name_token_reordered", "name_translit_equivalent")
+        for t in terms
+    )
+
+
+class ScoreCandidatesStage:
+    """Score every candidate with the current rule version (F7–F10, F13).
+
+    Writes claims with provenance for both sides of every comparison and a
+    term row citing them. Subject-side claims hold only a locator into the
+    encrypted subject record, never the value (N5).
+    """
+
+    name = "score_candidates"
+
+    def run(self, run_id: str, db: "Session", context: dict) -> dict:
+        from datetime import datetime, timezone  # noqa: PLC0415
+
+        from app.screening.models import ScreeningClaim, ScreeningTerm  # noqa: PLC0415
+        from app.screening.rules import current_rule  # noqa: PLC0415
+        from app.screening.scoring import score_pair  # noqa: PLC0415
+
+        rule = current_rule(db)
+        run = db.get(ScreeningRun, run_id)
+        run.rule_version_id = rule.id
+        subject = db.get(ScreeningSubject, run.subject_id)
+        pii = get_subject_pii(db, subject)
+        now = run.started_at or datetime.now(tz=timezone.utc)
+
+        candidates = db.query(ScreeningCandidate).filter_by(run_id=run_id).all()
+        records = (
+            {
+                r.id: r
+                for r in db.query(WatchlistRecord)
+                .filter(
+                    WatchlistRecord.id.in_([c.watchlist_record_id for c in candidates])
+                )
+                .all()
+            }
+            if candidates
+            else {}
+        )
+
+        scored = [
+            (
+                c,
+                score_pair(
+                    pii, record_dict(records[c.watchlist_record_id]), rule.config
+                ),
+            )
+            for c in candidates
+        ]
+        # Common-name frequency: how many candidates match the whole name.
+        frequency = sum(1 for _c, (_s, terms) in scored if _full_name_match(terms))
+        if frequency >= rule.config["common_name_threshold"]:
+            scored = [
+                (
+                    c,
+                    score_pair(
+                        pii,
+                        record_dict(records[c.watchlist_record_id]),
+                        rule.config,
+                        name_frequency=frequency,
+                    ),
+                )
+                for c in candidates
+            ]
+
+        subject_claims: dict[str, ScreeningClaim] = {}
+        top = None
+        for cand, (score, terms) in scored:
+            record = records[cand.watchlist_record_id]
+            cand.score = score
+            top = score if top is None else max(top, score)
+            for term in terms:
+                sfield = term["subject_field"]
+                if sfield not in subject_claims:
+                    subject_claims[sfield] = ScreeningClaim(
+                        run_id=run_id,
+                        about="subject",
+                        field=sfield,
+                        value=None,
+                        source="subject_submission",
+                        locator=f"screening_subject:{subject.id}#{sfield}",
+                        retrieved_at=now,
+                    )
+                    db.add(subject_claims[sfield])
+                rclaim = ScreeningClaim(
+                    run_id=run_id,
+                    candidate_id=cand.id,
+                    about="record",
+                    field=term["record_field"],
+                    value=term["record_value"],
+                    source=record.source,
+                    locator=(
+                        f"{record.source}:{record.source_entry_id}"
+                        f"@{record.snapshot_id}#{term['record_field']}"
+                    ),
+                    retrieved_at=now,
+                )
+                db.add(rclaim)
+                db.flush()
+                db.add(
+                    ScreeningTerm(
+                        run_id=run_id,
+                        candidate_id=cand.id,
+                        name=term["name"],
+                        weight=term["weight"],
+                        claim_ids=[subject_claims[sfield].id, rclaim.id],
+                    )
+                )
+        db.commit()
+        return {
+            **context,
+            "scoring": {
+                "status": "complete",
+                "rule_version": rule.version,
+                "candidates": len(candidates),
+                "top_score": top,
+            },
+        }
