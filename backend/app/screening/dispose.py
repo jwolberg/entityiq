@@ -35,7 +35,7 @@ _FULL_NAME = (
     "name_token_reordered",
     "name_translit_equivalent",
 )
-_CONFLICTS = ("dob_conflict", "id_number_conflict")
+_CONFLICTS = ("dob_conflict", "dob_partial_conflict", "id_number_conflict")
 
 
 def _band(score: float, terms: list[dict], thresholds: dict) -> str:

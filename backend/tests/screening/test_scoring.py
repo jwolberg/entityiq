@@ -105,9 +105,62 @@ def test_dob_terms():
     assert "dob_conflict" in _terms(
         subj, _rec("Teodor Vasilescu", dobs=[{"date": "1971-01-01"}])
     )
-    assert "dob_conflict" in _terms(
+    assert "dob_partial_conflict" in _terms(
         subj, _rec("Teodor Vasilescu", dobs=[{"year": 1975}])
     )
+
+
+def test_only_two_full_dates_make_a_hard_dob_conflict():
+    """Year-level disagreement is weaker evidence than two full dates."""
+    full = _terms(
+        {"name": "Teodor Vasilescu", "dob": "1962-08-30"},
+        _rec("Teodor Vasilescu", dobs=[{"date": "1962-09-30"}]),
+    )
+    assert "dob_conflict" in full
+    for subject_dob, record_dobs in [
+        ("1962", [{"date": "1971-01-01"}]),
+        ("1962-08-30", [{"year": 1975}]),
+        ("1962-08", [{"date": "1962-09-01"}]),
+        ("1962-08-30", [{"from_year": 1970, "to_year": 1972}]),
+    ]:
+        terms = _terms(
+            {"name": "Teodor Vasilescu", "dob": subject_dob},
+            _rec("Teodor Vasilescu", dobs=record_dobs),
+        )
+        assert "dob_partial_conflict" in terms, (subject_dob, record_dobs)
+        assert "dob_conflict" not in terms
+    w = DEFAULT_RULE["weights"]
+    assert w["dob_conflict"] < w["dob_partial_conflict"] < 0
+
+
+def test_rules_without_the_partial_term_keep_the_old_behavior():
+    """Frozen v1 configs predate dob_partial_conflict; replay must not change."""
+    legacy = {**DEFAULT_RULE, "weights": dict(DEFAULT_RULE["weights"])}
+    del legacy["weights"]["dob_partial_conflict"]
+    _s, terms = score_pair(
+        {"name": "Teodor Vasilescu", "dob": "1962-08-30"},
+        _rec("Teodor Vasilescu", dobs=[{"year": 1975}]),
+        legacy,
+    )
+    assert "dob_conflict" in {t["name"] for t in terms}
+
+
+def test_partial_dob_conflict_still_floors_at_review():
+    from app.screening.dispose import decide
+
+    bundle = {
+        "subject": {"name": "Teodor Vasilescu", "dob": "1962-08-30"},
+        "candidates": [
+            {
+                "candidate_id": "c1",
+                "record": _rec("Teodor Vasilescu", dobs=[{"year": 1975}]),
+            }
+        ],
+        "rule": {**DEFAULT_RULE, "thresholds": {"clear_below": 0.9, "match_at": 0.95}},
+        "normalizer_version": "n2",
+        "source_status": {},
+    }
+    assert decide(bundle)["candidates"][0]["band"] == "REVIEW"
 
 
 def test_no_dob_on_either_side_adds_no_dob_term():

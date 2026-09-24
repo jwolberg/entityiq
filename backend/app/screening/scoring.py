@@ -27,6 +27,7 @@ TERM_CATALOG = (
     "dob_year_match",
     "dob_within_range",
     "dob_conflict",
+    "dob_partial_conflict",
     "id_number_match",
     "id_number_conflict",
     "nationality_match",
@@ -52,6 +53,9 @@ DEFAULT_RULE: dict = {
         "dob_year_match": 0.15,
         "dob_within_range": 0.1,
         "dob_conflict": -0.35,
+        # Year/month-level disagreement: weaker, since list DOBs are often
+        # approximate. Still floors a name match at REVIEW.
+        "dob_partial_conflict": -0.15,
         "id_number_match": 0.6,
         "id_number_conflict": -0.3,
         "nationality_match": 0.1,
@@ -170,7 +174,13 @@ def _dob_term(subject_dob: str | None, record_dobs: list[dict]) -> str | None:
                 term = "dob_year_match"
         if term and (best is None or rank.index(term) < rank.index(best)):
             best = term
-    return best or "dob_conflict"
+    if best:
+        return best
+    full_vs_full = d is not None and any(
+        "date" in dob and (_parse_dob(dob["date"]) or (0, None, None))[2] is not None
+        for dob in record_dobs
+    )
+    return "dob_conflict" if full_vs_full else "dob_partial_conflict"
 
 
 def _norm_doc(number: str | None) -> str:
@@ -272,6 +282,8 @@ def score_pair(
         )
 
     dob = _dob_term(subject.get("dob"), record.get("dobs", []))
+    if dob == "dob_partial_conflict" and dob not in rule["weights"]:
+        dob = "dob_conflict"  # rule predates the term; keep replay exact
     if dob:
         terms.append(
             _term(rule, dob, "dob", "dobs", subject.get("dob"), record.get("dobs"))

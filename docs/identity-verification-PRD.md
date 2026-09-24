@@ -319,6 +319,7 @@ rule config (F13), not in code.
 | `name_semantic_same` (optional) | + | calibrated model claim (§[9]) |
 | `dob_full_match` / `dob_year_match` / `dob_within_range` | + | DOB claims |
 | `dob_conflict` | − | both full DOBs present and different |
+| `dob_partial_conflict` | − (weaker) | DOBs disagree but at least one side is year- or month-only, or a range; still floors a name match at REVIEW |
 | `id_number_match` | ++ | same ID type, issuer and number |
 | `id_number_conflict` | − | same ID type and issuer, different number |
 | `nationality_match` / `nationality_conflict` | +/− | nationality claims |
