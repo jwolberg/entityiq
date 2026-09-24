@@ -6,7 +6,10 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from sqlalchemy import text
+
 from app.models.audit_event import AuditEvent
+from app.models.list_snapshot import ListSnapshot
 from app.models.watchlist_record import WatchlistRecord
 from app.screening.blocking import BlockingIndex
 from app.screening.dispose import decide
@@ -49,21 +52,29 @@ def test_replay_reproduces_the_original_verdict(api_env):
     assert body["differences"] == []
 
 
-def test_replay_touches_no_lists_and_no_network(api_env, monkeypatch):
+def test_replay_needs_no_lists_and_no_network(api_env, monkeypatch):
+    """Delete every list row, then replay: only the frozen bundle is used."""
     run_id = _match_run(api_env)
+    db = api_env["factory"]()
+    db.execute(text("PRAGMA foreign_keys=OFF"))
+    db.query(WatchlistRecord).delete()
+    db.query(ListSnapshot).delete()
+    db.commit()
+    assert db.query(WatchlistRecord).count() == 0
+    db.close()
 
-    def boom(*a, **k):
-        raise AssertionError("replay must not read lists or the network")
+    def no_network(*a, **k):
+        raise AssertionError("replay must not use the network")
 
-    monkeypatch.setattr("app.screening.stages.current_snapshot_ids", boom)
-    monkeypatch.setattr(BlockingIndex, "build", classmethod(boom))
-    monkeypatch.setattr("app.lists.ofac.default_fetcher", boom)
-    monkeypatch.setattr("httpx.get", boom)
+    # The ASGI test client opens no sockets, so any connect is replay's.
+    monkeypatch.setattr("socket.socket.connect", no_network)
 
     r = api_env["client"].post(
         f"/screenings/{run_id}/replay", headers=api_env["auth"]["examiner"]
     )
+    assert r.status_code == 200, r.text
     assert r.json()["reproduced"] is True
+    assert r.json()["replayed"]["disposition"] == "MATCH"
 
 
 def test_replay_survives_the_list_changing_underneath(api_env):
