@@ -80,3 +80,14 @@ def test_load_is_idempotent(db):
     assert load_demo_data(db) == len(SCENARIOS)
     assert load_demo_data(db) == 0
     assert db.query(Submission).count() == len(SCENARIOS)
+
+
+def test_each_demo_run_has_an_audit_trail(db):
+    from app.models.audit_event import AuditEvent
+
+    load_demo_data(db)
+    for run in db.query(VerificationRun).all():
+        events = (
+            db.query(AuditEvent).filter(AuditEvent.verification_run_id == run.id).all()
+        )
+        assert any(e.event_type.endswith("submission_received") for e in events)

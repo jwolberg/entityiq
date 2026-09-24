@@ -25,6 +25,7 @@ from app.adapters.ipinfo import EnrichNetworkIPStage, IPInfoAdapter
 from app.adapters.opencorporates import OpenCorporatesAdapter, QueryRegistriesStage
 from app.adapters.sanctions import SanctionsScreeningStage
 from app.adapters.web import FetchResult, WebEvidenceStage
+from app.audit.recorder import record_event
 from app.models.entity import Entity
 from app.models.submission import Submission
 from app.models.verification_run import VerificationRun
@@ -415,6 +416,17 @@ def load_demo_data(db: Session) -> int:
         )
         db.add(run)
         db.commit()
+        record_event(
+            db,
+            "system.submission_received",
+            submission_id=sub.id,
+            verification_run_id=run.id,
+            payload={"system": "demo-dataset", "endpoint": "/submissions"},
+            description=(
+                f"Demo dataset submitted registration for {s.company_name!r}; "
+                "verification run enqueued."
+            ),
+        )
         Orchestrator(_stages(s)).run_sync(run.id, db)
         added += 1
     return added
