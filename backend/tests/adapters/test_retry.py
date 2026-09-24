@@ -152,3 +152,11 @@ def test_every_external_source_stage_retries(stage_path):
     module = __import__(module_path, fromlist=[cls_name])
     stage = getattr(module, cls_name)()
     assert isinstance(stage._adapter, RetryingAdapter)
+
+
+def test_copying_the_wrapper_does_not_recurse():
+    import copy
+
+    adapter, _ = _retrying(ScriptedAdapter())
+    clone = copy.copy(adapter)
+    assert clone.name == "scripted"

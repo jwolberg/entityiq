@@ -110,3 +110,79 @@ def test_soft_time_limit_marks_run_failed_but_keeps_partial_report(
         assert report is not None, "partial report must survive the time limit"
     finally:
         db.close()
+
+
+def test_soft_limit_signal_while_waiting_on_a_hung_stage(session_factory, monkeypatch):
+    """Celery delivers the soft limit as a signal on the main thread.
+
+    Here it lands while the orchestrator is blocked waiting on a hung stage (not
+    raised inside the stage). The stage must be abandoned so its late write
+    never lands, the run is failed with a clear reason, and the partial report
+    is still assembled.
+    """
+    import signal
+    import threading
+    import time
+
+    from app.models.entity import Entity
+
+    run_id = _make_run(session_factory)
+    db = session_factory()
+    entity_id = db.get(VerificationRun, run_id).entity_id
+    db.close()
+    release = threading.Event()
+    finished = threading.Event()
+
+    class Done:
+        name = "normalize_input"
+
+        def run(self, run_id, db, context):
+            return {**context, "normalize_input": "done"}
+
+    class Hangs:
+        name = "query_registries"
+
+        def run(self, run_id, db, context):
+            try:
+                release.wait(10)
+                db.get(Entity, entity_id).canonical_domain = "late.example"
+                db.commit()
+                return context
+            finally:
+                finished.set()
+
+    monkeypatch.setattr(
+        "app.pipeline.orchestrator.default_stages", lambda: [Done(), Hangs()]
+    )
+
+    def fire_soft_limit(signum, frame):
+        raise SoftTimeLimitExceeded()
+
+    previous = signal.signal(signal.SIGALRM, fire_soft_limit)
+    signal.setitimer(signal.ITIMER_REAL, 0.5)
+    try:
+        run_verification_task(run_id)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+
+    release.set()
+    assert finished.wait(2.0)
+    time.sleep(0.2)
+
+    db = session_factory()
+    try:
+        run = db.get(VerificationRun, run_id)
+        assert run.status == "failed"
+        assert "time limit" in (run.failure_reason or "").lower()
+        assert run.source_availability == {
+            "normalize_input": "complete",
+            "query_registries": "unavailable",
+        }
+        assert (
+            db.query(Report).filter(Report.verification_run_id == run_id).one_or_none()
+            is not None
+        )
+        assert db.get(Entity, entity_id).canonical_domain is None
+    finally:
+        db.close()

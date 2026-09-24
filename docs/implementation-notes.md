@@ -1175,3 +1175,18 @@ locking down operator-only report reads.
     verification_run.
   - CachedAdapter and RateLimitedAdapter exist but are still not wired into
     any stage.
+- **Fresh-context review (same day).** It confirmed the timeout/commit
+  handshake has no race, and that `rollback_only` makes a stage's own commit
+  a no-op.
+  - Added a test that delivers the soft limit as a real SIGALRM while the
+    orchestrator is blocked on a hung stage (the way Celery does it). A
+    mutation check proves it guards the abandon-on-interrupt code.
+  - Documented two stage conventions in pipeline/base.py: return a new
+    context dict, and never call `db.rollback()` in a stage.
+  - Guarded RetryingAdapter.__getattr__ against recursion.
+  - Checked and not a bug: python-whois uses a 10s socket timeout on its
+    default path.
+  - Remaining risk: an abandoned stage holds a pooled DB connection until its
+    I/O timeouts expire.
+  - The UI poll has no cap, so a run whose worker died polls every 5s while
+    the tab is open.

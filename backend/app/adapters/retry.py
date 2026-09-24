@@ -86,7 +86,11 @@ class RetryingAdapter:
     def __getattr__(self, attr: str) -> Any:
         # Adapters with a non-standard entry point (e.g. GeocodeAdapter.geocode)
         # get the same retry behavior on every method call.
-        value = getattr(self._adapter, attr)
+        inner = self.__dict__.get("_adapter")
+        if inner is None:
+            # Not initialised yet (copy/pickle probes): don't recurse.
+            raise AttributeError(attr)
+        value = getattr(inner, attr)
         if not callable(value):
             return value
 
