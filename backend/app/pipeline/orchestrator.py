@@ -82,6 +82,7 @@ def default_stages() -> list[PipelineStage]:
       4. analyze_domain               — Tier-2 domain/infrastructure signals (P1-T5)
       5. enrich_network_ip            — IPinfo geo/ASN/VPN enrichment (P2-T2)
       6. web_evidence                 — Tier-3 public web evidence (P2-T4)
+      6a. verify_linkedin             — Tier-3 LinkedIn presence (IC1-T4)
       7. consistency_checks           — submitted-vs-discovered comparisons (P1-T6)
       7b. geocode_hq                  — HQ coordinates + address confidence (P2-T9)
       8. scoring                      — risk assessment v1 (P1-T7)
@@ -90,6 +91,7 @@ def default_stages() -> list[PipelineStage]:
     from app.adapters.domain import AnalyzeDomainStage  # noqa: PLC0415
     from app.adapters.geocode import GeocodeHQStage  # noqa: PLC0415
     from app.adapters.ipinfo import EnrichNetworkIPStage  # noqa: PLC0415
+    from app.adapters.linkedin import VerifyLinkedInStage  # noqa: PLC0415
     from app.adapters.opencorporates import QueryRegistriesStage  # noqa: PLC0415
     from app.adapters.sanctions import SanctionsScreeningStage  # noqa: PLC0415
     from app.adapters.tax_id import VerifyTaxIdStage  # noqa: PLC0415
@@ -109,6 +111,7 @@ def default_stages() -> list[PipelineStage]:
         AnalyzeDomainStage(),
         EnrichNetworkIPStage(),
         WebEvidenceStage(),
+        VerifyLinkedInStage(),
         ConsistencyChecksStage(),
         GeocodeHQStage(),
         ScoringStage(),

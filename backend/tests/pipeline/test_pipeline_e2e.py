@@ -19,6 +19,11 @@ import app.models  # noqa: F401
 from app.adapters.domain import AnalyzeDomainStage
 from app.adapters.geocode import GeocodeAdapter, GeocodeHQStage
 from app.adapters.ipinfo import EnrichNetworkIPStage, IPInfoAdapter
+from app.adapters.linkedin import (
+    LinkedInAdapter,
+    StubLinkedInProvider,
+    VerifyLinkedInStage,
+)
 from app.adapters.opencorporates import OpenCorporatesAdapter, QueryRegistriesStage
 from app.adapters.sanctions import SanctionsScreeningStage
 from app.adapters.tax_id import StubTaxIdProvider, TaxIdAdapter, VerifyTaxIdStage
@@ -162,6 +167,7 @@ def _stages(*, age_days: int, mx: list[str], txt: list[str], registry: dict):
         ),
         EnrichNetworkIPStage(IPInfoAdapter(http_client=_Http(200, _US_RESIDENTIAL_IP))),
         WebEvidenceStage(fetcher=_Web(_ACME_HTML)),
+        VerifyLinkedInStage(LinkedInAdapter(provider=StubLinkedInProvider())),
         ConsistencyChecksStage(),
         GeocodeHQStage(
             GeocodeAdapter(
