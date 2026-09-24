@@ -1,4 +1,4 @@
-"""Tests for the PII retention job (ADR-0002; ticket 0002).
+"""Tests for the PII retention job (ADR-0002; tickets 0002, 0020).
 
 Covers the retention windows and anonymization rules from
 docs/decisions/0002-pii-retention-policy.md:
@@ -13,6 +13,8 @@ docs/decisions/0002-pii-retention-policy.md:
   - The audit log is untouched, and the job writes exactly one audit event
     with counts per category.
   - The job is idempotent.
+  - Requester-association evidence (ticket 0020) is scrubbed on the same
+    submitted-PII schedule.
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ from app.db.retention import ANONYMIZED_EMAIL, run_retention
 from app.db.session import Base
 from app.models.audit_event import AuditEvent
 from app.models.entity import Entity
+from app.models.evidence import Evidence
 from app.models.operator import Operator
 from app.models.review import Review
 from app.models.submission import Submission
@@ -117,6 +120,40 @@ def _review(db: Session, *, run: VerificationRun, decided_at: datetime) -> Revie
     db.add(review)
     db.flush()
     return review
+
+
+def _linkedin_evidence(db: Session, *, run: VerificationRun) -> Evidence:
+    ev = Evidence(
+        verification_run_id=run.id,
+        source="linkedin",
+        tier=3,
+        field="linkedin_presence",
+        raw_value="found",
+        normalized_value="found",
+        confidence=0.7,
+        raw_payload={
+            "url": "https://www.linkedin.com/company/acme-corp",
+            "name": "Acme Corporation",
+            "associated_people": ["Jane Smith"],
+            "resolved_by": "url",
+        },
+        attribution={"provider": "stub"},
+    )
+    db.add(ev)
+    match_ev = Evidence(
+        verification_run_id=run.id,
+        source="linkedin",
+        tier=3,
+        field="linkedin_requester_match",
+        raw_value="true",
+        normalized_value="true",
+        confidence=0.6,
+        raw_payload={},
+        attribution={"provider": "stub"},
+    )
+    db.add(match_ev)
+    db.flush()
+    return ev
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +313,54 @@ def test_pii_anonymization_is_idempotent(db):
 
     assert counts["unreviewed_pii"] == 0
     assert counts["reviewed_pii"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Requester-association evidence (ticket 0020)
+# ---------------------------------------------------------------------------
+
+
+def test_requester_association_scrubbed_with_submitted_pii(db):
+    entity = _entity(db, name="AssocOld")
+    sub = _submission(db, entity=entity, submitted_at=NOW - timedelta(days=181))
+    run = _run(db, submission=sub)
+    presence_ev = _linkedin_evidence(db, run=run)
+    db.commit()
+    presence_id = presence_ev.id
+
+    counts = run_retention(db, now=NOW)
+
+    db.refresh(presence_ev)
+    assert "associated_people" not in (presence_ev.raw_payload or {})
+    # The rest of the linkedin_presence payload (company-level) is preserved.
+    assert presence_ev.raw_payload["name"] == "Acme Corporation"
+    assert counts["requester_association"] == 1
+
+    match_ev = (
+        db.query(Evidence)
+        .filter(
+            Evidence.verification_run_id == run.id,
+            Evidence.field == "linkedin_requester_match",
+        )
+        .one()
+    )
+    # The true/false match flag itself is a derived fact, not raw PII — kept.
+    assert match_ev.normalized_value == "true"
+    assert presence_id == presence_ev.id
+
+
+def test_requester_association_not_touched_within_window(db):
+    entity = _entity(db, name="AssocRecent")
+    sub = _submission(db, entity=entity, submitted_at=NOW - timedelta(days=5))
+    run = _run(db, submission=sub)
+    presence_ev = _linkedin_evidence(db, run=run)
+    db.commit()
+
+    counts = run_retention(db, now=NOW)
+
+    db.refresh(presence_ev)
+    assert "associated_people" in presence_ev.raw_payload
+    assert counts["requester_association"] == 0
 
 
 # ---------------------------------------------------------------------------

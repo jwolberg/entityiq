@@ -1,4 +1,4 @@
-"""Tests for app/auth/pii.py — role-gated report access (ADR-0002 §2; ticket 0002).
+"""Tests for app/auth/pii.py — role-gated report access (ADR-0002 §2; 0002, 0020).
 
 Unit-level: exercises resolve_viewer(), filter_summary_for_viewer(), and
 report_contains_pii() directly against summary dict shapes matching
@@ -70,6 +70,28 @@ def _summary() -> dict:
                     "provider": "ipinfo",
                     "source_url": "https://ipinfo.io/73.162.40.18/json",
                 },
+                "fetched_at": None,
+            },
+            {
+                "id": "ev-3",
+                "source": "linkedin",
+                "tier": 3,
+                "field": "linkedin_requester_match",
+                "raw_value": "true",
+                "normalized_value": "true",
+                "confidence": 0.6,
+                "attribution": {"provider": "stub"},
+                "fetched_at": None,
+            },
+            {
+                "id": "ev-4",
+                "source": "linkedin",
+                "tier": 3,
+                "field": "linkedin_presence",
+                "raw_value": "found",
+                "normalized_value": "found",
+                "confidence": 0.7,
+                "attribution": {"provider": "stub"},
                 "fetched_at": None,
             },
         ],
@@ -160,6 +182,7 @@ def test_lead_viewer_sees_everything_unredacted():
     filtered = filter_summary_for_viewer(_summary(), "lead")
     fields = {(e["source"], e["field"]) for e in filtered["evidence"]}
     assert ("ipinfo", "ip_country") in fields
+    assert ("linkedin", "linkedin_requester_match") in fields
     ipinfo_ev = next(e for e in filtered["evidence"] if e["source"] == "ipinfo")
     assert (
         ipinfo_ev["attribution"]["source_url"] == "https://ipinfo.io/73.162.40.18/json"
@@ -180,6 +203,12 @@ def test_operator_viewer_keeps_derived_network_signals_but_strips_raw_ip():
     assert "source_url" not in ipinfo_src["attribution"]
 
 
+def test_operator_viewer_keeps_requester_association_evidence():
+    filtered = filter_summary_for_viewer(_summary(), "operator")
+    fields = {(e["source"], e["field"]) for e in filtered["evidence"]}
+    assert ("linkedin", "linkedin_requester_match") in fields
+
+
 def test_operator_viewer_keeps_billing_address_mismatch():
     filtered = filter_summary_for_viewer(_summary(), "operator")
     field_names = {m["field_name"] for m in filtered["mismatches"]}
@@ -191,6 +220,14 @@ def test_system_viewer_excludes_network_metadata_entirely():
     sources_used = {e["source"] for e in filtered["evidence"]}
     assert "ipinfo" not in sources_used
     assert not any(s["source"] == "ipinfo" for s in filtered["sources"])
+
+
+def test_system_viewer_excludes_requester_association_evidence():
+    filtered = filter_summary_for_viewer(_summary(), "system")
+    fields = {e["field"] for e in filtered["evidence"]}
+    assert "linkedin_requester_match" not in fields
+    # Company-level LinkedIn evidence (presence) is still company-level data.
+    assert "linkedin_presence" in fields
 
 
 def test_system_viewer_excludes_contact_pii_mismatches():

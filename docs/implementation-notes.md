@@ -1585,3 +1585,34 @@ single-tenant internal tool; multi-tenant would need per-client scoping.
   wrong reason when run after `tests/api/*`. Fixed with an autouse
   `_cleanup_dependency_overrides` fixture in that file; ran the two files
   back-to-back afterward to confirm.
+
+---
+
+## 2026-09-24 — Ticket 0020: gate LinkedIn requester-association PII
+
+- **`associated_people` had no existing leak to redact.** The IC1-T4
+  LinkedIn adapter puts the requester-association name list in the
+  `linkedin_presence` Evidence row's `raw_payload` (ticket 0010), but
+  `app.scoring.report._build_summary()` never serializes `raw_payload` into
+  the report's `evidence` section — only `id/source/tier/field/raw_value/
+  normalized_value/confidence/attribution/fetched_at`. So there was nothing
+  to filter out of the *API* for this field; the real exposure is that it
+  sits in the DB indefinitely, including after the submission's own
+  `requester_full_name` is anonymized. Handled it as a retention concern
+  (scrub `raw_payload["associated_people"]` in `app.db.retention` on the same
+  submitted-PII schedule) rather than a report-filtering concern.
+  `linkedin_requester_match` (the true/false match evidence field, which
+  *is* serialized) is what actually needed the same lead/operator/system
+  gating as network metadata — added to `app/auth/pii.py`'s existing
+  `filter_summary_for_viewer()` machinery from ticket 0002 rather than a
+  parallel mechanism.
+  `linkedin_requester_match`'s own normalized_value ("true"/"false") is not
+  itself a name, so it's left untouched by retention — only the
+  `associated_people` list is stripped from the linked `linkedin_presence`
+  row.
+- **Requester-association evidence is visible to operators, not just leads**
+  — ADR-0002 §2 and the ticket both say "visible to operators and leads,"
+  unlike raw network metadata (leads only). Confirmed this doesn't
+  contradict anything: the match evidence is a boolean derived fact, not the
+  associated names themselves, so operator visibility doesn't leak the
+  requester's actual PII.

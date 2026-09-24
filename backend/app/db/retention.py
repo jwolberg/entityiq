@@ -1,4 +1,4 @@
-"""PII retention job (ADR-0002; ticket 0002).
+"""PII retention job (ADR-0002; tickets 0002, 0020).
 
 Anonymizes rows in place once they pass their retention window. Never
 hard-deletes — foreign keys, scores and audit history stay intact
@@ -28,6 +28,12 @@ Anonymization rules (ADR-0002 §2):
     deviation from "null the PII fields" (see docs/implementation-notes.md).
   - company_name, domain, country and all scores/evidence/triage data are
     left untouched.
+  - Requester-association evidence (ticket 0020): the LinkedIn adapter's
+    ``associated_people`` list (a list of real names) is stripped from the
+    linked ``linkedin_presence`` Evidence row's raw_payload, on the same
+    schedule as the submission's own PII. The company-level parts of that
+    payload (name, employee_count, ...) and the linkedin_requester_match
+    true/false evidence (a derived fact, not a name) are left alone.
 
 Idempotency: rather than a separate "anonymized" flag column, we detect
 already-done rows structurally:
@@ -47,7 +53,8 @@ Writes exactly one audit event per run, with the row counts per category —
 and only when something was actually anonymized, so idempotent no-op runs
 don't spam the audit log:
   event_type = "retention.anonymized"
-  payload = {"network_metadata": N, "reviewed_pii": N, "unreviewed_pii": N}
+  payload = {"network_metadata": N, "reviewed_pii": N, "unreviewed_pii": N,
+             "requester_association": N}
 """
 
 from __future__ import annotations
@@ -79,6 +86,12 @@ _SUBMITTED_PII_FIELDS = (
     "requester_full_name",
     "linkedin_url",
 )
+
+# The LinkedIn evidence field whose raw_payload carries a list of real names
+# (ticket 0020) — the requester-association evidence that follows the
+# submitted-PII retention schedule.
+_REQUESTER_ASSOCIATION_EVIDENCE_FIELD = "linkedin_presence"
+_REQUESTER_ASSOCIATION_PAYLOAD_KEY = "associated_people"
 
 
 def _network_days() -> int:
@@ -181,6 +194,52 @@ def _anonymize_submission_pii(sub) -> None:
     sub.work_email = ANONYMIZED_EMAIL
 
 
+def _anonymize_requester_association(
+    db: "Session", *, submission_ids: list[str]
+) -> int:
+    """Strip ``associated_people`` from linked LinkedIn evidence (ticket 0020).
+
+    Only called for submissions whose PII was just anonymized in this same
+    pass — requester-association evidence follows the submitted-PII schedule.
+    """
+    if not submission_ids:
+        return 0
+
+    from app.models.evidence import Evidence  # noqa: PLC0415
+    from app.models.verification_run import VerificationRun  # noqa: PLC0415
+
+    run_ids = [
+        row[0]
+        for row in db.query(VerificationRun.id)
+        .filter(VerificationRun.submission_id.in_(submission_ids))
+        .all()
+    ]
+    if not run_ids:
+        return 0
+
+    rows = (
+        db.query(Evidence)
+        .filter(
+            Evidence.verification_run_id.in_(run_ids),
+            Evidence.field == _REQUESTER_ASSOCIATION_EVIDENCE_FIELD,
+        )
+        .all()
+    )
+
+    count = 0
+    for ev in rows:
+        payload = ev.raw_payload or {}
+        if _REQUESTER_ASSOCIATION_PAYLOAD_KEY not in payload:
+            continue
+        # Reassign (not in-place mutation) — JSON columns aren't tracked for
+        # dirty-checking on in-place dict mutation without MutableDict.
+        ev.raw_payload = {
+            k: v for k, v in payload.items() if k != _REQUESTER_ASSOCIATION_PAYLOAD_KEY
+        }
+        count += 1
+    return count
+
+
 def run_retention(db: "Session", *, now: datetime | None = None) -> dict[str, int]:
     """Run one retention pass. Idempotent.
 
@@ -197,6 +256,7 @@ def run_retention(db: "Session", *, now: datetime | None = None) -> dict[str, in
 
     reviewed_count = 0
     unreviewed_count = 0
+    anonymized_submission_ids: list[str] = []
 
     pii_candidates = (
         db.query(Submission).filter(Submission.work_email != ANONYMIZED_EMAIL).all()
@@ -207,9 +267,15 @@ def run_retention(db: "Session", *, now: datetime | None = None) -> dict[str, in
             if decided_at <= reviewed_cutoff:
                 _anonymize_submission_pii(sub)
                 reviewed_count += 1
+                anonymized_submission_ids.append(sub.id)
         elif _as_aware_utc(sub.submitted_at) <= unreviewed_cutoff:
             _anonymize_submission_pii(sub)
             unreviewed_count += 1
+            anonymized_submission_ids.append(sub.id)
+
+    requester_association_count = _anonymize_requester_association(
+        db, submission_ids=anonymized_submission_ids
+    )
 
     db.commit()
 
@@ -217,6 +283,7 @@ def run_retention(db: "Session", *, now: datetime | None = None) -> dict[str, in
         "network_metadata": network_count,
         "reviewed_pii": reviewed_count,
         "unreviewed_pii": unreviewed_count,
+        "requester_association": requester_association_count,
     }
 
     if any(counts.values()):
@@ -228,8 +295,10 @@ def run_retention(db: "Session", *, now: datetime | None = None) -> dict[str, in
             payload=counts,
             description=(
                 f"Retention job anonymized {network_count} network-metadata "
-                f"row(s), {reviewed_count} reviewed-PII row(s), and "
-                f"{unreviewed_count} unreviewed-PII row(s)."
+                f"row(s), {reviewed_count} reviewed-PII row(s), "
+                f"{unreviewed_count} unreviewed-PII row(s), and "
+                f"{requester_association_count} requester-association "
+                "evidence row(s)."
             ),
         )
 

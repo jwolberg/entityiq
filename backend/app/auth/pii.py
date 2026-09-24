@@ -1,23 +1,29 @@
-"""Role-gated PII access for the KYB report API (ADR-0002 §2; ticket 0002).
+"""Role-gated PII access for the KYB report API (ADR-0002 §2; tickets 0002, 0020).
 
 The assembled report (GET /reports/{run_id}, GET /reports/{run_id}/export)
-mixes company-level evidence with personal data. The first category this
-module gates: "raw network metadata" — evidence from the ipinfo (Tier-2)
-adapter (app/adapters/ipinfo.py). Its normalized fields (ip_country, ip_asn,
-...) are the *derived* signals ADR-0002 says operators may see; its
-``attribution["source_url"]`` embeds the literal source IP the evidence was
-fetched for (``https://ipinfo.io/<ip>/json``) — that's the "full IP" ADR-0002
-restricts to leads. (Ticket 0020 extends this module with a second category:
-LinkedIn requester-association evidence.)
+mixes company-level evidence with two categories of personal data:
+
+  - "raw network metadata" — evidence from the ipinfo (Tier-2) adapter
+    (app/adapters/ipinfo.py). Its normalized fields (ip_country, ip_asn, ...)
+    are the *derived* signals ADR-0002 says operators may see; its
+    ``attribution["source_url"]`` embeds the literal source IP the evidence
+    was fetched for (``https://ipinfo.io/<ip>/json``) — that's the "full IP"
+    ADR-0002 restricts to leads.
+  - "requester-association evidence" (ticket 0020) — the LinkedIn adapter's
+    ``linkedin_requester_match`` field, which exists only because a real
+    person (the requester) was looked up against a company page.
 
 Access matrix (ADR-0002 §2):
   lead      — sees everything: derived network signals AND the IP-identifying
-              attribution.
-  operator  — sees the derived network signals but not the raw IP.
+              attribution, plus requester-association evidence.
+  operator  — sees the derived network signals but not the raw IP; sees
+              requester-association evidence ("visible to operators and
+              leads" per ADR-0002 §2 / ticket 0020).
   system    — an integration API key. No network-metadata evidence or
               sources at all (not even derived signals — "reports without
-              raw network metadata"), and no contact-PII mismatch fields.
-              Company-level evidence and scores only.
+              raw network metadata"), no requester-association evidence, and
+              no contact-PII mismatch fields. Company-level evidence and
+              scores only.
 
 ``filter_summary_for_viewer()`` is the single choke point app/api/reports.py
 calls, for both GET /reports/{run_id} and GET /reports/{run_id}/export, so
@@ -37,6 +43,10 @@ Viewer = Literal["lead", "operator", "system"]
 
 # Evidence source name for the Tier-2 network/IP intelligence adapter.
 NETWORK_METADATA_SOURCE = "ipinfo"
+
+# Evidence field(s) that only exist because a requester's identity was
+# checked against a company's LinkedIn page (ticket 0020).
+REQUESTER_ASSOCIATION_EVIDENCE_FIELDS = frozenset({"linkedin_requester_match"})
 
 # FieldComparison.field_name values that carry the submitter's own contact
 # PII in `submitted_value` — as opposed to company-level fields such as
@@ -85,7 +95,12 @@ def filter_summary_for_viewer(summary: dict, viewer: Viewer) -> dict:
     mismatches = list(summary.get("mismatches") or [])
 
     if viewer == "system":
-        evidence = [e for e in evidence if e.get("source") != NETWORK_METADATA_SOURCE]
+        evidence = [
+            e
+            for e in evidence
+            if e.get("source") != NETWORK_METADATA_SOURCE
+            and e.get("field") not in REQUESTER_ASSOCIATION_EVIDENCE_FIELDS
+        ]
         sources = [s for s in sources if s.get("source") != NETWORK_METADATA_SOURCE]
         mismatches = [
             m
@@ -120,10 +135,13 @@ def report_contains_pii(summary: dict) -> bool:
     Used to decide whether a report view needs a PII-view audit event
     (ADR-0002 §2: "Viewing a report detail that contains PII records an audit
     event"). Company-level facts (registry name, domain age, ...) don't
-    count; network metadata and contact-PII mismatches do.
+    count; network metadata, requester-association evidence, and contact-PII
+    mismatches do.
     """
     evidence = summary.get("evidence") or []
     if any(e.get("source") == NETWORK_METADATA_SOURCE for e in evidence):
+        return True
+    if any(e.get("field") in REQUESTER_ASSOCIATION_EVIDENCE_FIELDS for e in evidence):
         return True
     mismatches = summary.get("mismatches") or []
     return any(m.get("field_name") in CONTACT_PII_MISMATCH_FIELDS for m in mismatches)

@@ -1,10 +1,10 @@
 """Integration tests: role-gated PII access on the report API (ADR-0002 §2,
-ticket 0002).
+tickets 0002 and 0020).
 
-Builds a run with ipinfo (network metadata) and a billing_address mismatch,
-then reads GET /reports/{run_id} and GET /reports/{run_id}/export as a lead,
-an operator, and an integration API key — asserting each sees exactly what
-ADR-0002 §2 allows.
+Builds a run with ipinfo (network metadata), a billing_address mismatch, and
+LinkedIn requester-association evidence, then reads GET /reports/{run_id} and
+GET /reports/{run_id}/export as a lead, an operator, and an integration API
+key — asserting each sees exactly what ADR-0002 §2 allows.
 
 Also covers: viewing a report with PII records an audit event
 (app.auth.operator.require_lead's denial-audit is covered separately in
@@ -108,6 +108,7 @@ def _build_run(SessionMaker) -> str:
             source_availability={
                 "query_registries": "complete",
                 "enrich_network_ip": "complete",
+                "verify_linkedin": "complete",
                 "consistency_checks": "complete",
                 "scoring": "complete",
             },
@@ -143,6 +144,17 @@ def _build_run(SessionMaker) -> str:
                     },
                     fetched_at=datetime.now(tz=timezone.utc),
                 ),
+                Evidence(
+                    verification_run_id=run_id,
+                    source="linkedin",
+                    tier=3,
+                    field="linkedin_requester_match",
+                    raw_value="true",
+                    normalized_value="true",
+                    confidence=0.6,
+                    attribution={"provider": "stub"},
+                    fetched_at=datetime.now(tz=timezone.utc),
+                ),
             ]
         )
         db.add(
@@ -172,7 +184,9 @@ def report_path(request):
 # ---------------------------------------------------------------------------
 
 
-def test_lead_sees_raw_network_attribution(pii_engine, SessionMaker, report_path):
+def test_lead_sees_raw_network_attribution_and_requester_match(
+    pii_engine, SessionMaker, report_path
+):
     lead = Operator(email="lead@example.com", full_name="Lead", role="lead")
     db = SessionMaker()
     db.add(lead)
@@ -193,12 +207,14 @@ def test_lead_sees_raw_network_attribution(pii_engine, SessionMaker, report_path
     assert (
         ipinfo_ev["attribution"]["source_url"] == "https://ipinfo.io/73.162.40.18/json"
     )
+    fields = {e["field"] for e in data["evidence"]}
+    assert "linkedin_requester_match" in fields
     mismatch_fields = {m["field_name"] for m in data["mismatches"]}
     assert "billing_address" in mismatch_fields
 
 
 # ---------------------------------------------------------------------------
-# Operator: derived signals only, no raw IP
+# Operator: derived signals only, no raw IP; requester-association visible
 # ---------------------------------------------------------------------------
 
 
@@ -223,16 +239,20 @@ def test_operator_sees_derived_signals_not_raw_ip(
     assert ipinfo_ev["field"] == "ip_country"
     assert "source_url" not in ipinfo_ev["attribution"]
 
+    fields = {e["field"] for e in data["evidence"]}
+    assert "linkedin_requester_match" in fields  # visible to operators + leads
+
     mismatch_fields = {m["field_name"] for m in data["mismatches"]}
     assert "billing_address" in mismatch_fields  # operators still read submitted PII
 
 
 # ---------------------------------------------------------------------------
-# Integration API key: no network metadata, no contact-PII mismatches
+# Integration API key: no network metadata, no requester-association, no
+# contact-PII mismatches
 # ---------------------------------------------------------------------------
 
 
-def test_api_key_excluded_from_network_metadata_and_contact_pii(
+def test_api_key_excluded_from_network_metadata_and_requester_association(
     pii_engine, SessionMaker, report_path
 ):
     run_id = _build_run(SessionMaker)
@@ -248,12 +268,14 @@ def test_api_key_excluded_from_network_metadata_and_contact_pii(
     assert "ipinfo" not in sources_used
     assert not any(s["source"] == "ipinfo" for s in data["sources"])
 
+    fields = {e["field"] for e in data["evidence"]}
+    assert "linkedin_requester_match" not in fields
+
     mismatch_fields = {m["field_name"] for m in data["mismatches"]}
     assert "billing_address" not in mismatch_fields
 
     # Company-level evidence is still returned; scores (when present) are
     # never redacted — they're an aggregate, not raw PII.
-    fields = {e["field"] for e in data["evidence"]}
     assert "company_name" in fields
 
 
