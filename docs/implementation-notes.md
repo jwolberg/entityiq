@@ -956,3 +956,22 @@ locking down operator-only report reads.
 - Found while testing: `representation_confidence_signals` returned early when
   there were no field comparisons and skipped web-contact signals, contrary to
   its own comment. Fixed.
+
+---
+
+## 2026-09-24 — P5-T2: one-command demo
+
+- `scripts/demo.sh`: first run creates the venv and runs `npm ci`; every run
+  migrates a local SQLite DB, seeds, and serves API + UI with Celery in eager
+  mode. Verified: fresh DB → both servers up → lead sign-in through the Vite
+  `/api` proxy → Ctrl-C/TERM stops both with no orphan processes.
+- `python -m app.seed`: operator + lead accounts (shared demo password) and a
+  `demo-integration` API key, printed only on creation. Idempotent.
+- Deviation: no docker-compose yet. The Docker daemon wasn't running here to
+  verify it, and I won't commit an untested compose file. The script already
+  delivers the one-command goal.
+- Process note: the seed module was written before its tests were run, so the
+  tests never had a RED run. They do assert real behavior (password verifies,
+  roles, single key, idempotency).
+- Added `backend/.gitignore` (`*.db`) instead of editing the root `.gitignore`,
+  which has uncommitted local changes.

@@ -433,7 +433,10 @@ _Track: Integration & reporting API_
   - Objective: seed script (operator + lead accounts, API key) and
     docker-compose (API + UI; SQLite + eager by default, Postgres + Redis
     profile). Replaces the inline Python snippets in RUNBOOK.
-  - Depends on: — · Status: Todo
+  - Depends on: — · Status: Complete (2026-09-24) — `scripts/demo.sh` (no Docker:
+    venv + npm install on first run, SQLite + eager, seed, both servers) and idempotent
+    `python -m app.seed`. docker-compose deferred: Docker daemon unavailable to verify it,
+    and the script already meets the one-command goal.
 - P5-T3 — Demo dataset
   - Objective: curated submissions that land in `pre_clear`, `review`, and
     `escalate` (including a sanctions hit and a fresh-domain shell). They use

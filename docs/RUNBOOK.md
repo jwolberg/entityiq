@@ -32,6 +32,25 @@ docs/       PRD, STRATEGY, ARCHITECTURE, USERS, BUILD_PLAN, this runbook
 
 ---
 
+## One-command demo
+
+```bash
+./scripts/demo.sh
+```
+
+This creates the backend venv and installs the frontend on the first run,
+migrates a local SQLite database (`backend/entityiq-demo.db`), seeds demo
+accounts and an integration API key, then serves:
+
+- UI: http://localhost:5173. Sign in as `operator@demo.entityiq.dev` or
+  `lead@demo.entityiq.dev`; the password for both is `entityiq-demo`.
+- API docs: http://localhost:8000/docs
+
+Ctrl-C stops both servers. Re-running is safe: the seed is idempotent. Ports
+and the DB path can be overridden with `API_PORT`, `UI_PORT`, and `DEMO_DB`.
+
+---
+
 ## Quick start (no Postgres or Redis needed)
 
 This is the fastest path to a running backend + frontend for development. It uses
@@ -66,47 +85,22 @@ curl -s http://localhost:8000/health
 Interactive API docs (Swagger UI, always reflects the current schema):
 **http://localhost:8000/docs**
 
-### 2. Seed an operator account (needed to sign in)
+### 2. Seed demo accounts and an API key
 
-There is no seed script yet, so create an operator directly. With the backend venv
-active and the same `DATABASE_URL` exported, from `backend/`:
-
-```bash
-python - <<'PY'
-from app.db.session import SessionLocal
-from app.models.operator import Operator
-from app.auth.operator import hash_password
-
-db = SessionLocal()
-db.add(Operator(
-    email="operator@example.com",
-    full_name="Dev Operator",
-    role="lead",                         # "operator" or "lead"
-    password_hash=hash_password("changeme"),
-))
-db.commit()
-print("created operator@example.com / changeme")
-PY
-```
-
-### 3. Seed a service credential (needed to submit via the API)
-
-`POST /submissions` and `GET /reports/{id}/export` require a **service credential**
-(API key) — integrating systems authenticate at the API boundary (P2-T12). The
-operator UI does not submit, so this is only needed for direct API testing
-(curl / Swagger). With the venv active and the same `DATABASE_URL` exported, from
+With the backend venv active and the same `DATABASE_URL` exported, from
 `backend/`:
 
 ```bash
-python - <<'PY'
-from app.db.session import SessionLocal
-from app.auth.service import create_api_client
-
-db = SessionLocal()
-client, key = create_api_client("local-dev", db)   # plaintext shown ONCE
-print(f"X-API-Key: {key}")
-PY
+python -m app.seed
 ```
+
+This creates `operator@demo.entityiq.dev` (role `operator`) and
+`lead@demo.entityiq.dev` (role `lead`), both with password `entityiq-demo`, plus
+a `demo-integration` service credential. The API key is printed **only on
+first creation** (keys are stored hashed). It's idempotent; never run it
+against a shared database.
+
+`POST /submissions` accepts that key or an operator `Bearer` token.
 
 Send the printed key as the `X-API-Key` header:
 
@@ -122,7 +116,7 @@ curl -s -X POST http://localhost:8000/submissions \
 Without the key the endpoint returns **401**. The report export endpoint accepts
 either an `X-API-Key` (integrating system) or an operator `Bearer` token.
 
-### 4. Frontend
+### 3. Frontend
 
 In a second terminal:
 
