@@ -1329,3 +1329,66 @@ single-tenant internal tool; multi-tenant would need per-client scoping.
   changes — `_new_session_token` / `_get_operator_id_from_token` /
   `invalidate_session` / `_clear_all_sessions` kept their exact signatures,
   now delegating to whichever `SessionStore` is active.
+
+---
+
+## 2026-09-24 — docker-compose full stack, live-verified (backlog 0025)
+
+- **Docker daemon was down at task start** (`docker info` failed: no
+  `docker.sock`). Started Docker Desktop (`open -a Docker`) and polled
+  `docker info` until the daemon came up (~6s) — then ran the full live
+  verification below. If Docker had stayed unavailable this would be
+  reported as not-done per the ticket, but it came up, so the compose file,
+  images, migrations, worker, and a real submission were all verified live,
+  not just written.
+- **Files added:** `docker-compose.yml` (root), `backend/Dockerfile` +
+  `backend/.dockerignore`, `frontend/Dockerfile` + `frontend/.dockerignore`.
+  No existing Dockerfiles existed to reuse.
+- **`frontend/.dockerignore` excludes `node_modules`.** The worktree's
+  `frontend/node_modules` is a symlink into the primary checkout, outside
+  this build context — without excluding it, `COPY . .` would either fail
+  ("forbidden path outside the build context") or copy garbage. `npm ci`
+  installs a real `node_modules` inside the image instead.
+- **`ui` service is a Vite dev server** (`npm run dev -- --host 0.0.0.0`),
+  not a production build — matches this ticket's "verify the full stack for
+  dev" scope. `VITE_API_TARGET=http://api:8000` reuses the proxy env var
+  `vite.config.ts` already supports; no frontend code changed.
+- **`REDIS_URL` also wired into the `api` service** (ticket 0024's operator
+  sessions), separate from `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND`, even
+  though all three point at the same `redis` service by default in compose.
+- **Live verification performed (not just "should work"):**
+  1. `docker compose build` — all three images (`api`, `worker`, `ui`) built
+     clean.
+  2. `docker compose up -d` — `db`/`redis` reported healthy, `api` ran
+     `alembic upgrade head` against Postgres (all 3 revisions applied,
+     ending at `a1b2c3d4e5f6`) then started; `worker` connected to
+     `redis://redis:6379/0`; `ui` served on :5173.
+  3. `docker compose exec -T api python -m app.seed` — seeded demo
+     accounts + an integration API key against Postgres.
+  4. `POST /submissions` (real API key, `stripe.com`) → enqueued to the
+     **real, non-eager Celery worker**. Confirmed via `app/worker.py` that
+     `run_verification_task` always passes `stage_timeout_seconds`, which is
+     what puts the orchestrator on the isolated-stage-session path (ticket
+     0001) — so this run exercised that path on Postgres, not SQLite.
+     Completed in ~25s: `run.status == "complete"`, `triage_tier ==
+     "pre_clear"`. Real external calls succeeded (sanctions CSV, WHOIS/DNS/
+     SSL, web fetch, OSM geocode); OpenCorporates/tax-id/LinkedIn correctly
+     reported `unavailable` (no token/provider configured) without failing
+     the run (P4-T3 behavior, now also observed against Postgres/live
+     network instead of only recorded fixtures).
+  5. Verified `alembic_version` directly via `psql` inside the `db`
+     container: `a1b2c3d4e5f6` (head).
+  6. Signed in as the seeded operator, called `POST /reviews/{run_id}` ->
+     201 (ties ticket 0004's flow together live, on Postgres).
+  7. Restarted the `api` container (`docker compose restart api`) and reused
+     the pre-restart session token: `GET /reports/{run_id}` still returned
+     200 (Redis-backed session survived the restart — ticket 0024, now
+     proven live against a real Redis, not just the in-test fake). Signed
+     out with the same token -> 204, then the same token -> 401 (revocation
+     took effect immediately).
+  8. Cleaned up: `docker compose down -v` (containers, network, and the
+     Postgres volume all removed — no lingering state from this
+     verification run).
+- **Not covered by this pass:** a production frontend build inside Docker
+  (out of scope — see "ui service" note above), and TLS/ingress (MVP has
+  none anywhere yet).

@@ -460,8 +460,9 @@ _Track: Integration & reporting API_
     profile). Replaces the inline Python snippets in RUNBOOK.
   - Depends on: — · Status: Complete (2026-09-24) — `scripts/demo.sh` (no Docker:
     venv + npm install on first run, SQLite + eager, seed, both servers) and idempotent
-    `python -m app.seed`. docker-compose deferred: Docker daemon unavailable to verify it,
-    and the script already meets the one-command goal.
+    `python -m app.seed`. docker-compose added and live-verified in ticket 0025
+    (`docker-compose.yml`: Postgres + Redis + API + worker + UI); RUNBOOK "Full
+    stack" documents it. `scripts/demo.sh` remains the one-command no-Docker path.
 - P5-T3 — Demo dataset
   - Objective: curated submissions that land in `pre_clear`, `review`, and
     `escalate` (including a sanctions hit and a fresh-domain shell). They use
@@ -538,9 +539,10 @@ _Track: Integration & reporting API_
   The largest remaining PRD gap is the representation layer: tax ID and LinkedIn are
   captured but never verified, and `valid_tax_id` is unreachable.
 - Then: P3-T1 (run timing, stage timeouts), P3-T4 (domain-ownership verification),
-  P3-T3 (PII policy; Open Decision #7), P3-T5. Follow-ups noted in implementation
-  notes: triage-tier dashboard filter, Redis-backed sessions, docker-compose,
-  API-key provisioning UI.
+  P3-T3 (PII policy; Open Decision #7), P3-T5 (coverage thresholds still blocked
+  on a pytest-cov/vitest-coverage dependency decision). Follow-ups noted in
+  implementation notes: triage-tier dashboard filter, API-key provisioning UI.
+  Redis-backed sessions (0024) and docker-compose (0025) are done.
 - Needs a human decision: P5-T5 hosting; OpenCorporates token/license (Open Decision #5).
 
 ## Deferred / Out of Scope

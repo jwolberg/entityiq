@@ -13,9 +13,10 @@ for build status see [BUILD_PLAN.md](./BUILD_PLAN.md).
 
 - **Python ≥ 3.11** (backend; `requires-python = ">=3.11"`)
 - **Node ≥ 18** + npm (frontend; Vite 5 / React 18)
-- **Optional for the full stack:** PostgreSQL 14+ and Redis 6+.
-  Neither is required for the quick-start path below — the backend defaults to
-  Postgres but runs on SQLite for dev, and the pipeline can run inline without a
+- **Optional for the full stack:** PostgreSQL 14+ and Redis 6+, or Docker +
+  Docker Compose (runs both for you — see "Full stack" below). Neither is
+  required for the quick-start path below — the backend defaults to Postgres
+  but runs on SQLite for dev, and the pipeline can run inline without a
   Celery worker/Redis.
 
 ---
@@ -24,10 +25,13 @@ for build status see [BUILD_PLAN.md](./BUILD_PLAN.md).
 
 ```
 backend/    FastAPI app, pipeline, adapters, scoring, auth, Alembic migrations
+            Dockerfile, .dockerignore (ticket 0025)
 frontend/   React + TypeScript + Vite operator app
+            Dockerfile, .dockerignore (ticket 0025)
 shared/     OpenAPI contract + generated TS types (placeholder)
 tests/      cross-cutting / e2e (placeholder)
 docs/       PRD, STRATEGY, ARCHITECTURE, USERS, BUILD_PLAN, this runbook
+docker-compose.yml   Full stack: Postgres + Redis + API + worker + UI
 ```
 
 ---
@@ -138,14 +142,85 @@ alongside it. Open http://localhost:5173 and sign in with the seeded operator.
 
 ---
 
-## Full stack (Postgres + Redis + Celery worker)
+## Full stack (Postgres + Redis + API + worker + UI)
 
-Closer to production: real Postgres, a Redis broker, and an out-of-process worker.
+Closer to production than the quick-start path: real Postgres, a real Redis
+(broker + operator sessions), an out-of-process Celery worker, and the UI —
+all via `docker-compose.yml` at the repo root (ticket 0025).
 
-### Postgres
+### Docker Compose (recommended)
 
-Start Postgres and create the database/user matching the default URL (or point
-`DATABASE_URL` at your own):
+Needs a running Docker daemon (`docker info` succeeds).
+
+```bash
+# from the repo root
+docker compose build
+docker compose up -d
+docker compose ps          # all 5 services should be Up (db/redis "healthy")
+```
+
+`docker compose up` runs `alembic upgrade head` against Postgres automatically
+(the `api` service's start command) before serving. Then seed demo accounts +
+an integration API key (prints the key once):
+
+```bash
+docker compose exec -T api python -m app.seed
+```
+
+Verify:
+
+- API: http://localhost:8000/docs (health: `curl -s localhost:8000/health`)
+- UI: http://localhost:5173 — sign in with `operator@demo.entityiq.dev` /
+  `entityiq-demo` (password from the seed step)
+
+Submit a registration (replace the key with the one `app.seed` printed) and
+watch it complete via the **real, non-eager Celery worker** on Postgres —
+this is the isolated-stage-session path from ticket 0001, exercised for real
+here instead of on SQLite:
+
+```bash
+curl -s -X POST http://localhost:8000/submissions \
+  -H "Content-Type: application/json" -H "X-API-Key: <key>" \
+  -d '{"company_name":"Acme Corp","work_email":"cto@acme.example",
+       "company_domain":"acme.example","country":"US"}'
+# {"run_id": "...", "status": "pending", ...}
+
+curl -s "http://localhost:8000/reports/<run_id>" -H "X-API-Key: <key>" | python3 -m json.tool
+# poll until "status": "complete" / run.status == "complete"
+```
+
+This submission uses the *real* adapters (no recorded fixtures — that's only
+for tests/demo_data), so registries/sanctions/WHOIS/geocode calls go out over
+the network; sources without a configured token/provider
+(`OPENCORPORATES_API_TOKEN`, `ENTITYIQ_TAX_ID_PROVIDER`,
+`ENTITYIQ_LINKEDIN_PROVIDER`) report as `unavailable` per-source rather than
+failing the run (P4-T3) — the run still reaches `complete`.
+
+Logs / rebuild after code changes / teardown:
+
+```bash
+docker compose logs -f api      # or worker, ui, db, redis
+docker compose build api worker # after backend changes (image isn't live-mounted)
+docker compose down             # stop; add -v to also drop the Postgres volume
+```
+
+Compose file summary (`docker-compose.yml`):
+
+| Service | Image / build | Notes |
+| --- | --- | --- |
+| `db` | `postgres:16-alpine` | `entityiq`/`entityiq`/`entityiq`; healthcheck gates `api`/`worker` startup. |
+| `redis` | `redis:7-alpine` | Celery broker/result-backend **and** the operator session store (ticket 0024). |
+| `api` | `backend/Dockerfile` | Runs `alembic upgrade head` then `uvicorn`, port 8000. |
+| `worker` | `backend/Dockerfile` (same image, different command) | `celery -A app.worker.celery_app worker --loglevel=info`, non-eager. |
+| `ui` | `frontend/Dockerfile` | Vite dev server, port 5173, proxies `/api` to `api:8000`. |
+
+The `backend`/`frontend` images are rebuilt from source, not live-mounted —
+re-run `docker compose build` after editing code (the `--reload`/HMR dev loop
+is the SQLite quick-start path above, not this one).
+
+### Manual (no Docker): Postgres + Celery worker on the host
+
+Same topology without containers — useful if Docker isn't available.
 
 ```bash
 # default expected by the app:
@@ -158,11 +233,10 @@ createdb entityiq -O entityiq
 cd backend
 source .venv/bin/activate
 export DATABASE_URL="postgresql+psycopg://entityiq:entityiq@localhost:5432/entityiq"
+export REDIS_URL="redis://localhost:6379/0"     # operator sessions (ticket 0024)
 alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
-
-### Redis + Celery worker
 
 With Redis running on `localhost:6379` (do NOT set `CELERY_TASK_ALWAYS_EAGER`):
 
