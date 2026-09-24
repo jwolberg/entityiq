@@ -327,7 +327,9 @@ export function RiskAssessmentPanel({
   const elevated = signals.filter((s) => s.direction === "elevated");
   const trust = signals.filter((s) => s.direction === "trust");
 
-  const evidenceCount = sources.reduce((n, s) => n + s.evidence_count, 0);
+  const available = sources.filter((s) => s.status !== "unavailable");
+  const unavailable = sources.filter((s) => s.status === "unavailable");
+  const evidenceCount = available.reduce((n, s) => n + s.evidence_count, 0);
 
   return (
     <div data-testid="risk-panel">
@@ -347,9 +349,15 @@ export function RiskAssessmentPanel({
 
       {/* Evidence summary */}
       <div style={styles.evidenceSummary} data-testid="risk-evidence-summary">
-        {sources.length} source{sources.length === 1 ? "" : "s"} ·{" "}
+        {available.length} source{available.length === 1 ? "" : "s"} ·{" "}
         {evidenceCount} evidence item{evidenceCount === 1 ? "" : "s"}
       </div>
+      {unavailable.length > 0 && (
+        <div style={styles.unavailableSources} data-testid="risk-unavailable-sources">
+          Unavailable during this run (confidence reduced):{" "}
+          {unavailable.map((s) => s.source).join(", ")}
+        </div>
+      )}
 
       {/* Risk flags */}
       <div style={styles.flagsSection}>
@@ -493,6 +501,15 @@ const styles: Record<string, React.CSSProperties> = {
   evidenceSummary: {
     fontSize: "0.8rem",
     color: "#6b7280",
+    marginBottom: "1rem",
+  },
+  unavailableSources: {
+    fontSize: "0.8rem",
+    color: "#92400e",
+    backgroundColor: "#fef3c7",
+    padding: "0.4rem 0.6rem",
+    borderRadius: "0.375rem",
+    marginTop: "-0.5rem",
     marginBottom: "1rem",
   },
   flagsSection: {

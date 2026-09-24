@@ -178,6 +178,36 @@ describe("CompanyDetail", () => {
     vi.restoreAllMocks();
   });
 
+  it("lists unavailable sources instead of silently counting fewer", async () => {
+    const report = {
+      ...COMPLETE_REPORT,
+      sources: [
+        { source: "domain", tier: 2, evidence_count: 2, attribution: null, status: "available" },
+        { source: "opencorporates", tier: 1, evidence_count: 0, attribution: null, status: "unavailable" },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ ok: true, json: async () => report })
+    );
+
+    render(
+      <Wrapper>
+        <CompanyDetail runId="run-abc" onBack={vi.fn()} />
+      </Wrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("risk-panel")).toBeDefined();
+    });
+    expect(screen.getByTestId("risk-evidence-summary").textContent).toContain(
+      "1 source"
+    );
+    expect(screen.getByTestId("risk-unavailable-sources").textContent).toContain(
+      "opencorporates"
+    );
+  });
+
   it("renders submitted-vs-discovered fields with mismatch markers", async () => {
     vi.stubGlobal(
       "fetch",

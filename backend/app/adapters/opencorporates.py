@@ -24,6 +24,7 @@ Default base URL: https://api.opencorporates.com/v0.4
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
@@ -112,7 +113,11 @@ class OpenCorporatesAdapter:
         self._http = http_client if http_client is not None else _default_http_client()
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
-        self._api_token = api_token
+        self._api_token = (
+            api_token
+            if api_token is not None
+            else os.environ.get("OPENCORPORATES_API_TOKEN")
+        )
 
     # ------------------------------------------------------------------
     # Public: SourceAdapter.fetch

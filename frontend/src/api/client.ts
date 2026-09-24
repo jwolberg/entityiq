@@ -121,6 +121,8 @@ export interface SourceSummary {
   tier: number;
   evidence_count: number;
   attribution: Record<string, unknown> | null;
+  /** "unavailable" when the source was down (timeout / error / rate limit). */
+  status?: "available" | "unavailable";
 }
 
 export interface SectionStatuses {

@@ -124,6 +124,7 @@ def _serialize_report(report: Report) -> ReportResponse:
             tier=s["tier"],
             evidence_count=s["evidence_count"],
             attribution=s.get("attribution"),
+            status=s.get("status", "available"),
         )
         for s in summary.get("sources", [])
     ]

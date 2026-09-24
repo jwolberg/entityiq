@@ -64,6 +64,8 @@ class SourceSummarySchema(BaseModel):
     tier: int
     evidence_count: int
     attribution: dict[str, Any] | None = None
+    # "available" or "unavailable" (source down: timeout / error / rate limit).
+    status: str = "available"
 
 
 # ---------------------------------------------------------------------------

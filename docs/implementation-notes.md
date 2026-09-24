@@ -918,3 +918,23 @@ locking down operator-only report reads.
 - Noticed, not fixed: both `long_lived_domain` (infrastructure) and
   `long_lived_domain_trust` (risk) fire off the same evidence. Double-counting
   may be intended (the layers are separate) — revisit when tuning weights.
+
+---
+
+## 2026-09-24 — P4-T3: live-source viability
+
+- `OPENCORPORATES_API_TOKEN` is read from the environment. The API now returns
+  401 without a token, even for dev use.
+- The orchestrator detects adapter outages. Adapter stages never raise on
+  failure; they return `{"status": <kind>}` under their context key. Any new
+  context entry with status `timeout` / `unavailable` / `rate_limited` now
+  marks the stage `unavailable`. `not_found` stays `complete`: "no registry
+  match" is a finding, not an outage.
+- The report's `sources` entries carry `status` (`available` / `unavailable`),
+  and unavailable adapter sources are listed with zero evidence. This is a new
+  field with a default, so it's backward compatible for API consumers. The UI
+  shows an amber "Unavailable during this run" line and counts only available
+  sources.
+- New runtime dependencies (approved via "move forward with recommendations"):
+  `httpx==0.27.2` moved from dev to runtime; `python-whois==0.9.5` added. A
+  pyproject test guards against runtime imports living only in the dev extra.

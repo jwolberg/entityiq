@@ -290,3 +290,40 @@ def test_fresh_shell_domain_is_not_pre_cleared(db):
     assert "has_mx_records" not in names
     assert "spf_configured" not in names
     assert ra.triage_tier != "pre_clear"
+
+
+def test_failed_source_is_reported_unavailable_not_dropped(db):
+    """A 401 from the registry must surface as an unavailable source (P4-T3)."""
+    from app.models.report import Report
+
+    stages = _stages(
+        age_days=4000,
+        mx=["aspmx.l.google.com"],
+        txt=["v=spf1 ~all"],
+        registry={},
+    )
+    stages[2] = QueryRegistriesStage(
+        OpenCorporatesAdapter(http_client=_Http(401, {"error": "token required"}))
+    )
+    run, _, _ = _run(db, stages)
+
+    assert run.source_availability["query_registries"] == "unavailable"
+    report = db.query(Report).filter(Report.verification_run_id == run.id).one()
+    by_source = {s["source"]: s for s in report.summary["sources"]}
+    assert by_source["opencorporates"]["status"] == "unavailable"
+    assert by_source["opencorporates"]["evidence_count"] == 0
+    assert by_source["domain"]["status"] == "available"
+
+
+def test_not_found_is_a_result_not_an_outage(db):
+    """No registry match is a finding; the source itself was available."""
+    run, _, _ = _run(
+        db,
+        _stages(
+            age_days=4000,
+            mx=["aspmx.l.google.com"],
+            txt=[],
+            registry={"results": {"companies": [], "total_count": 0}},
+        ),
+    )
+    assert run.source_availability["query_registries"] == "complete"

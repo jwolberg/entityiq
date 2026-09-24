@@ -188,6 +188,8 @@ The API enqueues verification runs to Redis; the worker executes the pipeline.
 | `CELERY_TASK_ALWAYS_EAGER` | `false` | `true` runs the pipeline inline in the API process — no Redis/worker needed. |
 | `CELERY_BROKER_URL` | `redis://localhost:6379/0` | Celery broker (when not in eager mode). |
 | `CELERY_RESULT_BACKEND` | `redis://localhost:6379/0` | Celery result backend. |
+| `OPENCORPORATES_API_TOKEN` | _(unset)_ | OpenCorporates API token. **Required for registry lookups**: the API returns 401 without one, and the registry source then shows as *unavailable* in the report. Production use also needs a license (Open Decision #5). |
+| `IPINFO_TOKEN` | _(unset)_ | Optional ipinfo.io token. The free tier works without one; a paid token adds precise VPN/proxy/hosting flags. |
 | `TRUSTED_PROXY_DEPTH` | `0` | Hops to walk back from the right of `X-Forwarded-For` to find the client IP. `0` = use the direct connection peer (correct when not behind a proxy). Set to the number of trusted proxies in front of the app. |
 
 ---

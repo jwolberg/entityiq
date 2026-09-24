@@ -326,3 +326,21 @@ def test_stage_no_exception_on_unavailable(oc_session: Session):
     # Must not raise
     ctx_out = stage.run(run.id, oc_session, context)
     assert ctx_out["registries"]["status"] == "timeout"
+
+
+def test_api_token_read_from_environment(monkeypatch):
+    """OPENCORPORATES_API_TOKEN configures the token without code changes."""
+    from app.adapters.opencorporates import OpenCorporatesAdapter
+
+    seen: dict = {}
+
+    class _Capture:
+        def get(self, url, *, params=None, timeout: float = 10.0):
+            seen.update(params or {})
+            return _FakeResponse(200, _EMPTY_RESPONSE)
+
+    monkeypatch.setenv("OPENCORPORATES_API_TOKEN", "tok-123")
+    OpenCorporatesAdapter(http_client=_Capture()).fetch(
+        AdapterContext(run_id="r", company_name="Acme")
+    )
+    assert seen.get("api_token") == "tok-123"

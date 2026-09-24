@@ -389,7 +389,10 @@ _Track: Integration & reporting API_
     library, and verify WHOIS domain age works live. Document every key in
     RUNBOOK.
   - Depends on: P4-T1; Open Decision #5 for *production* use only · AC: PRD § Tier 1–2;
-    ARCHITECTURE § 4 · Status: Todo
+    ARCHITECTURE § 4 · Status: Complete (2026-09-24) — env token; outage
+    kinds (timeout/unavailable/rate_limited) mark the stage `unavailable` and the source
+    is listed with `status: unavailable` in the report + UI; httpx and python-whois
+    are runtime deps; WHOIS verified live (stripe.com → 1995).
 - P4-T4 — Web contact extraction quality
   - Objective: reject placeholder emails (example.com etc.), invalid phone
     numbers, and address false positives. Add fixtures from real saved pages.
