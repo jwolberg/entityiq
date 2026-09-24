@@ -261,6 +261,30 @@ The API enqueues verification runs to Redis; the worker executes the pipeline.
 
 ---
 
+## Individual screening: lists and monitoring
+
+Load (or refresh) the official sanctions lists:
+
+```bash
+cd backend && .venv/bin/python -m app.lists.ingest          # OFAC, UN, EU, UK
+.venv/bin/python -m app.lists.ingest ofac_sdn               # one source
+```
+
+Each list is stored as a versioned snapshot only when its content changed.
+Every new snapshot triggers monitoring: active subjects whose names hit the
+added or changed records get a new `monitoring` run. Schedule it daily
+(cron, or a Celery beat entry). A fetch failure leaves the last good
+snapshot in use. Live smoke run (2026-09-24): about 30 s for all four lists,
+16.6k individuals; each screening took about 2 s against them.
+
+Crypto-shred retention for screening subjects (ADR-0004), also scheduled:
+
+```bash
+.venv/bin/python -m app.screening.retention
+```
+
+---
+
 ## Environment variables
 
 | Variable | Default | Purpose |
