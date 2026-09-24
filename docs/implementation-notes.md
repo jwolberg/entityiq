@@ -884,3 +884,21 @@ locking down operator-only report reads.
 - Web fetcher User-Agent contact URL now points at the GitHub repo.
 - Tradeoff (user decision): git history was NOT rewritten. Earlier commits
   still contain the old name and the screenshot asset.
+
+---
+
+## 2026-09-24 — Build-vs-PRD assessment; plan updated
+
+- Full audit in `docs/ASSESSMENT-2026-09-24.md`, including a live stripe.com run
+  (SQLite + eager). A legitimate company scored 42 ("review") because MX/SPF
+  trust signals are mis-wired, OpenCorporates returns 401 without a token, WHOIS
+  never runs (undeclared dependency), and web contacts come back as junk.
+- Plan decision: completed Phase-2 tickets keep status Complete (built as
+  scoped) and carry a "Gap" annotation pointing at the new Phase 4 fix ticket,
+  rather than being reopened. This keeps history honest and the fix work
+  trackable.
+- Scope added at the user's direction: Phase 5 (showcase readiness: README,
+  one-command demo, demo dataset, GitHub CI, optional hosted demo). This
+  overrides the plan's "no new scope" update rule.
+- Identity-corroboration plan is now sequenced after Phase 4 (it depends on the
+  P4-T1 field contract).

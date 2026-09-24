@@ -18,6 +18,12 @@ platform that augments human review; it does not auto-approve accounts.
 
 ## Status
 
-Pre-implementation. The design-doc set is in place; build planning is the next step
-(`.claude/skills/plan`). See [ARCHITECTURE.md § Open decisions](docs/ARCHITECTURE.md#open-decisions)
-for choices to confirm before coding — notably the backend stack.
+Working end to end: submission API → async 10-stage verification pipeline →
+four-layer explainable risk score with triage → operator web app (queue,
+detail, correct and re-run, review, export) with an append-only audit log.
+Backend: 385 tests; frontend: 18 tests.
+
+Known gaps and the plan to close them are in
+[docs/ASSESSMENT-2026-09-24.md](docs/ASSESSMENT-2026-09-24.md) and
+[docs/BUILD_PLAN.md](docs/BUILD_PLAN.md). To run it locally, see
+[docs/RUNBOOK.md](docs/RUNBOOK.md).

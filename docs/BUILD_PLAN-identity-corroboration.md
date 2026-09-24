@@ -77,6 +77,17 @@
 - Blockers: Open Decision #5 (data-source access for FEIN provider + LinkedIn
   data access / ToS) UNRESOLVED — blocks IC2-T1 and IC3-T1 only. The Phase-1
   stubbed slice is **not** blocked.
+- Sequencing (2026-09-24): scheduled **after** main BUILD_PLAN Phase 4
+  (real-data correctness). The 2026-09-24 assessment
+  (docs/ASSESSMENT-2026-09-24.md) found adapter evidence field names drifting
+  from what scoring reads (MX/SPF). IC1-T1 and IC1-T4 should build on the
+  shared field constants and end-to-end pipeline test from P4-T1, so the new
+  tax-ID/LinkedIn signals can't repeat that drift.
+- Related finding: the existing `valid_tax_id` trust signal
+  (backend/app/scoring/signals.py) is unreachable today because no adapter
+  emits `tax_id` evidence. IC1-T3 should replace it with the `tax_id_*`
+  signals rather than add alongside it. `requester_full_name` and
+  `linkedin_url` are captured but unused, which is the gap IC1-T4/T5 close.
 
 ---
 
@@ -346,6 +357,7 @@
 17. IC4-T4
 
 ## Recommended Next Step
+- Prerequisite: main BUILD_PLAN P4-T1 (evidence field contract + e2e pipeline test).
 - Start with: **IC1-T1 — Tax-ID adapter scaffold + stub provider**, and open
   **IC0-T1 / IC0-T2** (provider decisions) to run in parallel.
 - Why this is first: the entire Phase-1 slice is buildable behind deterministic
