@@ -27,10 +27,12 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 import traceback
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
@@ -185,7 +187,15 @@ def _run_stage_isolated(
         target=worker, name=f"stage-{stage.name}-{run_id}", daemon=True
     )
     thread.start()
-    done.wait(timeout_seconds)
+    try:
+        done.wait(timeout_seconds)
+    except BaseException:
+        # Interrupted while waiting (e.g. Celery's soft time limit): abandon
+        # the stage so nothing it writes afterwards lands, then propagate.
+        with lock:
+            if not state["settled"]:
+                state["abandoned"] = True
+        raise
     with lock:
         if not state["settled"]:
             state["abandoned"] = True
@@ -210,24 +220,42 @@ class Orchestrator:
                 runs in a worker thread on its own DB session and is recorded
                 as unavailable (its writes discarded) if it overruns.  None
                 keeps the original in-thread, shared-session behavior.
+        run_timeout_seconds: Whole-run budget.  Once spent, remaining stages
+                are skipped as unavailable, except those marked
+                ``always_run`` (scoring, store_report), so the report is still
+                produced.  Also caps each stage's timeout at the budget left.
     """
 
     def __init__(
         self,
         stages: list[PipelineStage],
         stage_timeout_seconds: float | None = None,
+        run_timeout_seconds: float | None = None,
     ) -> None:
         self.stages = stages
         self.stage_timeout_seconds = stage_timeout_seconds
+        self.run_timeout_seconds = run_timeout_seconds
+
+    def _stage_budget(
+        self, stage: PipelineStage, deadline: float | None
+    ) -> float | None:
+        budget = self.stage_timeout_seconds
+        if deadline is not None and not getattr(stage, "always_run", False):
+            remaining = max(0.0, deadline - time.monotonic())
+            budget = remaining if budget is None else min(budget, remaining)
+        return budget
 
     def _run_stage(
-        self, stage: PipelineStage, run_id: str, db: Session, context: dict
+        self,
+        stage: PipelineStage,
+        run_id: str,
+        db: Session,
+        context: dict,
+        budget: float | None,
     ) -> dict:
-        if self.stage_timeout_seconds is None:
+        if budget is None:
             return stage.run(run_id, db, context)
-        return _run_stage_isolated(
-            stage, run_id, db, context, self.stage_timeout_seconds
-        )
+        return _run_stage_isolated(stage, run_id, db, context, budget)
 
     # ------------------------------------------------------------------
     # Public: synchronous execution (used directly in tests and by the
@@ -255,16 +283,35 @@ class Orchestrator:
         db.commit()
 
         context: dict = {}
+        deadline = (
+            time.monotonic() + self.run_timeout_seconds
+            if self.run_timeout_seconds is not None
+            else None
+        )
 
         try:
             for stage in self.stages:
                 stage_name = stage.name
+                if (
+                    deadline is not None
+                    and time.monotonic() >= deadline
+                    and not getattr(stage, "always_run", False)
+                ):
+                    logger.warning(
+                        "Orchestrator: run %s budget spent; skipping stage %s",
+                        run_id,
+                        stage_name,
+                    )
+                    _update_stage_status(run, db, stage_name, STAGE_UNAVAILABLE)
+                    continue
                 logger.info(
                     "Orchestrator: run %s starting stage %s", run_id, stage_name
                 )
                 try:
                     before = context
-                    context = self._run_stage(stage, run_id, db, context)
+                    context = self._run_stage(
+                        stage, run_id, db, context, self._stage_budget(stage, deadline)
+                    )
                     # Persist partial result visibility after each stage.
                     status = (
                         STAGE_UNAVAILABLE
@@ -277,6 +324,8 @@ class Orchestrator:
                         run_id,
                         stage_name,
                     )
+                except SoftTimeLimitExceeded:
+                    raise
                 except Exception:
                     # A failing stage is recorded as unavailable; the run continues.
                     tb = traceback.format_exc()
@@ -294,6 +343,12 @@ class Orchestrator:
             db.commit()
             logger.info("Orchestrator: run %s complete", run_id)
 
+        except SoftTimeLimitExceeded:
+            # Celery's backstop fired before the run budget could wrap up.
+            # Keep what we have: mark unfinished stages unavailable, fail the
+            # run with a clear reason, and still assemble the partial report.
+            logger.error("Orchestrator: run %s hit the task time limit", run_id)
+            _finish_after_time_limit(run_id, db)
         except Exception:
             # Unexpected error outside stage execution (e.g. DB failure).
             tb = traceback.format_exc()
@@ -307,6 +362,28 @@ class Orchestrator:
                     db.commit()
             except Exception:
                 pass
+
+
+def _finish_after_time_limit(run_id: str, db: Session) -> None:
+    from app.scoring.report import assemble_report  # noqa: PLC0415
+
+    try:
+        db.rollback()
+        run = db.get(VerificationRun, run_id)
+        if run is None:
+            return
+        run.source_availability = {
+            name: (STAGE_UNAVAILABLE if status == STAGE_PENDING else status)
+            for name, status in (run.source_availability or {}).items()
+        }
+        run.status = "failed"
+        run.finished_at = datetime.now(tz=timezone.utc)
+        run.failure_reason = "Task time limit exceeded; partial report kept."
+        db.commit()
+        assemble_report(run_id, db)
+        db.commit()
+    except Exception:
+        logger.exception("Orchestrator: run %s partial-report save failed", run_id)
 
 
 def _update_stage_status(

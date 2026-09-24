@@ -216,3 +216,66 @@ def test_writes_from_a_stage_within_budget_are_committed(db):
     )
     db.expire_all()
     assert db.get(Entity, entity_id).canonical_domain == "ontime.example"
+
+
+# ---------------------------------------------------------------------------
+# Whole-run budget: skip remaining sources, still score and store the report
+# ---------------------------------------------------------------------------
+
+
+class NamedStage:
+    def __init__(self, name: str, seconds: float = 0.0, always_run: bool = False):
+        self.name = name
+        self._seconds = seconds
+        self.always_run = always_run
+        self.ran = False
+
+    def run(self, run_id: str, db: Session, context: dict) -> dict:
+        self.ran = True
+        time.sleep(self._seconds)
+        return {**context, self.name: "done"}
+
+
+def test_run_budget_skips_remaining_sources_but_still_finalizes(db):
+    """Budget already spent: sources are skipped, finalizers still run."""
+    run_id = _make_run(db)
+    skipped = NamedStage("skipped_source")
+    final = NamedStage("store_report", always_run=True)
+
+    Orchestrator(
+        [skipped, final], stage_timeout_seconds=5.0, run_timeout_seconds=0.0
+    ).run_sync(run_id, db)
+
+    run = db.get(VerificationRun, run_id)
+    assert run.status == "complete"
+    assert run.source_availability == {
+        "skipped_source": STAGE_UNAVAILABLE,
+        "store_report": STAGE_COMPLETE,
+    }
+    assert not skipped.ran
+    assert final.ran
+
+
+def test_stage_timeout_is_capped_by_remaining_run_budget(db, slow_stage):
+    run_id = _make_run(db)
+
+    started = time.monotonic()
+    Orchestrator(
+        [slow_stage, NamedStage("store_report", always_run=True)],
+        stage_timeout_seconds=30.0,
+        run_timeout_seconds=_STAGE_TIMEOUT_SECONDS,
+    ).run_sync(run_id, db)
+    elapsed = time.monotonic() - started
+
+    run = db.get(VerificationRun, run_id)
+    assert run.source_availability["slow_source"] == STAGE_UNAVAILABLE
+    assert run.source_availability["store_report"] == STAGE_COMPLETE
+    assert elapsed < _STAGE_TIMEOUT_SECONDS + 1.0
+
+
+def test_scoring_and_store_report_always_run():
+    from app.scoring.engine import ScoringStage
+    from app.scoring.report import StoreReportStage
+
+    assert ScoringStage().always_run is True
+    assert StoreReportStage().always_run is True
