@@ -28,7 +28,7 @@ Signal catalog design rules
    NOT yet implemented (PRD): suspicious_dns_infrastructure,
    inconsistent_contact_information, recently created social presence.
    Trust: long_lived_domain, registry_confirmed, consistent_addresses,
-   valid_tax_id, active_employee_footprint, matching_contact_info,
+   tax_id_verified_active, active_employee_footprint, matching_contact_info,
    stable_web_presence, ssl_present, spf_configured, has_mx_records.
 
 Cross-submission IP/ASN reuse (deferred from P2-T2)
@@ -66,7 +66,9 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
       - registry_name_confirmed
       - registration_number_present
       - registration_status_active
-      - valid_tax_id
+      - tax_id_verified_active (IC1-T3; replaces the unreachable valid_tax_id)
+    And elevated (IC1-T3): tax_id_not_found, tax_id_name_mismatch,
+    tax_id_inactive_or_dissolved.
       - sanctions_cleared
     """
     signals: list[Signal] = []
@@ -79,7 +81,6 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
         e for e in tier1_evidence if e.field == "registration_number"
     ]
     status_evidence = [e for e in tier1_evidence if e.field == "registration_status"]
-    tax_id_evidence = [e for e in tier1_evidence if e.field == "tax_id"]
     sanctions_hit_evidence = [e for e in tier1_evidence if e.field == "sanctions_hit"]
     sanctions_screened_evidence = [
         e for e in tier1_evidence if e.field == "sanctions_screened"
@@ -132,6 +133,7 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
                 evidence_ids=[],
             )
         )
+        signals.extend(_tax_id_signals(evidence_rows))
         return signals
 
     # Registry name confirmed / mismatch
@@ -210,21 +212,6 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
                 )
             )
 
-    # Tax ID trust signal
-    if tax_id_evidence:
-        signals.append(
-            Signal(
-                name="valid_tax_id",
-                layer="entity",
-                direction="trust",
-                weight=0.3,
-                description=(
-                    "Tax ID / registration number validated via authoritative source."
-                ),
-                evidence_ids=[e.id for e in tax_id_evidence],
-            )
-        )
-
     # Multiple distinct registered entities share the submitted name (P4-T2).
     conflict_ev = [e for e in tier1_evidence if e.field == "registry_identity_conflict"]
     if conflict_ev:
@@ -242,7 +229,82 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
             )
         )
 
+    signals.extend(_tax_id_signals(evidence_rows))
     return signals
+
+
+def _tax_id_signals(evidence_rows: list) -> list[Signal]:
+    """Entity-layer signals from the tax-ID/FEIN source (IC1-T3).
+
+    No tax-ID evidence (no input, non-US, provider down or not configured)
+    contributes nothing: an unavailable source lowers coverage, not the score.
+    """
+    rows = [e for e in evidence_rows if e.source == "tax_id"]
+    status_ev = [e for e in rows if e.field == "tax_id_status"]
+    match_ev = [e for e in rows if e.field == "tax_id_name_match"]
+    if not status_ev:
+        return []
+
+    status = (status_ev[0].normalized_value or "").lower()
+    match = (match_ev[0].normalized_value or "").lower() if match_ev else ""
+    out: list[Signal] = []
+
+    if status == "not_found":
+        out.append(
+            Signal(
+                name="tax_id_not_found",
+                layer="entity",
+                direction="elevated",
+                weight=0.5,
+                description=(
+                    "The submitted tax ID (FEIN) does not resolve with the "
+                    "authoritative tax-ID source."
+                ),
+                evidence_ids=[status_ev[0].id],
+            )
+        )
+        return out
+
+    if status == "inactive":
+        out.append(
+            Signal(
+                name="tax_id_inactive_or_dissolved",
+                layer="entity",
+                direction="elevated",
+                weight=0.4,
+                description="The tax ID is on file but the entity is not active.",
+                evidence_ids=[status_ev[0].id],
+            )
+        )
+    if match == "mismatch":
+        out.append(
+            Signal(
+                name="tax_id_name_mismatch",
+                layer="entity",
+                direction="elevated",
+                weight=0.5,
+                description=(
+                    "The tax ID is registered to a different name than the "
+                    "submitted company name."
+                ),
+                evidence_ids=[match_ev[0].id],
+            )
+        )
+    if status == "verified" and match == "match":
+        out.append(
+            Signal(
+                name="tax_id_verified_active",
+                layer="entity",
+                direction="trust",
+                weight=0.5,
+                description=(
+                    "Tax ID verified with an authoritative source: active and "
+                    "registered to the submitted company name."
+                ),
+                evidence_ids=[status_ev[0].id, match_ev[0].id],
+            )
+        )
+    return out
 
 
 # ---------------------------------------------------------------------------
