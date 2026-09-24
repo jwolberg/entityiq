@@ -317,7 +317,8 @@ export interface OwnershipChallenge {
   submission_id: string;
   domain: string;
   method: OwnershipMethod;
-  token: string;
+  /** Null for email challenges: the token only goes to the emailed address. */
+  token: string | null;
   /** "pending" | "verified" */
   status: string;
   issued_at: string;

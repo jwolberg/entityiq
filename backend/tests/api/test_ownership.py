@@ -467,14 +467,16 @@ class TestSameContractAcrossMethods:
         assert ev[0].source == "ownership"
         assert ev[0].field == "domain_ownership_verified"
 
-    def test_email_verifies_with_submitted_token(self, client, db):
+    def test_email_verifies_with_the_emailed_token(self, client, db, monkeypatch):
+        sent = _capture_emails(monkeypatch)
         run_id, _ = _make_run(db)
         issue_resp = client.post(
             f"/ownership/runs/{run_id}/challenges",
             json={"method": "email", "target": "verify@acme.example"},
         )
         challenge_id = issue_resp.json()["challenge_id"]
-        token = issue_resp.json()["token"]
+        assert sent[0][0] == "verify@acme.example"
+        token = sent[0][1]  # what the registrant receives, never the API caller
 
         resp = client.post(
             f"/ownership/challenges/{challenge_id}/verify",
@@ -485,6 +487,20 @@ class TestSameContractAcrossMethods:
         ev = db.query(Evidence).filter(Evidence.verification_run_id == run_id).all()
         assert ev[0].source == "ownership"
         assert ev[0].field == "domain_ownership_verified"
+
+    def test_email_token_is_never_returned_to_the_api_caller(
+        self, client, db, monkeypatch
+    ):
+        """Review finding: returning the token let the issuer self-verify."""
+        _capture_emails(monkeypatch)
+        run_id, _ = _make_run(db)
+        issued = client.post(
+            f"/ownership/runs/{run_id}/challenges",
+            json={"method": "email", "target": "verify@acme.example"},
+        ).json()
+        assert issued["token"] is None
+        listed = client.get(f"/ownership/runs/{run_id}/challenges").json()
+        assert all(c["token"] is None for c in listed if c["method"] == "email")
 
     def test_email_wrong_submitted_token_is_unverified(self, client, db):
         run_id, _ = _make_run(db)
@@ -626,3 +642,17 @@ def service_credential(ownership_engine):
     finally:
         sess.close()
     return info
+
+
+def _capture_emails(monkeypatch):
+    """Route email challenges to an in-memory outbox (the registrant's inbox)."""
+    import app.api.ownership as mod
+
+    sent: list[tuple[str, str]] = []
+
+    class _Outbox:
+        def send(self, to: str, token: str) -> None:
+            sent.append((to, token))
+
+    monkeypatch.setattr(mod, "email_sender_factory", lambda: _Outbox())
+    return sent

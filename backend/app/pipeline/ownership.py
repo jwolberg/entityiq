@@ -135,17 +135,61 @@ def _default_dns_txt_client() -> DnsTxtClient:
         return _Unavailable()
 
 
+class UnsafeFetchTarget(ValueError):
+    """The html_meta target isn't a public internet host (SSRF guard)."""
+
+
+def _system_resolve(host: str) -> list[str]:
+    import socket  # noqa: PLC0415
+
+    return sorted({info[4][0] for info in socket.getaddrinfo(host, 443)})
+
+
+def assert_public_host(domain: str, resolve=_system_resolve) -> None:
+    """Refuse IP literals and hosts resolving to non-public addresses.
+
+    The submitted domain is caller-controlled, so fetching it could otherwise
+    reach cloud metadata (169.254.169.254), localhost or internal services.
+    """
+    import ipaddress  # noqa: PLC0415
+
+    host = domain.strip().strip("[]").rstrip(".")
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        raise UnsafeFetchTarget(f"IP literal {host!r} is not a domain")
+    try:
+        addresses = resolve(host)
+    except OSError as exc:
+        raise UnsafeFetchTarget(f"cannot resolve {host!r}: {exc}") from exc
+    if not addresses:
+        raise UnsafeFetchTarget(f"{host!r} has no addresses")
+    for raw in addresses:
+        addr = ipaddress.ip_address(raw)
+        if not addr.is_global or addr.is_multicast:
+            raise UnsafeFetchTarget(f"{host!r} resolves to non-public {raw}")
+
+
 def _default_http_page_fetcher() -> HttpPageFetcher:
-    """Return an HTTP fetcher using httpx (a core dependency of this project)."""
+    """Return an HTTP fetcher using httpx (a core dependency of this project).
+
+    SSRF-guarded: only public hosts, and redirects are not followed (a
+    redirect could point back inside the network).
+    """
 
     class _Impl:
         def fetch_text(self, url: str) -> str:
+            from urllib.parse import urlsplit  # noqa: PLC0415
+
             import httpx  # noqa: PLC0415
 
+            assert_public_host(urlsplit(url).hostname or "")
             resp = httpx.get(
                 url,
                 timeout=10.0,
-                follow_redirects=True,
+                follow_redirects=False,
                 headers={
                     "User-Agent": (
                         "Mozilla/5.0 (compatible; EntityIQ/1.0; "

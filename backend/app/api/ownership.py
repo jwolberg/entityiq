@@ -93,7 +93,9 @@ class ChallengeResponse(BaseModel):
     submission_id: str
     domain: str
     method: str
-    token: str
+    # None for the email method: the token goes only to the emailed address;
+    # returning it would let the issuer verify without the registrant.
+    token: str | None
     status: str
     issued_at: str
     verified_at: str | None = None
@@ -126,6 +128,17 @@ class VerifyChallengeResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def email_sender_factory():
+    """Email backend for email challenges (patched in tests).
+
+    Unconfigured in production: sending fails loudly and the challenge stays
+    pending with ``last_error`` set. The token is never returned to the caller.
+    """
+    from app.pipeline.ownership import _default_email_sender  # noqa: PLC0415
+
+    return _default_email_sender()
+
+
 def _instructions_for(challenge: OwnershipChallenge) -> ChallengeInstructions:
     if challenge.method == "dns_txt":
         return ChallengeInstructions(
@@ -149,7 +162,7 @@ def _to_response(challenge: OwnershipChallenge, message: str = "") -> ChallengeR
         submission_id=challenge.submission_id,
         domain=challenge.domain,
         method=challenge.method,
-        token=challenge.token,
+        token=None if challenge.method == "email" else challenge.token,
         status=challenge.status,
         issued_at=challenge.issued_at.isoformat(),
         verified_at=(
@@ -199,6 +212,7 @@ def issue_challenge_endpoint(
             target=body.target,
             operator_id=operator_id,
             api_client_id=api_client_id,
+            email_sender=email_sender_factory(),
         )
     except UnknownChallengeMethod as exc:
         raise HTTPException(
