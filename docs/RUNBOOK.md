@@ -191,6 +191,7 @@ The API enqueues verification runs to Redis; the worker executes the pipeline.
 | `ENTITYIQ_RUN_TIMEOUT_SECONDS` | `5400` | Whole-run budget (PRD: under 2h). Once spent, remaining sources are skipped; scoring and the report still run. Celery's soft limit is this + 15 min, the hard limit + 20 min. |
 | `ENTITYIQ_ADAPTER_MAX_ATTEMPTS` | `3` | Total calls per source on `timeout`/`unavailable` (1 = no retry). `not_found` and `rate_limited` are never retried. |
 | `ENTITYIQ_ADAPTER_RETRY_BACKOFF_SECONDS` | `1.0` | First retry delay; doubles each retry. |
+| `ENTITYIQ_TAX_ID_PROVIDER` | _(unset)_ | Tax-ID/FEIN verification provider. Unset = none configured: the `verify_tax_id` source reports *unavailable* (no signal, no penalty). `stub` = deterministic fictional records for demos. A live provider waits on IC0-T1 (Open Decision #5).
 | `TRUSTED_PROXY_DEPTH` | `0` | Hops to walk back from the right of `X-Forwarded-For` to find the client IP. `0` = use the direct connection peer (correct when not behind a proxy). Set to the number of trusted proxies in front of the app. |
 
 ---

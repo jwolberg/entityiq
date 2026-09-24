@@ -71,7 +71,9 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
     """
     signals: list[Signal] = []
 
-    tier1_evidence = [e for e in evidence_rows if e.tier == 1]
+    # Tax-ID rows are Tier 1 too, but they aren't registry evidence; they get
+    # their own signals (IC1-T3) and must not shift the registry checks below.
+    tier1_evidence = [e for e in evidence_rows if e.tier == 1 and e.source != "tax_id"]
     name_evidence = [e for e in tier1_evidence if e.field == "company_name"]
     reg_number_evidence = [
         e for e in tier1_evidence if e.field == "registration_number"

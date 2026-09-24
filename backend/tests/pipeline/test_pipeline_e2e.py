@@ -21,6 +21,7 @@ from app.adapters.geocode import GeocodeAdapter, GeocodeHQStage
 from app.adapters.ipinfo import EnrichNetworkIPStage, IPInfoAdapter
 from app.adapters.opencorporates import OpenCorporatesAdapter, QueryRegistriesStage
 from app.adapters.sanctions import SanctionsScreeningStage
+from app.adapters.tax_id import StubTaxIdProvider, TaxIdAdapter, VerifyTaxIdStage
 from app.adapters.web import FetchResult, WebEvidenceStage
 from app.db.session import Base
 from app.models.entity import Entity
@@ -152,6 +153,7 @@ def _stages(*, age_days: int, mx: list[str], txt: list[str], registry: dict):
         NormalizeInputStage(),
         ResolveEntityCandidatesStage(),
         QueryRegistriesStage(OpenCorporatesAdapter(http_client=_Http(200, registry))),
+        VerifyTaxIdStage(TaxIdAdapter(provider=StubTaxIdProvider())),
         SanctionsScreeningStage(fetcher=_Sdn()),
         AnalyzeDomainStage(
             whois_client=_Whois(age_days),
@@ -214,6 +216,7 @@ def _submit(db: Session, *, domain: str = "acme.com") -> VerificationRun:
         country="US",
         billing_address="1 Market St, San Francisco, CA 94105",
         source_ip="8.8.8.8",
+        tax_id="12-3456789",
         entity_id=entity.id,
     )
     db.add(sub)
