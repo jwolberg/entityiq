@@ -198,6 +198,45 @@ def test_ofac_circa_citizen_and_year_range():
     assert by_id["90003"].dobs == [{"from_year": 1958, "to_year": 1962}]
 
 
+def test_ofac_remarks_are_case_insensitive():
+    csv = (
+        '90010,"ROE, Quill","individual","SDGT",-0- ,-0- ,-0- ,-0- ,-0- ,-0- ,-0- ,'
+        '"dob 03 Feb 1966; Alt. Dob 1967."\n'
+    )
+    [rec] = parse_ofac_individuals(csv)
+    assert rec.dobs == [{"date": "1966-02-03"}, {"year": 1967}]
+
+
+def test_one_malformed_remark_keeps_the_record_and_its_other_fields():
+    """A bad attribute must not drop a sanctioned person from the list."""
+    csv = (
+        '90011,"ROE, Quill","individual","SDGT",-0- ,-0- ,-0- ,-0- ,-0- ,-0- ,-0- ,'
+        '"DOB 31 Feb 1966; POB Nowhere; nationality Utopia."\n'
+        '90012,"ROE, Wren","individual","SDGT",-0- ,-0- ,-0- ,-0- ,-0- ,-0- ,-0- ,'
+        '"DOB 1970."\n'
+    )
+    by_id = {r.source_entry_id: r for r in parse_ofac_individuals(csv)}
+    assert set(by_id) == {"90011", "90012"}
+    assert by_id["90011"].pobs == ["Nowhere"]
+    assert by_id["90011"].nationalities == ["Utopia"]
+    # An impossible date degrades to the parts we can trust.
+    assert by_id["90011"].dobs == [{"year": 1966, "month": 2}]
+    assert by_id["90012"].dobs == [{"year": 1970}]
+
+
+def test_a_parser_error_skips_only_that_attribute(monkeypatch, caplog):
+    from app.lists import persons
+
+    def broken(_text):
+        raise ValueError("unexpected DOB shape")
+
+    monkeypatch.setattr(persons, "_parse_ofac_dob", broken)
+    [rec] = parse_ofac_individuals(OFAC_CSV.splitlines(keepends=True)[0])
+    assert rec.dobs == []
+    assert rec.pobs == ["Tver, Russia"]
+    assert "90001" in caplog.text
+
+
 # ---------------------------------------------------------------------------
 # UN
 # ---------------------------------------------------------------------------
@@ -312,3 +351,25 @@ def test_store_records_keeps_snapshot_and_entry_provenance(db):
     assert row.primary_name == "ANNA PETROVNA SIDOROVA"
     assert row.dobs[0] == {"date": "1975-06-02"}
     assert row.documents[0]["number"] == "P0000001"
+
+
+def test_malformed_years_drop_the_dob_not_the_record():
+    un = parse_un_individuals(
+        UN_XML.replace("<YEAR>1968</YEAR>", "<YEAR>19??</YEAR>").replace(
+            "<FROM_YEAR>1974</FROM_YEAR>", "<FROM_YEAR>unknown</FROM_YEAR>"
+        )
+    )
+    assert [r.source_entry_id for r in un] == ["8800001", "8800002"]
+    assert all(
+        "from_year" not in d and d.get("year") != 1968 for r in un for d in r.dobs
+    )
+    eu = parse_eu_persons(EU_XML.replace('year="1967"', 'year="n/a"'))
+    assert eu and all(d.get("year") != 1967 for r in eu for d in r.dobs)
+
+
+def test_uk_impossible_dates_degrade_to_trusted_parts():
+    from app.lists.persons import _uk_dob
+
+    assert _uk_dob("30/11/1966") == {"date": "1966-11-30"}
+    assert _uk_dob("31/02/1966") == {"year": 1966, "month": 2}
+    assert _uk_dob("00/13/1966") == {"year": 1966}

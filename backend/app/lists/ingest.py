@@ -104,7 +104,11 @@ def ingest_source(
     if latest is not None and latest.content_sha256 == content_hash(text):
         return IngestResult(source=source, changed=False, snapshot_id=latest.id)
 
-    records = spec.parse(text)
+    try:
+        records = spec.parse(text)
+    except Exception as exc:  # malformed/truncated file: keep the last good snapshot
+        logger.warning("List ingest %s: parse failed: %s", source, exc)
+        return IngestResult(source=source, changed=False, error=f"parse failed: {exc}")
     snapshot = record_snapshot(
         db, source=source, content=text, record_count=len(records)
     )

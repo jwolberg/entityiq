@@ -21,9 +21,11 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
+from datetime import date
 from typing import TYPE_CHECKING
 
 from app.lists.ofac import parse_sdn_csv
@@ -33,6 +35,8 @@ if TYPE_CHECKING:
 
     from app.models.list_snapshot import ListSnapshot
     from app.models.watchlist_record import WatchlistRecord
+
+logger = logging.getLogger(__name__)
 
 _MONTHS = {
     m: i
@@ -92,6 +96,12 @@ def _ofac_reorder(name: str) -> str:
     return f"{first.strip()} {last.strip()}".strip()
 
 
+def _year(value: str | None) -> int | None:
+    """A four-digit year, or None for blanks and junk ("19??", "unknown")."""
+    value = (value or "").strip()
+    return int(value) if re.fullmatch(r"\d{4}", value) else None
+
+
 def _parse_ofac_dob(text: str) -> dict | None:
     text = text.strip()
     circa = text.lower().startswith("circa ")
@@ -103,7 +113,11 @@ def _parse_ofac_dob(text: str) -> dict | None:
     m = re.fullmatch(r"(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})", text)
     if m and m.group(2).lower() in _MONTHS:
         month = _MONTHS[m.group(2).lower()]
-        return {"date": f"{int(m.group(3)):04d}-{month:02d}-{int(m.group(1)):02d}"}
+        year, day = int(m.group(3)), int(m.group(1))
+        try:
+            return {"date": date(year, month, day).isoformat()}
+        except ValueError:  # impossible day ("31 Feb"): keep what we can trust
+            return {"year": year, "month": month}
     m = re.fullmatch(r"([A-Za-z]{3})\s+(\d{4})", text)
     if m and m.group(1).lower() in _MONTHS:
         dob: dict = {"year": int(m.group(2)), "month": _MONTHS[m.group(1).lower()]}
@@ -120,6 +134,34 @@ def _ofac_document(part: str, prefix: str, doc_type: str) -> dict | None:
     if not m:
         return None
     return {"type": doc_type, "number": m.group(1).rstrip(".,"), "country": m.group(2)}
+
+
+def _apply_ofac_remark(rec: PersonRecord, part: str) -> None:
+    lowered = part.lower()
+    if lowered.startswith(("dob ", "alt. dob ")):
+        dob = _parse_ofac_dob(re.split("dob", part, maxsplit=1, flags=re.I)[1])
+        _add_unique(rec.dobs, dob)
+    elif lowered.startswith("pob "):
+        _add_unique(rec.pobs, part[4:].strip())
+    elif re.match(r"(alt\. )?(nationality|citizen) ", lowered):
+        _add_unique(
+            rec.nationalities,
+            part.split(" ", 2 if lowered.startswith("alt.") else 1)[-1].strip(),
+        )
+    elif lowered.startswith("gender "):
+        rec.gender = part[7:].strip()
+    elif lowered.startswith("passport "):
+        _add_unique(rec.documents, _ofac_document(part, "Passport", "passport"))
+    elif lowered.startswith("national id no. "):
+        _add_unique(
+            rec.documents,
+            _ofac_document(part, r"National ID No\.", "national_id"),
+        )
+    elif lowered.startswith(("a.k.a. ", "f.k.a. ")):
+        m = re.match(r"[af]\.k\.a\.\s+'([^']+)'", part)
+        if m:
+            kind = "fka" if lowered.startswith("f") else "aka"
+            _add_unique(rec.names, _name(_ofac_reorder(m.group(1)), kind))
 
 
 def parse_ofac_individuals(csv_text: str) -> list[PersonRecord]:
@@ -141,31 +183,14 @@ def parse_ofac_individuals(csv_text: str) -> list[PersonRecord]:
             part = part.strip().rstrip(".").strip()
             if not part:
                 continue
-            lowered = part.lower()
-            if lowered.startswith(("dob ", "alt. dob ")):
-                dob = _parse_ofac_dob(part.split("DOB", 1)[1])
-                _add_unique(rec.dobs, dob)
-            elif lowered.startswith("pob "):
-                _add_unique(rec.pobs, part[4:].strip())
-            elif re.match(r"(alt\. )?(nationality|citizen) ", lowered):
-                _add_unique(
-                    rec.nationalities,
-                    part.split(" ", 2 if lowered.startswith("alt.") else 1)[-1].strip(),
+            try:
+                _apply_ofac_remark(rec, part)
+            except Exception:  # noqa: BLE001 - one bad attribute must not drop a sanctioned person
+                logger.warning(
+                    "ofac_sdn entry %s: skipped unparsable remark",
+                    rec.source_entry_id,
+                    exc_info=True,
                 )
-            elif lowered.startswith("gender "):
-                rec.gender = part[7:].strip()
-            elif lowered.startswith("passport "):
-                _add_unique(rec.documents, _ofac_document(part, "Passport", "passport"))
-            elif lowered.startswith("national id no. "):
-                _add_unique(
-                    rec.documents,
-                    _ofac_document(part, r"National ID No\.", "national_id"),
-                )
-            elif lowered.startswith(("a.k.a. ", "f.k.a. ")):
-                m = re.match(r"[af]\.k\.a\.\s+'([^']+)'", part)
-                if m:
-                    kind = "fka" if lowered.startswith("f") else "aka"
-                    _add_unique(rec.names, _name(_ofac_reorder(m.group(1)), kind))
         records.append(rec)
     return records
 
@@ -218,12 +243,16 @@ def parse_un_individuals(xml_text: str) -> list[PersonRecord]:
             kind = (_text(dob, "TYPE_OF_DATE") or "").upper()
             if kind == "BETWEEN":
                 lo, hi = _text(dob, "FROM_YEAR"), _text(dob, "TO_YEAR")
-                if lo and hi:
-                    _add_unique(rec.dobs, {"from_year": int(lo), "to_year": int(hi)})
+                if _year(lo) and _year(hi):
+                    _add_unique(
+                        rec.dobs, {"from_year": _year(lo), "to_year": _year(hi)}
+                    )
                 continue
             date, year = _text(dob, "DATE"), _text(dob, "YEAR")
             value = (
-                {"date": date[:10]} if date else ({"year": int(year)} if year else None)
+                {"date": date[:10]}
+                if date
+                else ({"year": _year(year)} if _year(year) else None)
             )
             if value and kind == "APPROXIMATELY":
                 value["circa"] = True
@@ -310,15 +339,16 @@ def parse_eu_persons(xml_text: str) -> list[PersonRecord]:
             circa = bd.get("circa") == "true"
             if bd.get("birthdate"):
                 value: dict | None = {"date": bd.get("birthdate")[:10]}
-            elif bd.get("yearRangeFrom") and bd.get("yearRangeTo"):
+            elif _year(bd.get("yearRangeFrom")) and _year(bd.get("yearRangeTo")):
                 value = {
-                    "from_year": int(bd.get("yearRangeFrom")),
-                    "to_year": int(bd.get("yearRangeTo")),
+                    "from_year": _year(bd.get("yearRangeFrom")),
+                    "to_year": _year(bd.get("yearRangeTo")),
                 }
-            elif bd.get("year"):
-                value = {"year": int(bd.get("year"))}
-                if bd.get("monthOfYear"):
-                    value["month"] = int(bd.get("monthOfYear"))
+            elif _year(bd.get("year")):
+                value = {"year": _year(bd.get("year"))}
+                month = bd.get("monthOfYear") or ""
+                if month.isdigit() and 1 <= int(month) <= 12:
+                    value["month"] = int(month)
             else:
                 value = None
             if value is not None and circa:
@@ -373,11 +403,14 @@ def _uk_dob(value: str) -> dict | None:
     if not m:
         return None
     day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
-    if day and month:
-        return {"date": f"{year:04d}-{month:02d}-{day:02d}"}
-    if month:
-        return {"year": year, "month": month}
-    return {"year": year}
+    if not 1 <= month <= 12:
+        return {"year": year}
+    if day:
+        try:
+            return {"date": date(year, month, day).isoformat()}
+        except ValueError:
+            pass
+    return {"year": year, "month": month}
 
 
 def parse_uk_individuals(csv_text: str) -> list[PersonRecord]:

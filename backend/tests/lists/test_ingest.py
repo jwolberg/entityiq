@@ -64,3 +64,19 @@ def test_fetch_failure_is_reported_not_raised(db):
     assert result.changed is False
     assert "down" in (result.error or "")
     assert db.query(ListSnapshot).count() == 0
+
+
+def test_unparsable_file_is_reported_and_keeps_the_last_good_snapshot(db):
+    good = ingest.ingest_source(
+        db, "un_consolidated", fetch=lambda u: UN_XML, on_new_snapshot=lambda s: None
+    )
+    triggered = []
+    bad = ingest.ingest_source(
+        db,
+        "un_consolidated",
+        fetch=lambda u: UN_XML[: len(UN_XML) // 2],  # truncated download
+        on_new_snapshot=triggered.append,
+    )
+    assert bad.changed is False and "parse" in (bad.error or "").lower()
+    assert triggered == []
+    assert [s.id for s in db.query(ListSnapshot)] == [good.snapshot_id]
