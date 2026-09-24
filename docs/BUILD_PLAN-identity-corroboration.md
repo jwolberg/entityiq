@@ -357,7 +357,9 @@
 17. IC4-T4
 
 ## Recommended Next Step
-- Prerequisite: main BUILD_PLAN P4-T1 (evidence field contract + e2e pipeline test).
+- Prerequisite: main BUILD_PLAN P4-T1 (e2e pipeline test) — **done 2026-09-24**. New
+  adapters should be added to `tests/pipeline/test_pipeline_e2e.py` and `app/demo_data.py`
+  stage lists (the guard test enforces this).
 - Start with: **IC1-T1 — Tax-ID adapter scaffold + stub provider**, and open
   **IC0-T1 / IC0-T2** (provider decisions) to run in parallel.
 - Why this is first: the entire Phase-1 slice is buildable behind deterministic

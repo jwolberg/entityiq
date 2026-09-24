@@ -59,16 +59,13 @@
 
 ## Current Status
 - Overall status: In Progress
-- Current phase: Phase 4 — Real-data correctness (opened by the 2026-09-24 assessment)
-- Current ticket: P4-T1 — Real-pipeline integration test + evidence field contract (next)
-- Last completed: "Check New Company" form (2026-05-31, unplanned add-on after
-  P2-T12); repo de-branded for public showcase (2026-09-24)
-- Assessment 2026-09-24 (docs/ASSESSMENT-2026-09-24.md): architecture complete,
-  but scores are wrong on real data. A live stripe.com run scored 42 ("review")
-  because MX/SPF trust signals are mis-wired, OpenCorporates returns 401 without
-  a token, WHOIS never runs (undeclared dependency), and web contact extraction
-  returns junk. Phase 2 tickets P2-T2, P2-T6, P2-T8, and P2-T10 stay Complete
-  as scoped, and their gaps are ticketed in Phase 4.
+- Current phase: Phases 4–5 complete (2026-09-24) except P5-T5 (hosted demo: needs a
+  hosting decision) → next: identity-corroboration plan, then Phase 3 remainder
+- Current ticket: IC1-T1 (docs/BUILD_PLAN-identity-corroboration.md) — next
+- Last completed: P5-T1 — README + screenshots (2026-09-24)
+- 2026-09-24 pass: P4-T1..T6, P5-T1..T4, P2-T9, P3-T2 complete, plus fixes found
+  along the way (sanctions hit stored as pre_clear; dashboard/detail showed
+  escalations in green). Backend 439 tests, frontend 30.
 - Phase 2 status: complete except P2-T9 (blocked on Open Decision #4 — map provider)
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
@@ -443,7 +440,10 @@ _Track: Integration & reporting API_
   - Objective: what it is, why it's interesting (deterministic, explainable,
     human-in-the-loop), architecture diagram, screenshots, quick start, status,
     and links to PRD / ARCHITECTURE / ASSESSMENT.
-  - Depends on: P5-T2 (for screenshots) · Status: Todo
+  - Depends on: P5-T2 (for screenshots) · Status: Complete (2026-09-24) — README rewritten with
+    quick start, capability table, pipeline diagram, quality, honest known gaps; screenshots
+    of the queue, a sanctions-escalation detail page, HQ map, and lead audit log captured
+    from the demo. Screenshot pass surfaced + fixed 2 UI bugs (tier not shown; blank map).
 - P5-T2 — One-command local demo
   - Objective: seed script (operator + lead accounts, API key) and
     docker-compose (API + UI; SQLite + eager by default, Postgres + Redis
@@ -522,17 +522,16 @@ _Track: Integration & reporting API_
 44. P5-T5   (hosting decision)
 
 ## Recommended Next Step
-- Start with: **P4-T1 — Real-pipeline integration test + evidence field contract**
-- Why this is next: the 2026-09-24 assessment found the scoring engine is
-  correct but its inputs are not wired to what the adapters really emit, and
-  no test catches it. P4-T1 adds the missing end-to-end test and fixes the
-  known mismatch. Every later fix (P4-T3 live sources, P4-T4 contacts) and the
-  demo dataset (P5-T3) depend on that test to prove it works.
-- Then: P4-T3 and P4-T4 give correct scores on real companies. P5-T4 (CI) and
-  P5-T2 (one-command demo) make the repo presentable. P5-T1 (README) is last,
-  so the screenshots show the fixed product.
-- Note: Open Decision #5 still blocks *production* use of Tier-1 adapters;
-  P4-T3 only makes them configurable and visible when they fail.
+- Start with: **IC1-T1 — Tax-ID adapter scaffold + stub provider**
+  (docs/BUILD_PLAN-identity-corroboration.md). Its prerequisite P4-T1 is done.
+- Why: Phases 4–5 made the existing product correct on real data and presentable.
+  The largest remaining PRD gap is the representation layer: tax ID and LinkedIn are
+  captured but never verified, and `valid_tax_id` is unreachable.
+- Then: P3-T1 (run timing, stage timeouts), P3-T4 (domain-ownership verification),
+  P3-T3 (PII policy; Open Decision #7), P3-T5. Follow-ups noted in implementation
+  notes: triage-tier dashboard filter, Redis-backed sessions, docker-compose,
+  API-key provisioning UI.
+- Needs a human decision: P5-T5 hosting; OpenCorporates token/license (Open Decision #5).
 
 ## Deferred / Out of Scope
 - **Auto-approval / full automation of compliance decisions** — PRD § Non-Goals
