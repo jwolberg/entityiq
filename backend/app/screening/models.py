@@ -29,7 +29,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, validates
 
 from app.db.session import Base
 
@@ -204,6 +204,12 @@ class ScreeningTerm(Base):
     weight: Mapped[float] = mapped_column(Float, nullable=False)
     claim_ids: Mapped[list] = mapped_column(JSON, nullable=False)
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    @validates("claim_ids")
+    def _cites_a_claim(self, _key: str, value: list | None) -> list:
+        if not value:
+            raise ValueError("A screening term must cite at least one claim (F7).")
+        return value
 
 
 class ScreeningDecision(Base):

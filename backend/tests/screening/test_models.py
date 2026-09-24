@@ -93,3 +93,28 @@ def test_screening_imports_only_shared_platform_modules():
             if not mod.startswith("app.") or mod.startswith("app.screening"):
                 continue
             assert mod.startswith(_ALLOWED_SHARED), f"{path} imports {mod}"
+
+
+def test_a_term_must_cite_at_least_one_claim():
+    """F7: an uncited term is never stored."""
+    import pytest
+
+    from app.screening.models import ScreeningTerm
+
+    for bad in ([], None):
+        with pytest.raises(ValueError, match="claim"):
+            ScreeningTerm(
+                run_id="r",
+                candidate_id="c",
+                name="dob_full_match",
+                weight=0.3,
+                claim_ids=bad,
+            )
+    ok = ScreeningTerm(
+        run_id="r",
+        candidate_id="c",
+        name="dob_full_match",
+        weight=0.3,
+        claim_ids=["k1"],
+    )
+    assert ok.claim_ids == ["k1"]
