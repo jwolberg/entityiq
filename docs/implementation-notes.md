@@ -1473,3 +1473,49 @@ single-tenant internal tool; multi-tenant would need per-client scoping.
 - **Validation:** backend `ruff check`/`ruff format --check` clean, `pytest`
   → 554 passed. Frontend `npm run lint` clean, `vitest run` → 41 passed (6
   files), `npm run build` succeeds.
+
+---
+
+## 2026-09-24 — Verify audit + score-change history for identity signals (backlog 0019)
+
+- **No gap found — all three acceptance criteria were already met** by the
+  IC1 slice (backlog 0007–0013) and P2-T11/workflow. New tests in
+  `backend/tests/api/test_identity_audit_and_score_history.py` lock the
+  behavior in rather than fix anything:
+  1. `test_sources_used_audit_lists_tax_id_and_linkedin` — the report's
+     `sources` list (the "evidence sources used" surface per PRD §
+     Auditability Requirements / PRD-identity-corroboration § 11) already
+     includes `tax_id`/`linkedin` with `status="available"` once their
+     stages produce evidence — `_STAGE_SOURCES` in `scoring/report.py` was
+     wired for this in ticket 0012, and the "available" branch is generic
+     (groups by `Evidence.source`), so it needed no new code, just a
+     dedicated end-to-end assertion for this ticket.
+  2. `test_reanalysis_after_correction_records_score_change_from_new_signal`
+     — correcting a submission's `tax_id` (unknown FEIN → a matching one)
+     through `POST /workflow/runs/{id}/correct` and re-running produces a
+     new `RiskAssessment` whose `contributing_signals` swap
+     `tax_id_not_found` for `tax_id_verified_active` and whose
+     `overall_score` differs from the prior run's — already true because
+     each `VerificationRun` gets its own immutable `RiskAssessment` row and
+     `enqueue_reanalysis` never touches the prior run's persisted data.
+  3. `test_correction_and_reanalysis_never_mutates_prior_audit_rows` — every
+     `audit_event` row that existed before a correction is still present,
+     byte-identical, afterward; new events are appended, not merged in.
+     `AuditEvent` exposes no update/delete methods (by design, per its
+     docstring) and no code path in `workflow.py`/`reanalysis.py` does
+     anything but `record_event()` (insert-only), so this was already true.
+- **Non-tautology check:** before finalizing, each test's key assertion was
+  flipped (`==` ↔ `!=`, an absurd count) and re-run to confirm it actually
+  fails — all three did, for the expected reason — then reverted. Not left
+  in the test file; this was a one-off manual check, not a permanent
+  mutation-testing harness.
+- **Test infra:** `audit_client` fixture patches
+  `app.pipeline.orchestrator.enqueue_run` with a side effect that runs the
+  real `Orchestrator` synchronously against a stub-provider stage list
+  (`tests.pipeline.test_pipeline_e2e._stages`/`_submit`, reused rather than
+  duplicated) — the established "`enqueue_run` patched in API tests;
+  orchestrator uses `run_sync()` directly; no live Redis in CI" pattern
+  (P1-T2), extended so the patch actually *runs* the pipeline instead of
+  no-op'ing it, since these tests need real post-correction evidence/scores.
+- **Validation:** `ruff check`/`ruff format --check` clean; `pytest` → 557
+  passed (554 + 3 new).
