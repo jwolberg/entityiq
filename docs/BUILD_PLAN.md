@@ -444,7 +444,9 @@ _Track: Integration & reporting API_
   - Objective: port `.gitlab-ci.yml` (ruff, pytest, eslint, vitest, tsc) to
     `.github/workflows/`. Remove the GitLab config and the untracked bun
     template.
-  - Depends on: — · Status: Todo
+  - Depends on: — · Status: Complete (2026-09-24) — backend (ruff, format,
+    pytest) + frontend (eslint, vitest, tsc + vite build) jobs; `.gitlab-ci.yml` removed.
+    First real run happens when the PR is pushed.
 - P5-T5 — Hosted demo (optional)
   - Objective: deploy a read-mostly demo instance with seeded data and a
     shared demo login.

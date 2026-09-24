@@ -212,7 +212,7 @@ npm run test            # vitest
 npm run build           # type-check + production build
 ```
 
-CI (`.gitlab-ci.yml`) runs all of the above on push.
+CI (GitHub Actions, `.github/workflows/ci.yml`) runs all of the above plus the frontend build on every push to main and every PR.
 
 ---
 
