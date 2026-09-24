@@ -1753,3 +1753,57 @@ single-tenant internal tool; multi-tenant would need per-client scoping.
     O(subjects);
   - the UK list format watch;
   - threshold tuning on labeled data.
+
+## 2026-09-24 — Screening code-review fixes (feat/individual-screening)
+
+Fixes for the fresh-context review of the screening branch, each test-first.
+
+- **Auto-CLEAR guard:** it now needs every required list present and fresh.
+  - Required lists come from `ENTITYIQ_SCREENING_REQUIRED_SOURCES`; freshness
+    from `ENTITYIQ_SCREENING_MAX_LIST_AGE_DAYS` (default 7).
+  - A missing or stale list marks the run's coverage `unavailable`, and
+    auto-CLEAR is blocked.
+- **Nickname blocking:** blocking also indexes a name's canonical nickname
+  form (normalizer `n2`).
+- **Corpus v2:** adds 10 ID+DOB-corroborated matches and 10 clean subjects.
+  - Results:
+    - MATCH 10/10 and CLEAR 10/10 in the new categories.
+    - Every other category lands in REVIEW, so abstention is 0.78 overall.
+    - Recall and reproducibility are 1.0.
+  - The match_at question above still stands: name + full DOB alone is
+    REVIEW.
+- **Queue pagination:**
+  - `GET /screenings` pages in SQL (`limit` default 50, max 500; `offset`)
+    and returns `total`.
+  - Query counts for the list and the detail no longer grow with rows; tests
+    pin this.
+  - The UI has a "Load more" button.
+- **Replay test:** the old one patched functions replay never calls. The new
+  test deletes every list row and blocks sockets. Mutation-checked.
+- **DOB conflicts:**
+  - `dob_conflict` (−0.35) now needs two full dates, as PRD §[13] already
+    said.
+  - Year- or month-level disagreement is the new `dob_partial_conflict`
+    (−0.15). Both floor a name match at REVIEW.
+  - Decision: stored rule configs that lack the new weight keep the old
+    behavior, so frozen decisions replay unchanged.
+- **List parsers:**
+  - Lowercase "dob" no longer crashes.
+  - One bad OFAC remark skips only that attribute (logged).
+  - Junk years drop only that DOB.
+  - Impossible dates such as 31 Feb keep the year and month.
+  - A file that won't parse is reported and keeps the last good snapshot.
+- **Integration-key reads (decision):**
+  - `GET /screenings/{run_id}` now accepts an integration key, as PRD §[16]
+    specifies. I briefly considered a separate `/result` endpoint and
+    dropped it because it diverged from the spec.
+  - A key sees only its own runs; any other run is a 404.
+  - Keys don't see analyst notes or operator ids.
+  - The queue stays operator-only.
+- **Smaller fixes:**
+  - A term with no cited claim is rejected at the model.
+  - Queue reads audit the run ids shown and the filters used.
+- **Retention guard:** a test runs KYB retention and crypto-shredding against
+  both SQLite and Postgres with the append-only triggers installed.
+- **Still open:** multi-tenant scoping for the operator side is a
+  pre-existing gap. Operators see all clients' data by design today.
