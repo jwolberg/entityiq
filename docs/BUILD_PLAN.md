@@ -353,7 +353,13 @@ _Track: Integration & reporting API_
   - Depends on: P1-T1 · AC: PRD § Domain Ownership Verification; USERS § 4 · Status: Todo
 - P3-T5 — Test coverage (BE + FE) + documentation
   - Depends on: Phase 2 · AC: PRD § Technical Success, § Code Quality Expectations;
-    CLAUDE.md § Validation · Status: Todo
+    CLAUDE.md § Validation · Status: Partial (2026-09-24) —
+    backend/tests/e2e/test_submission_to_review.py adds the cross-layer
+    submit → pipeline → report → operator-review e2e test (ticket 0004).
+    Coverage thresholds NOT added: `pytest-cov` and a vitest coverage provider
+    are both absent from the repo's dependencies, and adding either needs a
+    human dependency decision (CLAUDE.md: no new deps without explicit
+    approval). See docs/implementation-notes.md.
 
 ---
 

@@ -1255,3 +1255,32 @@ A fresh-context reviewer found no high-severity issues. Fixed:
 Left open (design question, not a regression): any valid API key can read
 every company's report, not only its own submissions. That's fine for a
 single-tenant internal tool; multi-tenant would need per-client scoping.
+
+---
+
+## 2026-09-24 — Submit-to-review e2e test (backlog 0004)
+
+- **Coverage thresholds not added.** The ticket allows adding them only if
+  the coverage tooling is already a dev dependency. It isn't: `pytest-cov`
+  is absent from `backend/pyproject.toml` / the shared venv, and no vitest
+  coverage provider (`@vitest/coverage-v8` / `-istanbul`) is in
+  `frontend/package.json` or installed. Adding either is a new dependency,
+  which this workflow requires stopping and reporting on rather than adding
+  unilaterally. `docs/BUILD_PLAN.md` P3-T5 marked Partial; this remains open.
+- **e2e test location:** `backend/tests/e2e/test_submission_to_review.py`,
+  collected by the existing `pytest` run (`testpaths = ["tests"]` in
+  `backend/pyproject.toml`) — not the top-level `tests/` placeholder, which
+  has no runner wired up and isn't part of CI.
+- **Fixture data:** reuses `app.demo_data.SCENARIOS[0]` (Northwind Traders,
+  `pre_clear`) and its `_stages()` recorded-response builder, so the test
+  needs no network and stays consistent with the demo dataset.
+- **Pipeline execution:** the test calls `Orchestrator(...).run_sync()`
+  directly against the same SQLite engine the TestClient uses, per the
+  project's established Celery-testability pattern — `enqueue_run` is
+  stubbed like every other API test, and the real Celery path is untested
+  here (that's ticket 0025's job, against Postgres + a live worker).
+- **Scope vs. existing tests:** `tests/pipeline/test_pipeline_e2e.py` already
+  covers stage-by-stage signal correctness; this test only asserts the API →
+  pipeline → report → operator-review boundary (HTTP submit, HTTP report
+  read before/after the pipeline runs, operator sign-in, mark-reviewed,
+  unauthenticated-review rejection, and the resulting audit trail).
