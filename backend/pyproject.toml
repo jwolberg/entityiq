@@ -45,6 +45,8 @@ select = ["E", "F", "I"]
 [tool.ruff.lint.per-file-ignores]
 # Alembic auto-generates migration scripts; line-length is not controllable.
 "app/db/migrations/versions/*.py" = ["E501"]
+# Verbatim list-format fixtures (XML/CSV rows) cannot be wrapped.
+"tests/lists/test_person_parsers.py" = ["E501"]
 
 [tool.ruff.format]
 quote-style = "double"
