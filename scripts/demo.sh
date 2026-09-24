@@ -13,6 +13,13 @@ API_PORT="${API_PORT:-8000}"
 UI_PORT="${UI_PORT:-5173}"
 export DATABASE_URL="sqlite:///${DEMO_DB:-$ROOT/backend/entityiq-demo.db}"
 export CELERY_TASK_ALWAYS_EAGER=true
+# Individual screening encrypts subject data with a master key. The demo keeps
+# one in a local, gitignored file so data stays readable across restarts.
+KEY_FILE="$ROOT/backend/.screening-demo.key"
+if [ -z "${ENTITYIQ_SCREENING_MASTER_KEY:-}" ]; then
+  [ -s "$KEY_FILE" ] || python3 -c 'import base64,os;print(base64.b64encode(os.urandom(32)).decode())' > "$KEY_FILE"
+  export ENTITYIQ_SCREENING_MASTER_KEY="$(cat "$KEY_FILE")"
+fi
 
 PY="${PYTHON:-$(command -v python3.12 || command -v python3.11 || command -v python3)}"
 "$PY" -c 'import sys; sys.exit(sys.version_info < (3, 11))' \
@@ -33,6 +40,8 @@ echo "==> Seeding demo data"
 .venv/bin/python -m app.seed
 echo "==> Loading demo companies"
 .venv/bin/python -m app.demo_data
+echo "==> Loading demo individuals"
+.venv/bin/python -m app.screening.demo_data
 
 cd "$ROOT/frontend"
 if [ ! -d node_modules ]; then

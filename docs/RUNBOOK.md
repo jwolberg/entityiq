@@ -55,6 +55,15 @@ source responses, no network), then serves:
 Ctrl-C stops both servers. Re-running is safe: the seed is idempotent. Ports
 and the DB path can be overridden with `API_PORT`, `UI_PORT`, and `DEMO_DB`.
 
+
+The demo also loads **Individual Screening** data: a fictional watchlist
+(source `demo_watchlist`) and four fictional people screened through the real
+pipeline, covering MATCH, REVIEW (name-only and DOB-conflict) and an auto-CLEAR.
+Open **Individuals** in the nav. Screening encrypts subject data. If
+`ENTITYIQ_SCREENING_MASTER_KEY` is unset, the script creates a local key in
+`backend/.screening-demo.key` (gitignored) and reuses it on later runs. Sign in
+as `examiner@demo.entityiq.dev` (same password) to see the read-only examiner
+view.
 ---
 
 ## Quick start (no Postgres or Redis needed)
