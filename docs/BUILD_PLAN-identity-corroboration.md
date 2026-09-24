@@ -71,9 +71,14 @@
   v1, no new operator actions or API resources.
 
 ## Current Status
-- Overall status: Not Started
-- Current phase: Phase 0 — Provider decisions (parallel with Phase 1 stub slice)
-- Current ticket: IC1-T1 recommended start (see Recommended Next Step)
+- Overall status: In Progress
+- Current phase: Phase 1 complete (2026-09-24, backlog 0007–0013); Phase 0 decisions
+  open; Phases 2–3 blocked on them
+- Current ticket: IC0-T1 / IC0-T2 (provider decisions, backlog 0005 / 0006)
+- Phase 1 notes: both adapters default to an *unconfigured* provider (source
+  unavailable, no signal, no penalty); ENTITYIQ_TAX_ID_PROVIDER / _LINKEDIN_PROVIDER
+  = stub enables the deterministic stubs. valid_tax_id was replaced by
+  tax_id_verified_active. See implementation-notes 2026-09-24.
 - Blockers: Open Decision #5 (data-source access for FEIN provider + LinkedIn
   data access / ToS) UNRESOLVED — blocks IC2-T1 and IC3-T1 only. The Phase-1
   stubbed slice is **not** blocked.
@@ -147,7 +152,7 @@
   - Depends on: — (base platform exists)
   - Acceptance criteria covered: feature PRD §5 (Behavior, Evidence emitted);
     ARCHITECTURE § 4 (adapter contract), § 2 stage 3
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 
 - IC1-T2 — Tax-ID consistency / field comparisons
   - Objective: Upgrade the **Tax ID** comparison from permanent `unverified` to
@@ -158,7 +163,7 @@
   - Depends on: IC1-T1
   - Acceptance criteria covered: feature PRD §5 (Field comparison); PRD § FE
     § Registration Data (match/mismatch); ARCHITECTURE § 2 stage 7
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 
 - IC1-T3 — Tax-ID scoring signals (Entity Legitimacy)
   - Objective: Add `tax_id_verified_active` (trust) and `tax_id_not_found` /
@@ -170,7 +175,7 @@
   - Acceptance criteria covered: feature PRD §5 (Scoring contribution); PRD § Core
     Verification Philosophy (Entity Legitimacy), § Risk Signals; STRATEGY § Track:
     Risk scoring & explainability
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 
 - IC1-T4 — LinkedIn adapter scaffold + stub provider (Tier 3)
   - Objective: Implement `verify_linkedin` adapter (`name = "linkedin"`,
@@ -183,7 +188,7 @@
   - Depends on: — (base platform exists)
   - Acceptance criteria covered: feature PRD §6 (Behavior, Evidence emitted);
     ARCHITECTURE § 4, § 2 stage 6; PRD § Verification Sources § Tier 3
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 
 - IC1-T5 — LinkedIn consistency + scoring signals
   - Objective: Add website-match comparison (LinkedIn site vs. submitted `domain`),
@@ -198,7 +203,7 @@
   - Acceptance criteria covered: feature PRD §6 (Field comparison, Scoring,
     Calibration note); PRD § Risk Signals (recently created social presence);
     STRATEGY § Track: Risk scoring & explainability
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 
 - IC1-T6 — Operator UI: Identity Corroboration panel + diff rows
   - Objective: Surface Tax-ID verification (status, registered name, match badge,
@@ -213,7 +218,7 @@
   - Acceptance criteria covered: feature PRD §9 (Frontend impact); PRD § Company
     Detail View (Registration Data, Contact Information, Risk Assessment);
     USERS § 1 (operator interface)
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 
 - IC1-T7 — Report/export integration + state coverage tests
   - Objective: Confirm new evidence / comparisons / signals appear in
@@ -225,7 +230,7 @@
   - Depends on: IC1-T3, IC1-T5
   - Acceptance criteria covered: feature PRD §10 (API impact), §12 (Acceptance —
     Cross-cutting); PRD § API § Report Endpoint; USERS § 2 (API consumer)
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 
 ### Phase 2 — Wire Live FEIN Provider (US)
 **Goal**

@@ -47,6 +47,9 @@ class AdapterContext:
     tax_id: str | None = None
     email: str | None = None
     billing_address: str | None = None
+    # Identity corroboration (IC1-T4): LinkedIn handle and requester name.
+    linkedin_url: str | None = None
+    requester_full_name: str | None = None
 
 
 # ---------------------------------------------------------------------------

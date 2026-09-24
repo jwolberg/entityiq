@@ -22,8 +22,14 @@ from sqlalchemy.orm import Session
 from app.adapters.domain import AnalyzeDomainStage
 from app.adapters.geocode import GeocodeAdapter, GeocodeHQStage
 from app.adapters.ipinfo import EnrichNetworkIPStage, IPInfoAdapter
+from app.adapters.linkedin import (
+    LinkedInAdapter,
+    StubLinkedInProvider,
+    VerifyLinkedInStage,
+)
 from app.adapters.opencorporates import OpenCorporatesAdapter, QueryRegistriesStage
 from app.adapters.sanctions import SanctionsScreeningStage
+from app.adapters.tax_id import StubTaxIdProvider, TaxIdAdapter, VerifyTaxIdStage
 from app.adapters.web import FetchResult, WebEvidenceStage
 from app.audit.recorder import record_event
 from app.models.entity import Entity
@@ -369,6 +375,7 @@ def _stages(s: Scenario) -> list:
         NormalizeInputStage(),
         ResolveEntityCandidatesStage(),
         QueryRegistriesStage(OpenCorporatesAdapter(http_client=registry_http)),
+        VerifyTaxIdStage(TaxIdAdapter(provider=StubTaxIdProvider())),
         SanctionsScreeningStage(fetcher=_Sdn()),
         AnalyzeDomainStage(
             whois_client=_Whois(s.domain_age_days),
@@ -377,6 +384,7 @@ def _stages(s: Scenario) -> list:
         ),
         EnrichNetworkIPStage(IPInfoAdapter(http_client=_Http(200, s.ip))),
         WebEvidenceStage(fetcher=_Web(s.html)),
+        VerifyLinkedInStage(LinkedInAdapter(provider=StubLinkedInProvider())),
         ConsistencyChecksStage(),
         GeocodeHQStage(GeocodeAdapter(http_client=_Http(200, geocode))),
         ScoringStage(),

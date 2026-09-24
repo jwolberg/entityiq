@@ -28,7 +28,7 @@ Signal catalog design rules
    NOT yet implemented (PRD): suspicious_dns_infrastructure,
    inconsistent_contact_information, recently created social presence.
    Trust: long_lived_domain, registry_confirmed, consistent_addresses,
-   valid_tax_id, active_employee_footprint, matching_contact_info,
+   tax_id_verified_active, active_employee_footprint, matching_contact_info,
    stable_web_presence, ssl_present, spf_configured, has_mx_records.
 
 Cross-submission IP/ASN reuse (deferred from P2-T2)
@@ -66,18 +66,21 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
       - registry_name_confirmed
       - registration_number_present
       - registration_status_active
-      - valid_tax_id
+      - tax_id_verified_active (IC1-T3; replaces the unreachable valid_tax_id)
+    And elevated (IC1-T3): tax_id_not_found, tax_id_name_mismatch,
+    tax_id_inactive_or_dissolved.
       - sanctions_cleared
     """
     signals: list[Signal] = []
 
-    tier1_evidence = [e for e in evidence_rows if e.tier == 1]
+    # Tax-ID rows are Tier 1 too, but they aren't registry evidence; they get
+    # their own signals (IC1-T3) and must not shift the registry checks below.
+    tier1_evidence = [e for e in evidence_rows if e.tier == 1 and e.source != "tax_id"]
     name_evidence = [e for e in tier1_evidence if e.field == "company_name"]
     reg_number_evidence = [
         e for e in tier1_evidence if e.field == "registration_number"
     ]
     status_evidence = [e for e in tier1_evidence if e.field == "registration_status"]
-    tax_id_evidence = [e for e in tier1_evidence if e.field == "tax_id"]
     sanctions_hit_evidence = [e for e in tier1_evidence if e.field == "sanctions_hit"]
     sanctions_screened_evidence = [
         e for e in tier1_evidence if e.field == "sanctions_screened"
@@ -130,6 +133,8 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
                 evidence_ids=[],
             )
         )
+        signals.extend(_tax_id_signals(evidence_rows))
+        signals.extend(_linkedin_entity_signals(evidence_rows))
         return signals
 
     # Registry name confirmed / mismatch
@@ -208,21 +213,6 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
                 )
             )
 
-    # Tax ID trust signal
-    if tax_id_evidence:
-        signals.append(
-            Signal(
-                name="valid_tax_id",
-                layer="entity",
-                direction="trust",
-                weight=0.3,
-                description=(
-                    "Tax ID / registration number validated via authoritative source."
-                ),
-                evidence_ids=[e.id for e in tax_id_evidence],
-            )
-        )
-
     # Multiple distinct registered entities share the submitted name (P4-T2).
     conflict_ev = [e for e in tier1_evidence if e.field == "registry_identity_conflict"]
     if conflict_ev:
@@ -240,7 +230,98 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
             )
         )
 
+    signals.extend(_tax_id_signals(evidence_rows))
+    signals.extend(_linkedin_entity_signals(evidence_rows))
     return signals
+
+
+def _tax_id_signals(evidence_rows: list) -> list[Signal]:
+    """Entity-layer signals from the tax-ID/FEIN source (IC1-T3).
+
+    No tax-ID evidence (no input, non-US, provider down or not configured)
+    contributes nothing: an unavailable source lowers coverage, not the score.
+    """
+    rows = [e for e in evidence_rows if e.source == "tax_id"]
+    status_ev = [e for e in rows if e.field == "tax_id_status"]
+    match_ev = [e for e in rows if e.field == "tax_id_name_match"]
+    if not status_ev:
+        return []
+
+    status = (status_ev[0].normalized_value or "").lower()
+    match = (match_ev[0].normalized_value or "").lower() if match_ev else ""
+    out: list[Signal] = []
+
+    if status == "not_found":
+        out.append(
+            Signal(
+                name="tax_id_not_found",
+                layer="entity",
+                direction="elevated",
+                weight=0.5,
+                description=(
+                    "The submitted tax ID (FEIN) does not resolve with the "
+                    "authoritative tax-ID source."
+                ),
+                evidence_ids=[status_ev[0].id],
+            )
+        )
+        return out
+
+    if status == "inactive":
+        out.append(
+            Signal(
+                name="tax_id_inactive_or_dissolved",
+                layer="entity",
+                direction="elevated",
+                weight=0.4,
+                description="The tax ID is on file but the entity is not active.",
+                evidence_ids=[status_ev[0].id],
+            )
+        )
+    if match == "mismatch":
+        out.append(
+            Signal(
+                name="tax_id_name_mismatch",
+                layer="entity",
+                direction="elevated",
+                weight=0.5,
+                description=(
+                    "The tax ID is registered to a different name than the "
+                    "submitted company name."
+                ),
+                evidence_ids=[match_ev[0].id],
+            )
+        )
+    if status == "verified" and not match_ev:
+        # Provider confirmed the FEIN but returned no name to compare.
+        out.append(
+            Signal(
+                name="tax_id_verified_name_unconfirmed",
+                layer="entity",
+                direction="trust",
+                weight=0.25,
+                description=(
+                    "Tax ID verified and active, but the source returned no "
+                    "registered name to compare with the submission."
+                ),
+                evidence_ids=[status_ev[0].id],
+            )
+        )
+    if status == "verified" and match == "match":
+        out.append(
+            Signal(
+                name="tax_id_verified_active",
+                layer="entity",
+                direction="trust",
+                weight=0.5,
+                description=(
+                    "Tax ID verified with an authoritative source: active and "
+                    "registered to the submitted company name."
+                ),
+                evidence_ids=[status_ev[0].id, match_ev[0].id],
+            )
+        )
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -493,6 +574,7 @@ def representation_confidence_signals(
         _append_ip_signals(signals, evidence_rows)
         _append_web_contact_signals(signals, evidence_rows)
         _append_intake_signals(signals, evidence_rows)
+        _append_linkedin_signals(signals, evidence_rows, fc_by_field)
         return signals
 
     # Core field weights (PRD § Core Verification Philosophy — representation layer)
@@ -541,6 +623,7 @@ def representation_confidence_signals(
     _append_ip_signals(signals, evidence_rows)
     _append_web_contact_signals(signals, evidence_rows)
     _append_intake_signals(signals, evidence_rows)
+    _append_linkedin_signals(signals, evidence_rows, fc_by_field)
 
     # Guard: if no signals produced (all fields unverified)
     if not signals:
@@ -559,6 +642,197 @@ def representation_confidence_signals(
         )
 
     return signals
+
+
+# LinkedIn footprint thresholds (IC1-T5). "Established" needs a real following;
+# "thin" means both counts are near zero. Anything between adds no signal.
+_LI_ESTABLISHED_EMPLOYEES = 10
+_LI_ESTABLISHED_FOLLOWERS = 500
+_LI_THIN_EMPLOYEES = 5
+_LI_THIN_FOLLOWERS = 50
+_LI_RECENT_DAYS = 365
+# Tier 3: absence is weak evidence (PRD §6 calibration note).
+_LI_ABSENT_WEIGHT = 0.15
+
+
+def _li_rows(evidence_rows: list) -> dict:
+    return {
+        e.field: e
+        for e in evidence_rows
+        if e.source == "linkedin" and (e.field or "").startswith("linkedin_")
+    }
+
+
+def _li_int(ev) -> int | None:
+    try:
+        return int(ev.normalized_value) if ev is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _li_footprint(rows: dict) -> tuple[bool, bool]:
+    """(established, thin) from employee count and followers."""
+    employees = _li_int(rows.get("linkedin_employee_count"))
+    followers = _li_int(rows.get("linkedin_followers"))
+    established = (employees or 0) >= _LI_ESTABLISHED_EMPLOYEES or (
+        followers or 0
+    ) >= _LI_ESTABLISHED_FOLLOWERS
+    thin = (
+        employees is not None
+        and followers is not None
+        and employees < _LI_THIN_EMPLOYEES
+        and followers < _LI_THIN_FOLLOWERS
+    )
+    return established, thin
+
+
+def _append_linkedin_signals(
+    signals: list[Signal], evidence_rows: list, fc_by_field: dict
+) -> None:
+    """Representation-layer LinkedIn signals (IC1-T5). Tier 3: weights stay low.
+
+    No LinkedIn evidence (unresolved search, provider not configured) adds
+    nothing.
+    """
+    rows = _li_rows(evidence_rows)
+    presence = rows.get("linkedin_presence")
+    if presence is None:
+        return
+
+    if (presence.normalized_value or "") != "found":
+        signals.append(
+            Signal(
+                name="linkedin_absent_or_thin",
+                layer="representation",
+                direction="elevated",
+                weight=_LI_ABSENT_WEIGHT,
+                description=(
+                    "The submitted LinkedIn company page does not exist. Weak "
+                    "evidence on its own; many legitimate firms have thin pages."
+                ),
+                evidence_ids=[presence.id],
+            )
+        )
+        return
+
+    established, thin = _li_footprint(rows)
+    website_fc = fc_by_field.get("linkedin_website")
+
+    if thin:
+        signals.append(
+            Signal(
+                name="linkedin_absent_or_thin",
+                layer="representation",
+                direction="elevated",
+                weight=_LI_ABSENT_WEIGHT,
+                description=(
+                    "The LinkedIn company page has almost no employees or "
+                    "followers. Weak evidence on its own."
+                ),
+                evidence_ids=[
+                    e.id
+                    for e in (
+                        presence,
+                        rows.get("linkedin_employee_count"),
+                        rows.get("linkedin_followers"),
+                    )
+                    if e is not None
+                ],
+            )
+        )
+
+    if website_fc is not None and website_fc.match_status == "mismatch":
+        signals.append(
+            Signal(
+                name="linkedin_website_mismatch",
+                layer="representation",
+                direction="elevated",
+                weight=0.25,
+                description=(
+                    "The LinkedIn page lists a different website than the "
+                    f"submitted domain ({website_fc.discovered_value!r} vs. "
+                    f"{website_fc.submitted_value!r})."
+                ),
+                evidence_ids=[website_fc.evidence_id]
+                if website_fc.evidence_id
+                else [presence.id],
+            )
+        )
+    elif established and website_fc is not None and website_fc.match_status == "match":
+        signals.append(
+            Signal(
+                name="linkedin_established_presence",
+                layer="representation",
+                direction="trust",
+                weight=0.3,
+                description=(
+                    "Established LinkedIn company page whose stated website "
+                    "matches the submitted domain."
+                ),
+                evidence_ids=[presence.id]
+                + ([website_fc.evidence_id] if website_fc.evidence_id else []),
+            )
+        )
+
+    created = rows.get("linkedin_page_created")
+    if created is not None:
+        from datetime import date  # noqa: PLC0415
+
+        try:
+            age = (date.today() - date.fromisoformat(created.normalized_value)).days
+        except (TypeError, ValueError):
+            age = None
+        if age is not None and 0 <= age < _LI_RECENT_DAYS:
+            signals.append(
+                Signal(
+                    name="linkedin_recently_created",
+                    layer="representation",
+                    direction="elevated",
+                    weight=0.2,
+                    description=(
+                        f"The LinkedIn company page was created {age} days ago "
+                        "(PRD § Risk Signals: recently created social presence)."
+                    ),
+                    evidence_ids=[created.id],
+                )
+            )
+
+    requester = rows.get("linkedin_requester_match")
+    if requester is not None and (requester.normalized_value or "") == "true":
+        signals.append(
+            Signal(
+                name="linkedin_requester_associated",
+                layer="representation",
+                direction="trust",
+                weight=0.2,
+                description="The requester is associated with the company on LinkedIn.",
+                evidence_ids=[requester.id],
+            )
+        )
+
+
+def _linkedin_entity_signals(evidence_rows: list) -> list[Signal]:
+    """Secondary entity-layer trust from an established LinkedIn page (IC1-T5).
+
+    Deliberately tiny (Tier 3): it corroborates, never confirms, the entity.
+    """
+    rows = _li_rows(evidence_rows)
+    presence = rows.get("linkedin_presence")
+    if presence is None or (presence.normalized_value or "") != "found":
+        return []
+    established, _thin = _li_footprint(rows)
+    if not established:
+        return []
+    return [
+        Signal(
+            name="linkedin_presence_corroborates_entity",
+            layer="entity",
+            direction="trust",
+            weight=0.1,
+            description="An established LinkedIn page corroborates the entity.",
+            evidence_ids=[presence.id],
+        )
+    ]
 
 
 def _append_ip_signals(signals: list[Signal], evidence_rows: list) -> None:

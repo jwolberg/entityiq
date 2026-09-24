@@ -263,6 +263,15 @@ class NormalizeInputStage:
             "company_name": (
                 sub.company_name.strip() if sub and sub.company_name else None
             ),
+            # Identity corroboration inputs (IC1-T4), passed through as given.
+            "linkedin_url": (
+                sub.linkedin_url.strip() if sub and sub.linkedin_url else None
+            ),
+            "requester_full_name": (
+                sub.requester_full_name.strip()
+                if sub and sub.requester_full_name
+                else None
+            ),
             # Network metadata — captured server-side; used by EnrichNetworkIPStage.
             "source_ip": (sub.source_ip if sub else None),
         }

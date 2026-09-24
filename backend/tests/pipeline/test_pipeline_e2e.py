@@ -19,8 +19,14 @@ import app.models  # noqa: F401
 from app.adapters.domain import AnalyzeDomainStage
 from app.adapters.geocode import GeocodeAdapter, GeocodeHQStage
 from app.adapters.ipinfo import EnrichNetworkIPStage, IPInfoAdapter
+from app.adapters.linkedin import (
+    LinkedInAdapter,
+    StubLinkedInProvider,
+    VerifyLinkedInStage,
+)
 from app.adapters.opencorporates import OpenCorporatesAdapter, QueryRegistriesStage
 from app.adapters.sanctions import SanctionsScreeningStage
+from app.adapters.tax_id import StubTaxIdProvider, TaxIdAdapter, VerifyTaxIdStage
 from app.adapters.web import FetchResult, WebEvidenceStage
 from app.db.session import Base
 from app.models.entity import Entity
@@ -152,6 +158,7 @@ def _stages(*, age_days: int, mx: list[str], txt: list[str], registry: dict):
         NormalizeInputStage(),
         ResolveEntityCandidatesStage(),
         QueryRegistriesStage(OpenCorporatesAdapter(http_client=_Http(200, registry))),
+        VerifyTaxIdStage(TaxIdAdapter(provider=StubTaxIdProvider())),
         SanctionsScreeningStage(fetcher=_Sdn()),
         AnalyzeDomainStage(
             whois_client=_Whois(age_days),
@@ -160,6 +167,7 @@ def _stages(*, age_days: int, mx: list[str], txt: list[str], registry: dict):
         ),
         EnrichNetworkIPStage(IPInfoAdapter(http_client=_Http(200, _US_RESIDENTIAL_IP))),
         WebEvidenceStage(fetcher=_Web(_ACME_HTML)),
+        VerifyLinkedInStage(LinkedInAdapter(provider=StubLinkedInProvider())),
         ConsistencyChecksStage(),
         GeocodeHQStage(
             GeocodeAdapter(
@@ -203,7 +211,9 @@ def db(e2e_engine):
     connection.close()
 
 
-def _submit(db: Session, *, domain: str = "acme.com") -> VerificationRun:
+def _submit(
+    db: Session, *, domain: str = "acme.com", tax_id: str = "12-3456789"
+) -> VerificationRun:
     entity = Entity(canonical_name="Acme Corporation", canonical_domain=domain)
     db.add(entity)
     db.flush()
@@ -214,6 +224,7 @@ def _submit(db: Session, *, domain: str = "acme.com") -> VerificationRun:
         country="US",
         billing_address="1 Market St, San Francisco, CA 94105",
         source_ip="8.8.8.8",
+        tax_id=tax_id,
         entity_id=entity.id,
     )
     db.add(sub)
@@ -225,9 +236,12 @@ def _submit(db: Session, *, domain: str = "acme.com") -> VerificationRun:
 
 
 def _run(
-    db: Session, stages, stage_timeout_seconds: float | None = None
+    db: Session,
+    stages,
+    stage_timeout_seconds: float | None = None,
+    tax_id: str = "12-3456789",
 ) -> tuple[VerificationRun, RiskAssessment, set[str]]:
-    run = _submit(db)
+    run = _submit(db, tax_id=tax_id)
     Orchestrator(stages, stage_timeout_seconds=stage_timeout_seconds).run_sync(
         run.id, db
     )
@@ -270,6 +284,8 @@ def test_established_company_gets_infrastructure_trust_signals(db):
         "long_lived_domain",
         "registry_name_confirmed",
         "sanctions_cleared",
+        "tax_id_verified_active",
+        "linkedin_established_presence",
     ):
         assert expected in names, f"{expected} missing; got {sorted(names)}"
 
@@ -363,3 +379,31 @@ def test_not_found_is_a_result_not_an_outage(db):
         ),
     )
     assert run.source_availability["query_registries"] == "complete"
+
+
+def test_unknown_fein_flags_entity_and_tax_id_diff_row(db):
+    """IC1-T1..T3 end to end: an unresolvable FEIN is a finding, not an outage."""
+    from app.models.field_comparison import FieldComparison
+
+    run, ra, names = _run(
+        db,
+        _stages(
+            age_days=4000,
+            mx=["aspmx.l.google.com"],
+            txt=["v=spf1 include:_spf.google.com ~all"],
+            registry=_ACME_REGISTRY,
+        ),
+        tax_id="99-0000000",
+    )
+    assert run.source_availability["verify_tax_id"] == "complete"
+    assert "tax_id_not_found" in names
+    assert "tax_id_verified_active" not in names
+    fc = (
+        db.query(FieldComparison)
+        .filter(
+            FieldComparison.verification_run_id == run.id,
+            FieldComparison.field_name == "tax_id",
+        )
+        .one()
+    )
+    assert fc.match_status == "mismatch"

@@ -1203,3 +1203,44 @@ locking down operator-only report reads.
 - Every duration can be changed via env var. Revisit them with compliance
   counsel before any real deployment.
 - This unblocks P3-T3 / backlog ticket 0002.
+
+---
+
+## 2026-09-24 — IC1 identity corroboration slice (backlog 0007–0013)
+
+- **Providers default to "unconfigured", not the stub.** With no provider
+  selected (IC0-T1/T2 open), `verify_tax_id` and `verify_linkedin` report
+  *unavailable*: no evidence, no signal, no penalty. A stub in production
+  would mark every real FEIN `tax_id_not_found`. The deterministic stubs are
+  opt-in (`ENTITYIQ_*_PROVIDER=stub`) and used by tests and the pipeline e2e
+  test.
+- **"Not found" vs. "unavailable":**
+  - An unknown or malformed FEIN is a finding (`tax_id_status=not_found`
+    evidence, so the elevated signal can cite it).
+  - For LinkedIn, only a *submitted* URL that doesn't resolve is a finding;
+    a name + domain search that finds nothing is unavailable, since many
+    legitimate firms have no page.
+- **Registry signals ignore tax-ID rows.** Tax-ID evidence is Tier 1, and the
+  registry checks previously treated any Tier-1 row as registry evidence, so
+  scores would have shifted. The tax-ID signals also fire on the
+  no-registry-evidence path, because OpenCorporates is usually unavailable
+  without a token.
+- **Name matching for FEIN** is exact on "core" names (all trailing legal
+  suffixes and punctuation stripped). A subsidiary's name ("Acme Europe BV")
+  is not a match.
+- **Deviation: `linkedin_absent_or_thin`.** The PRD scopes it to "a company
+  claiming enterprise scale", but the submission has no scale field. It fires
+  on a dead submitted URL or a near-empty page (<5 employees and <50
+  followers). Its weight is 0.15, below the weakest Tier-3 elevated signal
+  (`thin_website`, 0.35), and a test asserts that.
+- **Entity-layer secondary term:** `linkedin_presence_corroborates_entity`
+  (weight 0.1) is based on footprint only, because the entity layer has no
+  field comparisons to check the website. It's small by design.
+- **Reports:** `verify_tax_id` / `verify_linkedin` outages are now listed
+  under their source names, so the UI can say "not available" rather than
+  showing blanks.
+- **Follow-ups:**
+  - The demo dataset has no tax IDs or LinkedIn pages, so the demo shows the
+    new panel as "not available". Give demo scenarios stub records (check
+    the tier test).
+  - IC4-T1 / backlog 0018 wires caching and rate limiting.

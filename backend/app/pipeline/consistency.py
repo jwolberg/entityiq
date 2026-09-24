@@ -96,11 +96,44 @@ def _address_match(submitted: str | None, discovered: str | None) -> bool:
 # Field specs: (submitted_field, evidence_field, match_fn)
 # ---------------------------------------------------------------------------
 
+
+def _tax_id_resolves(submitted: str | None, discovered: str | None) -> bool:
+    """The FEIN is on file (active or not) with the tax-ID provider (IC1-T2)."""
+    return bool(submitted) and _norm(discovered) in ("verified", "inactive")
+
+
+def _registered_name_match(submitted: str | None, discovered: str | None) -> bool:
+    from app.adapters.tax_id import names_match  # noqa: PLC0415
+
+    return names_match(submitted, discovered)
+
+
+def _linkedin_website_match(submitted: str | None, discovered: str | None) -> bool:
+    """LinkedIn-stated website vs. submitted domain; subdomains count (IC1-T5)."""
+    from app.adapters.linkedin import bare_domain  # noqa: PLC0415
+
+    s, d = bare_domain(submitted), bare_domain(discovered)
+    if not s or not d:
+        return False
+    return s == d or d.endswith("." + s) or s.endswith("." + d)
+
+
 _FIELD_SPECS = [
-    # (submitted key in context["normalized"], evidence field name, match function)
+    # (submitted key in context["normalized"], evidence field name, match
+    #  function[, comparison field_name when it differs from the submitted key])
     ("company_name", "company_name", _names_match),
     ("country_iso", "jurisdiction", _iso_match),
     ("billing_address", "legal_address", _address_match),
+    # Tax ID (IC1-T2): does the FEIN resolve, and to the submitted name?
+    ("tax_id", "tax_id_status", _tax_id_resolves),
+    (
+        "company_name",
+        "tax_id_registered_name",
+        _registered_name_match,
+        "tax_id_registered_name",
+    ),
+    # LinkedIn (IC1-T5): does the page's stated website match the domain?
+    ("domain", "linkedin_website", _linkedin_website_match, "linkedin_website"),
 ]
 
 
@@ -125,7 +158,8 @@ def _run_comparisons(run_id: str, db: "Session", normalized: dict) -> None:
     from app.models.evidence import Evidence  # noqa: PLC0415
     from app.models.field_comparison import FieldComparison  # noqa: PLC0415
 
-    for submitted_key, evidence_field, match_fn in _FIELD_SPECS:
+    for submitted_key, evidence_field, match_fn, *override in _FIELD_SPECS:
+        field_name = override[0] if override else submitted_key
         submitted_value = normalized.get(submitted_key)
 
         # Query evidence for this field from this run.
@@ -143,7 +177,7 @@ def _run_comparisons(run_id: str, db: "Session", normalized: dict) -> None:
             fc = FieldComparison(
                 verification_run_id=run_id,
                 evidence_id=None,
-                field_name=submitted_key,
+                field_name=field_name,
                 submitted_value=submitted_value,
                 discovered_value=None,
                 match_status="unverified",
@@ -160,7 +194,7 @@ def _run_comparisons(run_id: str, db: "Session", normalized: dict) -> None:
                 fc = FieldComparison(
                     verification_run_id=run_id,
                     evidence_id=matching_ev.id,
-                    field_name=submitted_key,
+                    field_name=field_name,
                     submitted_value=submitted_value,
                     discovered_value=(
                         matching_ev.normalized_value or matching_ev.raw_value
@@ -173,7 +207,7 @@ def _run_comparisons(run_id: str, db: "Session", normalized: dict) -> None:
                 fc = FieldComparison(
                     verification_run_id=run_id,
                     evidence_id=first_ev.id,
-                    field_name=submitted_key,
+                    field_name=field_name,
                     submitted_value=submitted_value,
                     discovered_value=first_ev.normalized_value or first_ev.raw_value,
                     match_status="mismatch",
