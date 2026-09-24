@@ -16,6 +16,10 @@ dependencies = [
     "redis==5.2.1",
     "httpx==0.27.2",
     "python-whois==0.9.5",
+    # Individual screening (ADR-0003): subject encryption + name matching.
+    "cryptography==50.0.1",
+    "anyascii==0.3.3",
+    "jellyfish==1.2.1",
 ]
 
 [project.optional-dependencies]
