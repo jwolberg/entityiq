@@ -347,6 +347,13 @@ export interface VerifyOwnershipChallengeResponse {
 
 export type SystemDisposition = "CLEAR" | "REVIEW" | "MATCH";
 
+export interface ScreeningQueuePage {
+  items: ScreeningQueueItem[];
+  total?: number;
+  limit?: number;
+  offset?: number;
+}
+
 export interface ScreeningQueueItem {
   run_id: string;
   subject_name: string | null;
@@ -480,10 +487,12 @@ export const apiClient = {
   /** GET /screenings: individual screening queue. */
   listScreenings(
     token: string,
-    filters: { disposition?: string; trigger?: string } = {}
-  ): Promise<{ items: ScreeningQueueItem[] }> {
+    filters: { disposition?: string; trigger?: string; offset?: number } = {}
+  ): Promise<ScreeningQueuePage> {
     const q = new URLSearchParams(
-      Object.entries(filters).filter(([, v]) => v) as [string, string][]
+      Object.entries(filters)
+        .filter(([, v]) => v)
+        .map(([k, v]) => [k, String(v)])
     ).toString();
     return request(`/screenings${q ? `?${q}` : ""}`, {}, token);
   },

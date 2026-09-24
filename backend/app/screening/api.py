@@ -11,8 +11,9 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import case
 from sqlalchemy.orm import Session
 
 from app.audit.recorder import record_event
@@ -175,11 +176,21 @@ def _iso(dt: datetime | None) -> str | None:
     return _aware(dt).isoformat() if dt else None
 
 
-def _subject_name(db: Session, subject: ScreeningSubject) -> str | None:
-    try:
-        return crypto.get_subject_pii(db, subject).get("name")
-    except crypto.SubjectShredded:
-        return None
+def _latest_dispositions(
+    db: Session, decision_ids: list[str]
+) -> dict[str, ScreeningDisposition]:
+    """Latest human disposition per decision, in one query."""
+    latest: dict[str, ScreeningDisposition] = {}
+    if not decision_ids:
+        return latest
+    rows = (
+        db.query(ScreeningDisposition)
+        .filter(ScreeningDisposition.decision_id.in_(decision_ids))
+        .order_by(ScreeningDisposition.created_at.desc(), ScreeningDisposition.id)
+    )
+    for row in rows:
+        latest.setdefault(row.decision_id, row)
+    return latest
 
 
 @router.get("")
@@ -188,79 +199,81 @@ def list_screenings(
     list_source: str | None = None,
     older_than_days: int | None = None,
     trigger: Literal["intake", "monitoring"] | None = None,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(_get_db),
     operator: Operator = Depends(get_current_operator),
 ) -> dict:
-    runs = db.query(ScreeningRun).order_by(ScreeningRun.created_at.desc()).all()
-    decisions = (
-        {
-            d.run_id: d
-            for d in db.query(ScreeningDecision).filter(
-                ScreeningDecision.run_id.in_([r.id for r in runs])
+    query = db.query(ScreeningRun, ScreeningDecision).outerjoin(
+        ScreeningDecision, ScreeningDecision.run_id == ScreeningRun.id
+    )
+    if disposition:
+        query = query.filter(ScreeningDecision.system_disposition == disposition)
+    if trigger:
+        query = query.filter(ScreeningRun.trigger == trigger)
+    if older_than_days is not None:
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=older_than_days)
+        query = query.filter(ScreeningRun.created_at <= cutoff)
+    if list_source:
+        query = query.filter(
+            db.query(ScreeningCandidate.id)
+            .join(
+                WatchlistRecord,
+                ScreeningCandidate.watchlist_record_id == WatchlistRecord.id,
             )
-        }
-        if runs
-        else {}
-    )
-    cutoff = (
-        datetime.now(tz=timezone.utc) - timedelta(days=older_than_days)
-        if older_than_days is not None
-        else None
-    )
-    items = []
-    for run in runs:
-        decision = decisions.get(run.id)
-        system = decision.system_disposition if decision else None
-        if disposition and system != disposition:
-            continue
-        if trigger and run.trigger != trigger:
-            continue
-        if cutoff and _aware(run.created_at) > cutoff:
-            continue
-        if list_source:
-            sources = {
-                rec.source
-                for rec in db.query(WatchlistRecord)
-                .join(
-                    ScreeningCandidate,
-                    ScreeningCandidate.watchlist_record_id == WatchlistRecord.id,
-                )
-                .filter(ScreeningCandidate.run_id == run.id)
-            }
-            if list_source not in sources:
-                continue
-        latest = (
-            db.query(ScreeningDisposition)
-            .filter_by(decision_id=decision.id)
-            .order_by(ScreeningDisposition.created_at.desc(), ScreeningDisposition.id)
-            .first()
-            if decision
-            else None
+            .filter(
+                ScreeningCandidate.run_id == ScreeningRun.id,
+                WatchlistRecord.source == list_source,
+            )
+            .exists()
         )
+    total = query.count()
+    severity = case(
+        *(
+            (ScreeningDecision.system_disposition == d, rank)
+            for d, rank in _SEVERITY.items()
+            if d is not None
+        ),
+        else_=_SEVERITY[None],
+    )
+    page = (
+        query.order_by(severity, ScreeningRun.created_at.desc(), ScreeningRun.id)
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+
+    pii = crypto.get_subjects_pii(
+        db,
+        db.query(ScreeningSubject)
+        .filter(ScreeningSubject.id.in_([run.subject_id for run, _ in page]))
+        .all(),
+    )
+    latest = _latest_dispositions(db, [d.id for _, d in page if d])
+    items = []
+    for run, decision in page:
+        human = latest.get(decision.id) if decision else None
         items.append(
             {
                 "run_id": run.id,
-                "subject_name": _subject_name(
-                    db, db.get(ScreeningSubject, run.subject_id)
-                ),
+                "subject_name": (pii.get(run.subject_id) or {}).get("name"),
                 "status": run.status,
                 "trigger": run.trigger,
-                "system_disposition": system,
+                "system_disposition": decision.system_disposition if decision else None,
                 "auto_closed": decision.auto_closed if decision else None,
                 "top_score": decision.top_score if decision else None,
-                "human_disposition": latest.disposition if latest else None,
+                "human_disposition": human.disposition if human else None,
                 "created_at": _iso(run.created_at),
             }
         )
-    items.sort(key=lambda i: (_SEVERITY[i["system_disposition"]]))
     record_event(
         db,
         "screening.queue_viewed",
         operator_id=operator.id,
-        payload={"count": len(items)},
+        payload={"count": len(items), "total": total, "offset": offset},
     )
     db.commit()
-    return {"items": items}
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
 def _load_run(db: Session, run_id: str) -> ScreeningRun:
@@ -302,10 +315,23 @@ def get_screening(
     for t in db.query(ScreeningTerm).filter_by(run_id=run_id):
         term_rows.setdefault(t.candidate_id, []).append(t)
 
+    entries = decision.terms if decision else []
+    cands = {
+        c.id: c
+        for c in db.query(ScreeningCandidate).filter(
+            ScreeningCandidate.id.in_([e["candidate_id"] for e in entries])
+        )
+    }
+    records = {
+        r.id: r
+        for r in db.query(WatchlistRecord).filter(
+            WatchlistRecord.id.in_([c.watchlist_record_id for c in cands.values()])
+        )
+    }
     candidates = []
-    for entry in decision.terms if decision else []:
-        cand = db.get(ScreeningCandidate, entry["candidate_id"])
-        record = db.get(WatchlistRecord, cand.watchlist_record_id)
+    for entry in entries:
+        cand = cands[entry["candidate_id"]]
+        record = records[cand.watchlist_record_id]
         claim_ids_by_name = {t.name: t.claim_ids for t in term_rows.get(cand.id, [])}
         terms = [
             {**t, "claim_ids": claim_ids_by_name.get(t["name"], [])}

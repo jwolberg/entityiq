@@ -102,6 +102,24 @@ describe("IndividualsQueue", () => {
     await waitFor(() => expect(screen.getAllByTestId("screening-row")).toHaveLength(1));
     expect(calls.some((c) => c.includes("disposition=REVIEW"))).toBe(true);
   });
+
+  it("pages through a long queue with Load more", async () => {
+    const extra = { ...QUEUE.items[2], run_id: "r-clear-2", subject_name: "Ada Obi" };
+    const calls = routed({
+      "/screenings": [
+        { items: QUEUE.items, total: 4, limit: 3, offset: 0 },
+        { items: [extra], total: 4, limit: 3, offset: 3 },
+      ],
+    });
+    const Wrapper = withRole("operator");
+    render(<Wrapper><IndividualsQueue onSelect={vi.fn()} /></Wrapper>);
+    await waitFor(() => expect(screen.getAllByTestId("screening-row")).toHaveLength(3));
+    expect(screen.getByTestId("queue-count").textContent).toBe("Showing 3 of 4");
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    await waitFor(() => expect(screen.getAllByTestId("screening-row")).toHaveLength(4));
+    expect(calls.some((c) => c.includes("offset=3"))).toBe(true);
+    expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
 });
 
 describe("IndividualDetail", () => {

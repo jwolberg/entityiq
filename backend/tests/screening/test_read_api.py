@@ -139,3 +139,74 @@ def test_unknown_run_is_404_and_integration_keys_cannot_read_the_queue(api_env):
         == 404
     )
     assert c.get("/screenings", headers=api_env["api_key"]).status_code == 401
+
+
+def _count_queries(env):
+    from sqlalchemy import event
+
+    engine = env["factory"].kw["bind"]
+    seen: list[str] = []
+
+    def on_exec(_conn, _cur, statement, *_a):
+        if statement.lstrip().upper().startswith("SELECT"):
+            seen.append(statement)
+
+    event.listen(engine, "before_cursor_execute", on_exec)
+    return seen, lambda: event.remove(engine, "before_cursor_execute", on_exec)
+
+
+def test_queue_is_paginated_in_severity_order(api_env):
+    match, review, clear = _seed_three(api_env)
+    c, h = api_env["client"], api_env["auth"]["operator"]
+
+    page1 = c.get("/screenings?limit=2", headers=h).json()
+    assert page1["total"] == 3 and page1["limit"] == 2 and page1["offset"] == 0
+    assert [i["run_id"] for i in page1["items"]] == [match, review]
+    page2 = c.get("/screenings?limit=2&offset=2", headers=h).json()
+    assert [i["run_id"] for i in page2["items"]] == [clear]
+    filtered = c.get("/screenings?disposition=CLEAR&limit=1", headers=h).json()
+    assert filtered["total"] == 1
+    assert c.get("/screenings?limit=0", headers=h).status_code == 422
+    assert c.get("/screenings?limit=501", headers=h).status_code == 422
+
+
+def test_queue_query_count_does_not_grow_with_rows(api_env):
+    """No per-row queries in the queue."""
+    c, h = api_env["client"], api_env["auth"]["operator"]
+    load_people(api_env["factory"], [{"name": "Teodor Vasilescu"}])
+
+    def measure(n_runs):
+        for _ in range(n_runs):
+            _submit(api_env, {"name": "Teodor Vasilescu"})
+        seen, stop = _count_queries(api_env)
+        try:
+            c.get("/screenings?list_source=ofac_sdn", headers=h)
+            return len(seen)
+        finally:
+            stop()
+
+    small, big = measure(1), measure(4)
+    assert big == small, (small, big)
+
+
+def test_detail_query_count_does_not_grow_with_candidates(api_env):
+    c, h = api_env["client"], api_env["auth"]["operator"]
+
+    def measure(people, source):
+        load_people(api_env["factory"], people, source=source)
+        run_id = _submit(api_env, {"name": "Teodor Vasilescu"})
+        seen, stop = _count_queries(api_env)
+        try:
+            d = c.get(f"/screenings/{run_id}", headers=h).json()
+            return len(d["candidates"]), len(seen)
+        finally:
+            stop()
+
+    few, q_few = measure([{"name": "Teodor Vasilescu"}], "ofac_sdn")
+    # A second list adds candidates without replacing the first snapshot.
+    many, q_many = measure(
+        [{"name": f"Teodor Vasilescu{s}"} for s in ("u", "o", "a", "e")],
+        "un_consolidated",
+    )
+    assert many > few
+    assert q_many == q_few, (q_few, q_many)

@@ -11,6 +11,8 @@ import { DispositionBadge } from "../../components/DispositionBadge";
 export function IndividualsQueue({ onSelect }: { onSelect: (runId: string) => void }) {
   const { auth } = useAuth();
   const [items, setItems] = useState<ScreeningQueueItem[] | null>(null);
+  const [total, setTotal] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [trigger, setTrigger] = useState("");
@@ -26,12 +28,34 @@ export function IndividualsQueue({ onSelect }: { onSelect: (runId: string) => vo
         disposition: filter || undefined,
         trigger: trigger || undefined,
       })
-      .then((r) => !cancelled && setItems(r.items))
+      .then((r) => {
+        if (cancelled) return;
+        setItems(r.items);
+        setTotal(r.total ?? r.items.length);
+      })
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
     return () => {
       cancelled = true;
     };
   }, [auth.token, filter, trigger, refresh]);
+
+  async function loadMore() {
+    if (!items) return;
+    setLoadingMore(true);
+    try {
+      const r = await apiClient.listScreenings(auth.token, {
+        disposition: filter || undefined,
+        trigger: trigger || undefined,
+        offset: items.length,
+      });
+      setItems([...items, ...r.items]);
+      setTotal(r.total ?? total);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   async function screen(e: React.FormEvent) {
     e.preventDefault();
@@ -150,6 +174,18 @@ export function IndividualsQueue({ onSelect }: { onSelect: (runId: string) => vo
           </tbody>
         </table>
       )}
+      {items !== null && total !== null && items.length > 0 && (
+        <div style={styles.footer}>
+          <span data-testid="queue-count">
+            Showing {items.length} of {total}
+          </span>
+          {items.length < total && (
+            <button onClick={loadMore} disabled={loadingMore} style={styles.button}>
+              {loadingMore ? "Loading…" : "Load more"}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -168,6 +204,8 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: "0.75rem", color: "#6b7280", textTransform: "uppercase" },
   td: { padding: "0.5rem", borderBottom: "1px solid #f3f4f6", fontSize: "0.875rem" },
   row: { cursor: "pointer" },
+  footer: { display: "flex", justifyContent: "space-between", alignItems: "center",
+            marginTop: "0.75rem", fontSize: "0.875rem", color: "#6b7280" },
   monitoring: { backgroundColor: "#ede9fe", color: "#5b21b6", padding: "0.125rem 0.5rem",
                 borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600 },
 };

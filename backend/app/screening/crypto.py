@@ -72,7 +72,11 @@ def _key_row(db: "Session", subject_id: str) -> ScreeningSubjectKey:
 
 
 def _data_key(db: "Session", subject_id: str) -> AESGCM:
-    row = _key_row(db, subject_id)
+    return _unwrap(_key_row(db, subject_id))
+
+
+def _unwrap(row: ScreeningSubjectKey) -> AESGCM:
+    subject_id = row.subject_id
     nonce, wrapped = row.wrapped_key[:_NONCE_BYTES], row.wrapped_key[_NONCE_BYTES:]
     try:
         key = _master().decrypt(nonce, wrapped, _aad(subject_id, b"dek"))
@@ -133,6 +137,35 @@ def get_subject_pii(db: "Session", subject: ScreeningSubject) -> dict:
     return decrypt_for_subject(
         db, subject.id, subject.pii_ciphertext, subject.pii_nonce, purpose=b"pii"
     )
+
+
+def get_subjects_pii(
+    db: "Session", subjects: list[ScreeningSubject]
+) -> dict[str, dict | None]:
+    """PII for many subjects with one key query; None where shredded."""
+    live = [
+        s for s in subjects if s.shredded_at is None and s.pii_ciphertext is not None
+    ]
+    keys = {
+        row.subject_id: row
+        for row in db.query(ScreeningSubjectKey).filter(
+            ScreeningSubjectKey.subject_id.in_([s.id for s in live]),
+            ScreeningSubjectKey.wrapped_key.is_not(None),
+        )
+    }
+    out: dict[str, dict | None] = {s.id: None for s in subjects}
+    for subject in live:
+        row = keys.get(subject.id)
+        if row is None:
+            continue
+        try:
+            plaintext = _unwrap(row).decrypt(
+                subject.pii_nonce, subject.pii_ciphertext, _aad(subject.id, b"pii")
+            )
+        except InvalidTag as exc:
+            raise DecryptionError("Ciphertext does not authenticate") from exc
+        out[subject.id] = json.loads(plaintext)
+    return out
 
 
 def shred_subject(db: "Session", subject: ScreeningSubject, now: datetime) -> None:
