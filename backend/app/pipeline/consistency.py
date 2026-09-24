@@ -108,6 +108,16 @@ def _registered_name_match(submitted: str | None, discovered: str | None) -> boo
     return names_match(submitted, discovered)
 
 
+def _linkedin_website_match(submitted: str | None, discovered: str | None) -> bool:
+    """LinkedIn-stated website vs. submitted domain; subdomains count (IC1-T5)."""
+    from app.adapters.linkedin import bare_domain  # noqa: PLC0415
+
+    s, d = bare_domain(submitted), bare_domain(discovered)
+    if not s or not d:
+        return False
+    return s == d or d.endswith("." + s) or s.endswith("." + d)
+
+
 _FIELD_SPECS = [
     # (submitted key in context["normalized"], evidence field name, match
     #  function[, comparison field_name when it differs from the submitted key])
@@ -122,6 +132,8 @@ _FIELD_SPECS = [
         _registered_name_match,
         "tax_id_registered_name",
     ),
+    # LinkedIn (IC1-T5): does the page's stated website match the domain?
+    ("domain", "linkedin_website", _linkedin_website_match, "linkedin_website"),
 ]
 
 

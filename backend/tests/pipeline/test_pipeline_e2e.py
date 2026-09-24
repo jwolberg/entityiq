@@ -285,6 +285,7 @@ def test_established_company_gets_infrastructure_trust_signals(db):
         "registry_name_confirmed",
         "sanctions_cleared",
         "tax_id_verified_active",
+        "linkedin_established_presence",
     ):
         assert expected in names, f"{expected} missing; got {sorted(names)}"
 
