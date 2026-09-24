@@ -303,10 +303,17 @@ def _load_run(db: Session, run_id: str) -> ScreeningRun:
 def get_screening(
     run_id: str,
     db: Session = Depends(_get_db),
-    operator: Operator = Depends(get_current_operator),
+    principal: Principal = Depends(get_principal),
 ) -> dict:
+    """Operators see any run; an integration key only runs it submitted."""
     run = _load_run(db, run_id)
     subject = db.get(ScreeningSubject, run.subject_id)
+    is_operator = principal.operator_id is not None
+    if not is_operator and subject.api_client_id != principal.api_client_id:
+        # Same answer as a missing run: don't reveal other clients' runs.
+        raise HTTPException(
+            status_code=404, detail=f"Screening run {run_id!r} not found."
+        )
     try:
         pii: dict | None = crypto.get_subject_pii(db, subject)
     except crypto.SubjectShredded:
@@ -389,7 +396,8 @@ def get_screening(
     record_event(
         db,
         "screening.viewed",
-        operator_id=operator.id,
+        operator_id=principal.operator_id,
+        api_client_id=principal.api_client_id,
         payload={"run_id": run_id, "pii_shown": pii is not None},
     )
     db.commit()
@@ -426,9 +434,13 @@ def get_screening(
         "dispositions": [
             {
                 "disposition": d.disposition,
-                "notes": d.notes,
-                "operator_id": d.operator_id,
                 "created_at": _iso(d.created_at),
+                # Analyst notes and identities stay internal to operators.
+                **(
+                    {"notes": d.notes, "operator_id": d.operator_id}
+                    if is_operator
+                    else {}
+                ),
             }
             for d in dispositions
         ],

@@ -10,7 +10,8 @@ MATCH_SUBJECT = {"name": "Teodor Vasilescu", "dob": "1962-08-30", "nationality":
 
 
 def _submit(env, payload, who="operator"):
-    r = env["client"].post("/screenings", json=payload, headers=env["auth"][who])
+    headers = env["auth"][who] if who else env["api_key"]
+    r = env["client"].post("/screenings", json=payload, headers=headers)
     assert r.status_code == 201, r.text
     return r.json()["run_id"]
 
@@ -223,3 +224,53 @@ def test_detail_query_count_does_not_grow_with_candidates(api_env):
     )
     assert many > few
     assert q_many == q_few, (q_few, q_many)
+
+
+def test_integration_keys_read_only_their_own_results(api_env):
+    from app.auth import service as service_auth
+
+    c = api_env["client"]
+    load_people(
+        api_env["factory"],
+        [{"name": "Teodor Vasilescu", "dobs": [{"date": "1962-08-30"}], "nat": ["RO"]}],
+    )
+    mine = _submit(api_env, MATCH_SUBJECT, who=None)
+    by_operator = _submit(api_env, MATCH_SUBJECT)
+    db = api_env["factory"]()
+    _row, other_key = service_auth.create_api_client("someone-else", db)
+    db.commit()
+    db.close()
+
+    lead = api_env["auth"]["lead"]
+    decided = c.post(
+        f"/screenings/{mine}/disposition",
+        json={"disposition": "MATCH", "notes": "internal analyst reasoning"},
+        headers=lead,
+    )
+    assert decided.status_code == 201, decided.text
+
+    r = c.get(f"/screenings/{mine}", headers=api_env["api_key"])
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["subject"]["name"] == "Teodor Vasilescu"  # their own submission
+    assert body["decision"]["system_disposition"] == "MATCH"
+    assert [d["disposition"] for d in body["dispositions"]] == ["MATCH"]
+    assert "internal analyst reasoning" not in r.text
+    assert "operator_id" not in body["dispositions"][0]
+
+    # Other clients' and operator-submitted runs look like they don't exist.
+    for run_id, headers in [
+        (mine, {"X-API-Key": other_key}),
+        (by_operator, api_env["api_key"]),
+        ("nope", api_env["api_key"]),
+    ]:
+        assert c.get(f"/screenings/{run_id}", headers=headers).status_code == 404
+    # Operators still see everything; the queue stays operator-only.
+    op = c.get(f"/screenings/{mine}", headers=api_env["auth"]["operator"]).json()
+    assert op["dispositions"][0]["notes"] == "internal analyst reasoning"
+    assert c.get("/screenings", headers=api_env["api_key"]).status_code == 401
+
+    db = api_env["factory"]()
+    viewed = db.query(AuditEvent).filter_by(event_type="screening.viewed").all()
+    assert any(e.api_client_id == api_env["api_client_id"] for e in viewed)
+    db.close()
