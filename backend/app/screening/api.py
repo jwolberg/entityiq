@@ -344,6 +344,7 @@ def get_screening(
         if decision
         else []
     )
+    monitoring = _monitoring_block(db, run, candidates)
     started, finished = _aware(run.started_at), _aware(run.finished_at)
     record_event(
         db,
@@ -381,6 +382,7 @@ def get_screening(
         if decision
         else None,
         "candidates": candidates,
+        "monitoring": monitoring,
         "dispositions": [
             {
                 "disposition": d.disposition,
@@ -390,6 +392,48 @@ def get_screening(
             }
             for d in dispositions
         ],
+    }
+
+
+def _monitoring_block(
+    db: Session, run: ScreeningRun, candidates: list[dict]
+) -> dict | None:
+    """Why a monitoring run exists: the snapshot, what changed, the prior run."""
+    if run.trigger != "monitoring" or not run.triggered_by_snapshot_id:
+        return None
+    from app.lists.delta import diff_snapshots  # noqa: PLC0415
+    from app.models.list_snapshot import ListSnapshot  # noqa: PLC0415
+
+    snapshot = db.get(ListSnapshot, run.triggered_by_snapshot_id)
+    previous = (
+        db.query(ListSnapshot)
+        .filter(
+            ListSnapshot.source == snapshot.source,
+            ListSnapshot.retrieved_at < snapshot.retrieved_at,
+        )
+        .order_by(ListSnapshot.retrieved_at.desc())
+        .first()
+    )
+    delta = diff_snapshots(db, previous.id if previous else None, snapshot.id)
+    changed = set(delta.added_entry_ids) | set(delta.changed_entry_ids)
+    hit = sorted(
+        c["record"]["source_entry_id"]
+        for c in candidates
+        if c["record"]["source"] == snapshot.source
+        and c["record"]["source_entry_id"] in changed
+    )
+    prior = (
+        db.query(ScreeningDecision).filter_by(run_id=run.prior_run_id).one_or_none()
+        if run.prior_run_id
+        else None
+    )
+    return {
+        "snapshot_id": snapshot.id,
+        "source": snapshot.source,
+        "retrieved_at": _iso(snapshot.retrieved_at),
+        "changed_entry_ids": hit,
+        "prior_run_id": run.prior_run_id,
+        "prior_disposition": prior.system_disposition if prior else None,
     }
 
 

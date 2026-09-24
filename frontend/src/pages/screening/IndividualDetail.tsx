@@ -86,7 +86,15 @@ function Candidate({ cand, subject }: { cand: ScreeningCandidateView; subject: R
   );
 }
 
-export function IndividualDetail({ runId, onBack }: { runId: string; onBack: () => void }) {
+export function IndividualDetail({
+  runId,
+  onBack,
+  onOpenRun,
+}: {
+  runId: string;
+  onBack: () => void;
+  onOpenRun?: (runId: string) => void;
+}) {
   const { auth } = useAuth();
   const [data, setData] = useState<ScreeningDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -151,6 +159,26 @@ export function IndividualDetail({ runId, onBack }: { runId: string; onBack: () 
             {data.subject_shredded ? "(subject data shredded)" : fmt(data.subject?.name)}{" "}
             <DispositionBadge value={data.decision?.system_disposition ?? null} auto={data.decision?.auto_closed} />
           </h2>
+
+          {data.monitoring && (
+            <div data-testid="monitoring-banner" style={styles.monitoring}>
+              Monitoring alert: list <strong>{data.monitoring.source}</strong> changed (snapshot{" "}
+              {data.monitoring.snapshot_id}). Changed entries:{" "}
+              {data.monitoring.changed_entry_ids.join(", ") || "none among candidates"}.
+              {data.monitoring.prior_run_id && (
+                <>
+                  {" "}Previous decision: {data.monitoring.prior_disposition ?? "none"}.{" "}
+                  <button
+                    data-testid="open-prior-run"
+                    style={styles.linkBtn}
+                    onClick={() => onOpenRun?.(data.monitoring!.prior_run_id!)}
+                  >
+                    Open previous screening
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           {inFlight && (
             <div data-testid="screening-in-progress" style={styles.muted}>
@@ -261,4 +289,8 @@ const styles: Record<string, React.CSSProperties> = {
   matchBtn: { padding: "0.375rem 0.75rem", borderRadius: "0.375rem", border: "none",
               background: "#991b1b", color: "#fff", cursor: "pointer" },
   error: { color: "#991b1b", marginBottom: "0.75rem" },
+  monitoring: { background: "#ede9fe", color: "#4c1d95", padding: "0.5rem 0.75rem",
+                borderRadius: "0.375rem", marginBottom: "0.75rem", fontSize: "0.85rem" },
+  linkBtn: { background: "none", border: "none", color: "#4c1d95", textDecoration: "underline",
+             cursor: "pointer", padding: 0 },
 };

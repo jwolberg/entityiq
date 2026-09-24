@@ -13,6 +13,7 @@ export function IndividualsQueue({ onSelect }: { onSelect: (runId: string) => vo
   const [items, setItems] = useState<ScreeningQueueItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [trigger, setTrigger] = useState("");
   const [name, setName] = useState("");
   const [dob, setDob] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -21,13 +22,16 @@ export function IndividualsQueue({ onSelect }: { onSelect: (runId: string) => vo
   useEffect(() => {
     let cancelled = false;
     apiClient
-      .listScreenings(auth.token, { disposition: filter || undefined })
+      .listScreenings(auth.token, {
+        disposition: filter || undefined,
+        trigger: trigger || undefined,
+      })
       .then((r) => !cancelled && setItems(r.items))
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
     return () => {
       cancelled = true;
     };
-  }, [auth.token, filter, refresh]);
+  }, [auth.token, filter, trigger, refresh]);
 
   async function screen(e: React.FormEvent) {
     e.preventDefault();
@@ -64,6 +68,17 @@ export function IndividualsQueue({ onSelect }: { onSelect: (runId: string) => vo
           <option value="MATCH">MATCH</option>
           <option value="REVIEW">REVIEW</option>
           <option value="CLEAR">CLEAR</option>
+        </select>
+        <select
+          data-testid="filter-trigger"
+          value={trigger}
+          onChange={(e) => setTrigger(e.target.value)}
+          style={styles.select}
+          aria-label="Filter by trigger"
+        >
+          <option value="">All triggers</option>
+          <option value="intake">Intake</option>
+          <option value="monitoring">Monitoring alerts</option>
         </select>
       </div>
 
@@ -116,7 +131,15 @@ export function IndividualsQueue({ onSelect }: { onSelect: (runId: string) => vo
                 </td>
                 <td style={styles.td}>{i.human_disposition ?? "—"}</td>
                 <td style={styles.td}>{i.top_score?.toFixed(2) ?? "—"}</td>
-                <td style={styles.td}>{i.trigger}</td>
+                <td style={styles.td}>
+                  {i.trigger === "monitoring" ? (
+                    <span data-testid="monitoring-label" style={styles.monitoring}>
+                      Monitoring alert
+                    </span>
+                  ) : (
+                    i.trigger
+                  )}
+                </td>
               </tr>
             ))}
             {items.length === 0 && (
@@ -145,4 +168,6 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: "0.75rem", color: "#6b7280", textTransform: "uppercase" },
   td: { padding: "0.5rem", borderBottom: "1px solid #f3f4f6", fontSize: "0.875rem" },
   row: { cursor: "pointer" },
+  monitoring: { backgroundColor: "#ede9fe", color: "#5b21b6", padding: "0.125rem 0.5rem",
+                borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600 },
 };

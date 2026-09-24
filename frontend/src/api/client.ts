@@ -417,6 +417,15 @@ export interface ScreeningDetail {
     created_at: string | null;
   } | null;
   candidates: ScreeningCandidateView[];
+  /** Present for monitoring runs (ticket 0052). */
+  monitoring?: {
+    snapshot_id: string;
+    source: string;
+    retrieved_at: string | null;
+    changed_entry_ids: string[];
+    prior_run_id: string | null;
+    prior_disposition: SystemDisposition | null;
+  } | null;
   dispositions: {
     disposition: "CLEAR" | "MATCH";
     notes: string | null;
