@@ -1692,3 +1692,64 @@ single-tenant internal tool; multi-tenant would need per-client scoping.
 - **Migration:** `b3f7a2c9d4e1` (down_revision `a1b2c3d4e5f6`, current head
   at the time this ticket was branched) adds `ownership_challenge`. Verified
   upgrade/downgrade against a throwaway SQLite file.
+
+---
+
+## 2026-09-24 — Individual screening v1 (backlog 0027–0045, 0051, 0052)
+
+- **Decisions recorded:** all of PRD-IDV C1–C10. Libraries in ADR-0003
+  (cryptography 50.0.1, anyascii 0.3.3, jellyfish 1.2.1). Crypto-shred
+  retention in ADR-0004.
+- **Lists:** the parsers were checked against the live OFAC, UN, EU and UK
+  files. A smoke parse gave 7,534 / 736 / 4,465 / 3,834 individuals.
+  - Test fixtures are fictional entries in the real formats.
+  - UK OFSI ConList.csv showed "Last Updated 03/06/2026", so it may be being
+    replaced by the UK Sanctions List format. Watch it.
+- **Not in the plan: list ingestion.** The plan had parsers but nothing that
+  loads them in production. Added `python -m app.lists.ingest` (fetch, store a
+  snapshot only on a content-hash change, trigger monitoring) as part of 0051.
+  A live run ingested all four lists in about 30 s.
+- **Blocking cap (0037):** records matching every token of the subject's name
+  are never capped. The live lists have 440 full matches for "Mohammed Ali",
+  so a plain top-200 cap would silently drop true candidates. Only partial
+  matches are capped.
+- **Consonant skeleton bug:** found and fixed in 0038. It dropped the first
+  consonant after a leading vowel ("Iuliia" became key `sk:i`). The corpus
+  recall still passed before the fix, because of looser keys; there's now a
+  regression test.
+- **Country table:** new shared `app/lists/countries.py` (ISO 3166 plus
+  aliases), cross-checked against the EU file's code/name pairs. It maps
+  99.85% of live nationality strings. Screening doesn't import KYB's
+  40-country normalizer; the import-boundary test caught the attempt.
+- **Privacy:**
+  - Subject-side claims store only a locator into the encrypted subject blob.
+  - Decision `terms` are stored without subject values.
+  - Frozen inputs are encrypted with the subject key.
+- **Examiner role (0042):** implemented as one app-wide dependency that returns
+  403 on non-read requests for examiner tokens (allowlist: sign-in/out,
+  screening replay), so routes added later are covered too. Roles are
+  free-text strings, so no migration was needed (the ticket assumed one).
+- **Orchestrator:** now takes `run_model` and `on_time_limit` parameters, so
+  screening reuses stage timeouts, run budgets and isolated sessions. KYB
+  defaults are unchanged.
+- **Metrics finding (0045), a product decision to revisit:**
+  - Corpus results: blocking recall 1.0, FP rate at 100% recall 0.0,
+    reproducibility 1.0.
+  - Abstention is 1.0: every case lands in REVIEW. The default
+    `match_at = 0.9` is above name + full DOB (0.8), so nothing reaches MATCH
+    without a nationality or ID.
+  - Lowering `match_at` to 0.8 would be a new rule version, and a
+    risk-appetite call for the owner.
+- **Smoke run on the live lists:**
+  - A real, listed public figure (name + DOB + nationality) came back MATCH.
+  - A fictional person was auto-CLEARed.
+  - About 1.8 s per screening, against the PRD's 10 s target.
+- **Found on main:** commit 17c230f from the PR #1 branch (demo-seed guard +
+  HQ-confidence crash fix) never reached main. CLAUDE.md §12.1 describes a
+  guard that doesn't exist there. Restored on a separate fix branch.
+- **Follow-ups:**
+  - master-key rotation (re-wrap data keys);
+  - performance: decrypting all active subjects on each monitoring delta is
+    O(subjects);
+  - the UK list format watch;
+  - threshold tuning on labeled data.

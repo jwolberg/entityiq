@@ -68,9 +68,11 @@
   with its own queue and detail pages.
 
 ## Current Status
-- Overall status: Not Started
-- Current phase: Phase 0 — confirm open decisions and dependencies
-- Current ticket: IS0-T1 (see Recommended Next Step)
+- Overall status: v1 built (2026-09-24). Phases 0–2 and 5 complete (backlog
+  0027–0045, 0051, 0052); Phases 3–4 deferred (icebox 0046–0050).
+- Current phase: done for v1; next is tuning thresholds on labeled data (see
+  implementation-notes: abstention 100% on the corpus with default match_at 0.9)
+- Current ticket: none (Phase 3/4 await licensing and model decisions)
 - Blockers: none for Phase 0. Phase 1 tickets that depend on C4/C6/C8 or on new
   libraries wait for IS0-T1 / IS0-T2. Phase 3 is blocked on PEP/adverse-media
   licensing (IS3-T1); Phase 4 on a model-provider decision (IS4-T1).
@@ -105,7 +107,7 @@
   - Files likely involved: docs/decisions/ (new ADR), backend/pyproject.toml
   - Depends on: —
   - Acceptance criteria covered: PRD-IDV F6, C5, N1 (determinism)
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 
 ### Phase 1 — Foundations
 **Goal**
@@ -127,7 +129,7 @@
     backend/app/models/, alembic migration, backend/tests/
   - Depends on: —
   - Acceptance criteria covered: PRD-IDV §[12], §[14] (shared list infrastructure), F15
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS1-T2 — Parse person records from OFAC, UN, EU and UK lists
   - Objective: Parse individuals into `watchlist_record`: names/aliases (with
     script), DOBs (full/partial/year/range), POB, nationalities, ID documents,
@@ -135,7 +137,7 @@
   - Files likely involved: backend/app/lists/parsers/ (new), backend/tests/fixtures/
   - Depends on: IS1-T1
   - Acceptance criteria covered: PRD-IDV F1–F2 (structured sources), §[12]
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS1-T3 — Screening data model and migrations
   - Objective: Add the PRD §[15] tables (subject, run, candidate, claim,
     scoring_term, rule_version, decision_record, disposition) under
@@ -143,7 +145,7 @@
   - Files likely involved: backend/app/screening/models/ (new), alembic migration
   - Depends on: IS0-T1 (C1 vocabulary)
   - Acceptance criteria covered: PRD-IDV §[15], F13, F15
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS1-T4 — Enforce append-only at the database layer
   - Objective: Add triggers rejecting UPDATE/DELETE on `audit_event`,
     `decision_record` and `disposition` (Postgres raise; SQLite `RAISE(ABORT)`).
@@ -151,7 +153,7 @@
   - Files likely involved: alembic migration, .github/workflows/ci.yml, backend/tests/
   - Depends on: IS1-T3, IS0-T1 (C4)
   - Acceptance criteria covered: PRD-IDV F14, C4
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS1-T5 — Per-subject envelope encryption and crypto-shred
   - Objective: Encrypt subject PII and frozen inputs with a per-subject data key,
     wrapped by a master key from env. Shredding destroys the data key after the
@@ -160,7 +162,7 @@
     backend/app/screening/retention.py (new), docs/decisions/ (ADR-0003), RUNBOOK
   - Depends on: IS1-T3, IS0-T2
   - Acceptance criteria covered: PRD-IDV N5, C5
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS1-T6 — Adversarial name corpus v1 and evaluation harness
   - Objective: Check in a synthetic, fictional corpus of collision cases
     (transliteration, inversion, patronymics, nicknames, initials, common-name
@@ -169,7 +171,7 @@
   - Files likely involved: backend/tests/screening/corpus/ (new), backend/app/screening/eval.py
   - Depends on: —
   - Acceptance criteria covered: PRD-IDV §[7] (evaluation data, metrics), §[10]
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS1-T7 — Per-offering run budgets and a dedicated screening Celery queue
   - Objective: Make stage/run budgets per pipeline (screening defaults in seconds via
     `ENTITYIQ_SCREENING_*`), and route screening tasks to their own queue so KYB runs
@@ -178,7 +180,7 @@
     docs/RUNBOOK.md
   - Depends on: IS0-T1 (C8)
   - Acceptance criteria covered: PRD-IDV N3, C8
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 
 ### Phase 2 — Deterministic screening slice
 **Goal**
@@ -198,7 +200,7 @@
   - Files likely involved: backend/app/screening/api.py (new), schemas, tests
   - Depends on: IS1-T3, IS1-T5, IS1-T7
   - Acceptance criteria covered: PRD-IDV F0, §[16], N3
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS2-T2 — Person-name normalization and blocking with a recall gate
   - Objective: Normalize names (script, diacritics, particles, order) and generate
     blocking keys (transliteration + phonetic + token-set). Produce candidates with
@@ -206,7 +208,7 @@
   - Files likely involved: backend/app/screening/normalize.py, blocking.py (new), CI
   - Depends on: IS1-T2, IS1-T6, IS0-T2
   - Acceptance criteria covered: PRD-IDV F4–F6, §[7] (recall gate), §[10]
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS2-T3 — Scoring terms and versioned rule config
   - Objective: Implement the PRD §[13] term catalog (every term cites ≥1 claim) with
     weights and thresholds in `rule_version` rows; include name-frequency data for
@@ -214,7 +216,7 @@
   - Files likely involved: backend/app/screening/scoring.py (new), rule seed, tests
   - Depends on: IS2-T2
   - Acceptance criteria covered: PRD-IDV F7–F10, F13, §[13]
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS2-T4 — Disposition engine with guarded auto-CLEAR and a frozen decision record
   - Objective: Map scores to CLEAR/REVIEW/MATCH per the rule version. Auto-CLEAR only
     when every candidate is below the clear threshold and no source was unavailable
@@ -223,7 +225,7 @@
   - Files likely involved: backend/app/screening/dispose.py (new), tests
   - Depends on: IS2-T3, IS1-T4
   - Acceptance criteria covered: PRD-IDV F11–F12, F15, C2, N4
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS2-T5 — Replay endpoint and reproducibility check
   - Objective: `POST /screenings/{id}/replay` recomputes from the frozen inputs only
     (no list or network access) and reports match/mismatch; CI replays every corpus
@@ -231,7 +233,7 @@
   - Files likely involved: backend/app/screening/replay.py, api.py, tests
   - Depends on: IS2-T4
   - Acceptance criteria covered: PRD-IDV F16, N1, §[7] (reproducibility 100%)
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS2-T6 — Screening read and human-disposition API
   - Objective: `GET /screenings` (queue filters), `GET /screenings/{id}` (subject,
     candidates, terms with evidence, run timing), and
@@ -239,14 +241,14 @@
   - Files likely involved: backend/app/screening/api.py, schemas, tests
   - Depends on: IS2-T4
   - Acceptance criteria covered: PRD-IDV F12, §[16], N2
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS2-T7 — Read-only examiner role
   - Objective: Add `examiner` (read-only screening and audit views, replay; no
     dispositions or writes) on the existing auth path, with permission tests.
   - Files likely involved: backend/app/auth/, backend/app/models/operator.py, migration, tests
   - Depends on: IS0-T1 (C6), IS2-T5, IS2-T6
   - Acceptance criteria covered: PRD-IDV §[3], C6
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS2-T8 — Individuals queue and detail UI
   - Objective: An "Individuals" nav section: a queue sorted by disposition severity;
     a detail page with subject vs candidate side by side, each term with its evidence,
@@ -255,7 +257,7 @@
   - Files likely involved: frontend/src/pages/screening/ (new), api/client.ts, tests
   - Depends on: IS2-T6, IS2-T7
   - Acceptance criteria covered: PRD-IDV §[16] (UI), N2
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS2-T9 — Screening demo data and end-to-end test
   - Objective: Fictional subjects spanning CLEAR / REVIEW / MATCH against recorded
     list fixtures, loaded by the demo script; an e2e test from submit to disposition
@@ -263,7 +265,7 @@
   - Files likely involved: backend/app/screening/demo_data.py (new), scripts/demo.sh, tests
   - Depends on: IS2-T5, IS2-T6
   - Acceptance criteria covered: PRD-IDV §[18] phase 2, §[7]
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS2-T10 — Screening metrics report
   - Objective: Report FP rate at 100% recall, abstention rate, coverage and
     reproducibility over the corpus as a CI artifact; a lead-only metrics view is
@@ -271,7 +273,7 @@
   - Files likely involved: backend/app/screening/eval.py, CI workflow
   - Depends on: IS2-T5
   - Acceptance criteria covered: PRD-IDV §[7]
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 
 ### Phase 3 — PEP and adverse media
 **Goal**
@@ -348,14 +350,14 @@
   - Files likely involved: backend/app/lists/delta.py, backend/app/screening/monitor.py (new)
   - Depends on: IS2-T4
   - Acceptance criteria covered: PRD-IDV F17
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS5-T2 — Monitoring alerts in the queue
   - Objective: Surface monitoring-originated runs in the Individuals queue with their
     trigger (snapshot + changed record) and link to the prior decision.
   - Files likely involved: frontend/src/pages/screening/, backend/app/screening/api.py
   - Depends on: IS5-T1, IS2-T8
   - Acceptance criteria covered: PRD-IDV F17, N2
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 
 ---
 
