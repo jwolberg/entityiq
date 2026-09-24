@@ -1439,3 +1439,37 @@ single-tenant internal tool; multi-tenant would need per-client scoping.
   acceptance criterion) — the Identity Corroboration panel's visible content
   changed for 3 of 6 demo companies. Follow-up if the README screenshots are
   revisited.
+
+---
+
+## 2026-09-24 — Filter dashboard by triage tier (backlog 0023)
+
+- **Backend:** `GET /reports` gains an optional `triage_tier` query param,
+  matched exactly against the tier stored in `report.summary.scores.triage_tier`
+  (same "read the pre-assembled JSON summary" pattern `_serialize_report`
+  already uses — no join, no new column). Unvalidated string equality, same
+  as the existing `event_type` filter on `GET /audit/events` — an unknown
+  value just returns an empty list rather than a 422; there's no enum type
+  for `triage_tier` anywhere else in the codebase to reuse.
+- **Frontend:** the dashboard's risk-band select (`RiskFilter` / `riskBand()`,
+  score buckets `<40` / `40–69` / `70+`) is replaced by a `TierFilter` select
+  keyed directly off `item.triage_tier`. Filtering stays client-side over the
+  already-fetched list, consistent with the existing search/review-status
+  filters (`docs/implementation-notes.md` 2026-05-31 P2-T10) — the new
+  `?triage_tier=` query param exists for API consumers, but the dashboard
+  itself doesn't need a network round-trip per filter change since the full
+  list (with `triage_tier` per item) is already in hand.
+- `data-testid="filter-risk"` renamed to `filter-tier`; `RiskFilter`/`riskBand`
+  removed (`scoreColor`'s tier-wins-over-band logic was untouched — it
+  already prioritized `triage_tier` over the score, per the 2026-09-24
+  "dashboard showed a sanctions hit as low risk" fix).
+- **Tests:** `test_list_filters_by_triage_tier` (backend) covers the
+  motivating case directly — a sanctions-style report at score 22 with
+  `triage_tier=escalate` is returned by `?triage_tier=escalate` and excluded
+  by `review`/`pre_clear`. `Dashboard.test.tsx`'s combined filter test was
+  rewritten (not appended) to drive the same scenario through the UI: a
+  high-score `review`-tier item and a low-score `escalate`-tier item,
+  asserting the escalate filter selects by tier, not score.
+- **Validation:** backend `ruff check`/`ruff format --check` clean, `pytest`
+  → 554 passed. Frontend `npm run lint` clean, `vitest run` → 41 passed (6
+  files), `npm run build` succeeds.

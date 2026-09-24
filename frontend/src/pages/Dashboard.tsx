@@ -70,15 +70,7 @@ function formatDate(iso: string | null): string {
 }
 
 type ReviewFilter = "all" | "pending" | "reviewed";
-type RiskFilter = "all" | "low" | "medium" | "high";
-
-/** Risk band for a score: low < 40 ≤ medium < 70 ≤ high. */
-function riskBand(score: number | null): RiskFilter | null {
-  if (score === null) return null;
-  if (score >= 70) return "high";
-  if (score >= 40) return "medium";
-  return "low";
-}
+type TierFilter = "all" | "escalate" | "review" | "pre_clear";
 
 export function Dashboard({ onSelect }: DashboardProps) {
   const { auth } = useAuth();
@@ -89,7 +81,7 @@ export function Dashboard({ onSelect }: DashboardProps) {
   // Filters / search (client-side over the fetched list)
   const [search, setSearch] = useState("");
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
-  const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
+  const [tierFilter, setTierFilter] = useState<TierFilter>("all");
 
   // New-company form modal + queue refresh trigger
   const [showForm, setShowForm] = useState(false);
@@ -126,14 +118,14 @@ export function Dashboard({ onSelect }: DashboardProps) {
     }
     if (reviewFilter === "pending" && item.review_status !== null) return false;
     if (reviewFilter === "reviewed" && item.review_status === null) return false;
-    if (riskFilter !== "all" && riskBand(item.overall_score) !== riskFilter) {
+    if (tierFilter !== "all" && item.triage_tier !== tierFilter) {
       return false;
     }
     return true;
   });
 
   const filtersActive =
-    query !== "" || reviewFilter !== "all" || riskFilter !== "all";
+    query !== "" || reviewFilter !== "all" || tierFilter !== "all";
 
   return (
     <div>
@@ -190,16 +182,16 @@ export function Dashboard({ onSelect }: DashboardProps) {
             <option value="reviewed">Reviewed</option>
           </select>
           <select
-            value={riskFilter}
-            onChange={(e) => setRiskFilter(e.target.value as RiskFilter)}
-            aria-label="Filter by risk level"
+            value={tierFilter}
+            onChange={(e) => setTierFilter(e.target.value as TierFilter)}
+            aria-label="Filter by triage tier"
             style={styles.select}
-            data-testid="filter-risk"
+            data-testid="filter-tier"
           >
-            <option value="all">All risk levels</option>
-            <option value="high">High (70+)</option>
-            <option value="medium">Medium (40–69)</option>
-            <option value="low">Low (&lt;40)</option>
+            <option value="all">All tiers</option>
+            <option value="escalate">{TIER_LABEL.escalate}</option>
+            <option value="review">{TIER_LABEL.review}</option>
+            <option value="pre_clear">{TIER_LABEL.pre_clear}</option>
           </select>
         </div>
       )}
