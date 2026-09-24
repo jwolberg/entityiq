@@ -67,6 +67,13 @@ class Scenario:
     ip: dict = field(default_factory=dict)
     html: str = ""
     hq: tuple[float, float] | None = None  # recorded geocode (lat, lon)
+    # Identity corroboration (IC1, ticket 0053). Submitted values plus the
+    # scenario-specific StubTaxIdProvider / StubLinkedInProvider records that
+    # back them. Empty defaults mean "not submitted" (source unavailable).
+    tax_id: str | None = None
+    tax_id_records: dict[str, dict] = field(default_factory=dict)
+    linkedin_url: str | None = None
+    linkedin_pages: list[dict] = field(default_factory=list)
 
 
 def _registry_company(name: str, number: str, status: str, jur: str, addr: str):
@@ -128,6 +135,30 @@ SCENARIOS: list[Scenario] = [
             "<p>Team: maria.anders@northwindtraders.com,"
             " thomas.hardy@northwindtraders.com</p>",
         ),
+        # Verified FEIN, name match; established LinkedIn page whose website
+        # matches the submitted domain (identity corroboration, ticket 0053).
+        tax_id="91-6003123",
+        tax_id_records={
+            "916003123": {
+                "status": "active",
+                "registered_name": "Northwind Traders Inc",
+                "entity_type": "corporation",
+                "jurisdiction": "US-WA",
+            },
+        },
+        linkedin_url="https://www.linkedin.com/company/northwind-traders",
+        linkedin_pages=[
+            {
+                "url": "https://www.linkedin.com/company/northwind-traders",
+                "name": "Northwind Traders Inc",
+                "employee_count": 850,
+                "followers": 15400,
+                "founded_year": 2004,
+                "website": "https://www.northwindtraders.com",
+                "page_created": "2010-04-01",
+                "associated_people": ["Maria Anders"],
+            },
+        ],
     ),
     Scenario(
         company_name="Fabrikam Robotics Corp",
@@ -222,6 +253,9 @@ SCENARIOS: list[Scenario] = [
             "Brightpath",
             "<p>Last-mile delivery for independent retailers.</p>",
         ),
+        # Submitted FEIN doesn't resolve with the tax-ID source — an unknown
+        # FEIN is itself a finding (identity corroboration, ticket 0053).
+        tax_id="88-4471002",
     ),
     Scenario(
         company_name="Quantum Ledger Holdings",
@@ -247,6 +281,9 @@ SCENARIOS: list[Scenario] = [
             "org": "AS14061 DigitalOcean, LLC",
         },
         html=_site("Coming soon", "<p>Site under construction.</p>"),
+        # Submitted LinkedIn URL doesn't resolve — no page by that slug
+        # (identity corroboration, ticket 0053).
+        linkedin_url="https://www.linkedin.com/company/quantum-ledger-holdings",
     ),
     Scenario(
         company_name="Volga Maritime Trading Ltd",
@@ -375,7 +412,7 @@ def _stages(s: Scenario) -> list:
         NormalizeInputStage(),
         ResolveEntityCandidatesStage(),
         QueryRegistriesStage(OpenCorporatesAdapter(http_client=registry_http)),
-        VerifyTaxIdStage(TaxIdAdapter(provider=StubTaxIdProvider())),
+        VerifyTaxIdStage(TaxIdAdapter(provider=StubTaxIdProvider(s.tax_id_records))),
         SanctionsScreeningStage(fetcher=_Sdn()),
         AnalyzeDomainStage(
             whois_client=_Whois(s.domain_age_days),
@@ -384,7 +421,9 @@ def _stages(s: Scenario) -> list:
         ),
         EnrichNetworkIPStage(IPInfoAdapter(http_client=_Http(200, s.ip))),
         WebEvidenceStage(fetcher=_Web(s.html)),
-        VerifyLinkedInStage(LinkedInAdapter(provider=StubLinkedInProvider())),
+        VerifyLinkedInStage(
+            LinkedInAdapter(provider=StubLinkedInProvider(s.linkedin_pages))
+        ),
         ConsistencyChecksStage(),
         GeocodeHQStage(GeocodeAdapter(http_client=_Http(200, geocode))),
         ScoringStage(),
@@ -412,6 +451,8 @@ def load_demo_data(db: Session) -> int:
             billing_address=s.billing_address,
             requester_full_name=s.requester_full_name,
             source_ip=s.source_ip,
+            tax_id=s.tax_id,
+            linkedin_url=s.linkedin_url,
             user_agent="Mozilla/5.0 (demo dataset)",
             endpoint="/submissions",
             submitted_at=datetime.now(tz=timezone.utc),

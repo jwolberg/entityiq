@@ -91,3 +91,36 @@ def test_each_demo_run_has_an_audit_trail(db):
             db.query(AuditEvent).filter(AuditEvent.verification_run_id == run.id).all()
         )
         assert any(e.event_type.endswith("submission_received") for e in events)
+
+
+def test_identity_corroboration_states_are_represented(db):
+    """Ticket 0053: the demo dataset must show every identity state, not just
+    the "not available" state every scenario had before scenario-specific
+    tax-ID / LinkedIn records were added.
+    """
+    from app.models.evidence import Evidence
+
+    load_demo_data(db)
+    evidence = db.query(Evidence).all()
+
+    tax_id_status = {e.normalized_value for e in evidence if e.field == "tax_id_status"}
+    assert "verified" in tax_id_status, "expected at least one verified FEIN"
+    assert "not_found" in tax_id_status, "expected at least one unknown FEIN"
+
+    name_match = {
+        e.normalized_value for e in evidence if e.field == "tax_id_name_match"
+    }
+    assert "match" in name_match, "expected a verified FEIN with a name match"
+
+    linkedin_presence = {
+        e.normalized_value for e in evidence if e.field == "linkedin_presence"
+    }
+    assert "found" in linkedin_presence, "expected an established LinkedIn page"
+    assert (
+        "not_found" in linkedin_presence
+    ), "expected a submitted LinkedIn URL that doesn't resolve"
+
+    linkedin_website = [e for e in evidence if e.field == "linkedin_website"]
+    assert any(
+        e.raw_value for e in linkedin_website
+    ), "expected the established LinkedIn page to list a matching website"

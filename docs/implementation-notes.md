@@ -1392,3 +1392,50 @@ single-tenant internal tool; multi-tenant would need per-client scoping.
 - **Not covered by this pass:** a production frontend build inside Docker
   (out of scope — see "ui service" note above), and TLS/ingress (MVP has
   none anywhere yet).
+
+---
+
+## 2026-09-24 — Demo identity corroboration records (backlog 0053)
+
+- **Which scenarios got which state** (design note left this open): the four
+  required states landed on three scenarios, chosen so the added signals
+  reinforce rather than contest each scenario's existing story — no tier
+  changed, so no deliberate `expected_tier` edits were needed.
+  - Northwind Traders Inc (`pre_clear`): verified FEIN with a name match
+    (`tax_id_verified_active`) + an established LinkedIn page whose website
+    matches the domain (`linkedin_established_presence`,
+    `linkedin_presence_corroborates_entity`) — both trust signals on an
+    already-clean scenario.
+  - Brightpath Logistics LLC (`review`): FEIN not on file
+    (`tax_id_not_found`, elevated 0.5) — added to a scenario already
+    `review` for other reasons; the tier test confirms it doesn't push it
+    to `escalate`.
+  - Quantum Ledger Holdings (`escalate`): submitted LinkedIn URL doesn't
+    resolve (`linkedin_absent_or_thin`, elevated 0.15) — low weight, and
+    the scenario is already `escalate` on domain/registry signals alone.
+  - Tax-ID verification is US-only (`TaxIdAdapter.fetch`), so only the
+    three US scenarios (Northwind, Fabrikam, Brightpath) were even eligible
+    for a FEIN.
+  - Fabrikam Robotics Corp, Contoso Analytics GmbH, and Volga Maritime
+    Trading Ltd were left without tax-ID/LinkedIn records — the four
+    required states were already covered, and per the "smallest change"
+    rule, extra flavor records weren't added without a concrete need.
+- **New test:** `test_identity_corroboration_states_are_represented`
+  (`backend/tests/test_demo_data.py`) asserts the evidence table contains a
+  verified + name-matched FEIN, a not-found FEIN, a found LinkedIn page with
+  a matching website, and a not-found LinkedIn page — i.e. that the Identity
+  Corroboration panel actually has something to show for these scenarios,
+  not just that the tier test still passes.
+- **Production untouched:** `demo_data._stages` passes
+  `StubTaxIdProvider(s.tax_id_records)` / `StubLinkedInProvider(s.linkedin_pages)`
+  explicitly per scenario, rather than relying on the stub classes'
+  `DEFAULT_STUB_*` fallback tables (which are keyed to an unrelated "Acme
+  Corporation" fixture and would otherwise leak into scenarios that don't
+  intend a match). The real API/pipeline entrypoint still calls
+  `provider_from_env()`, which defaults to `Unconfigured*Provider` unless
+  `ENTITYIQ_TAX_ID_PROVIDER` / `ENTITYIQ_LINKEDIN_PROVIDER` is set to
+  `stub`.
+- **Not done:** README screenshots weren't refreshed (a design note, not an
+  acceptance criterion) — the Identity Corroboration panel's visible content
+  changed for 3 of 6 demo companies. Follow-up if the README screenshots are
+  revisited.
