@@ -39,6 +39,14 @@ jobs:
         run: ruff format --check .
       - name: Tests
         run: pytest -q
+      - name: Screening metrics (gates recall + reproducibility)
+        run: python -m app.screening.metrics screening-metrics.json
+      - name: Upload screening metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screening-metrics
+          path: backend/screening-metrics.json
 
   frontend:
     runs-on: ubuntu-latest
