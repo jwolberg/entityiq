@@ -19,8 +19,10 @@ if TYPE_CHECKING:
 
 
 def screening_stages() -> list["PipelineStage"]:
-    """Ordered screening stages (filled in by tickets 0036–0039)."""
-    return []
+    """Ordered screening stages: block → score → dispose (0037–0039)."""
+    from app.screening.stages import BlockCandidatesStage  # noqa: PLC0415
+
+    return [BlockCandidatesStage()]
 
 
 def _no_partial_report(run_id: str, db: "Session") -> None:
