@@ -16,7 +16,7 @@ Tables are prefixed ``screening_`` so they're namespaced away from KYB.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     JSON,
@@ -252,6 +252,11 @@ class ScreeningDisposition(Base):
     operator_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("operator.id"), nullable=False
     )
+    # Set in Python (microseconds) so history orders reliably even when two
+    # dispositions land within the same second; server default as fallback.
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True),
+        default=lambda: datetime.now(tz=timezone.utc),
+        server_default=func.now(),
+        nullable=False,
     )
