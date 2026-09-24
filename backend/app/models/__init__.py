@@ -5,6 +5,8 @@ Import all models here so that:
   2. Application code has a single convenient import path.
 """
 
+# Individual screening tables (PRD-IDV §[15]) register with the same metadata.
+import app.screening.models  # noqa: E402,F401
 from app.models.api_client import ApiClient
 from app.models.audit_event import AuditEvent
 from app.models.entity import Entity
