@@ -70,13 +70,14 @@ is fallback enrichment only.
 2. **Resolve entity candidates** — match the submission to candidate real-world
    entities.
 3. **Query authoritative registries** — business registries, OpenCorporates,
-   sanctions/watchlists (Tier 1).
+   tax-ID/FEIN verification (US), sanctions/watchlists (Tier 1).
 4. **Analyze domain infrastructure** — WHOIS age, DNS, MX, SPF/DKIM, SSL, registrar
    reputation (Tier 2).
 5. **Enrich network/IP** — IPinfo on the captured submission IP: geo, ASN/ISP,
    hosting/VPN/proxy flags, reuse patterns.
 6. **Crawl/extract public web evidence** — site, contacts, directories, press
-   footprint (Tier 3, fallback).
+   footprint, LinkedIn company page via a licensed provider, never scraped
+   (Tier 3, fallback).
 7. **Consistency checks** — submitted vs. discovered field comparisons; cross-source
    mismatches; risk/trust signals.
 8. **Generate risk assessment** — four-layer scores + overall 0–100 + flags + triage
@@ -133,9 +134,10 @@ pipeline from per-source quirks and the PRD's known "scraping brittleness" risk.
 - **Rate limiting & backoff** — per source, respecting provider quotas.
 - **Graceful degradation** — an unavailable source yields a `unavailable` section,
   not a failed run; scoring accounts for reduced coverage.
-- **Source tiers** — Tier 1 authoritative (registries, sanctions, OpenCorporates),
-  Tier 2 infrastructure (WHOIS/DNS/SSL, IPinfo), Tier 3 public web (Playwright
-  fallback). Authoritative sources are tried first and weighted highest.
+- **Source tiers** — Tier 1 authoritative (registries, sanctions, OpenCorporates,
+  tax ID/FEIN), Tier 2 infrastructure (WHOIS/DNS/SSL, IPinfo), Tier 3 public web
+  (Playwright fallback, LinkedIn). Identity sources default to an unconfigured
+  provider (source unavailable) until Open Decision #5 selects vendors. Authoritative sources are tried first and weighted highest.
 
 ## 5. Authentication & authorization
 
