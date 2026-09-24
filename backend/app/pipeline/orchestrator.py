@@ -26,10 +26,12 @@ task_always_eager=True for integration tests that still need the Celery path.
 from __future__ import annotations
 
 import logging
+import threading
 import traceback
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from app.models.verification_run import VerificationRun
@@ -109,6 +111,94 @@ def default_stages() -> list[PipelineStage]:
     ]
 
 
+class StageTimeout(Exception):
+    """A stage exceeded the orchestrator's per-stage time budget."""
+
+
+def _run_stage_isolated(
+    stage: PipelineStage,
+    run_id: str,
+    db: Session,
+    context: dict,
+    timeout_seconds: float,
+) -> dict:
+    """Run one stage in a worker thread on its own session, bounded in time.
+
+    The stage gets a fresh Session inside its own transaction on the same bind
+    as ``db`` (its commits become savepoints).  The transaction is committed
+    only if the stage finishes within budget; a timed-out stage is abandoned
+    and everything it wrote is rolled back when it eventually returns, so late
+    writes never land.  Raises StageTimeout on timeout, or re-raises the
+    stage's own exception.
+    """
+    lock = threading.Lock()
+    # "settled" flips under the lock once the worker has committed or rolled
+    # back, so the caller's timeout check and the worker's commit can't race.
+    state: dict = {"abandoned": False, "settled": False}
+    done = threading.Event()
+
+    def worker() -> None:
+        bind = db.get_bind()
+        owns_conn = isinstance(bind, Engine)
+        conn = bind.connect() if owns_conn else bind
+        if owns_conn:
+            # Production path: a plain transaction on a fresh connection.  In
+            # "rollback_only" mode the stage's own commit() calls don't commit
+            # it — only the orchestrator does, below — and no SAVEPOINTs are
+            # needed (pysqlite mishandles them by default).
+            trans = conn.begin()
+            join_mode = "rollback_only"
+        else:
+            # Caller bound the session to a Connection with a transaction
+            # already open (tests): nest so the stage's writes can be undone.
+            trans = conn.begin_nested()
+            join_mode = "create_savepoint"
+        sess = Session(bind=conn, join_transaction_mode=join_mode)
+        try:
+            result = stage.run(run_id, sess, dict(context))
+            # Close out the session's own transaction first; ``trans`` still
+            # decides whether any of it is kept.
+            sess.commit()
+            with lock:
+                if state["abandoned"]:
+                    if trans.is_active:
+                        trans.rollback()
+                else:
+                    if trans.is_active:
+                        trans.commit()
+                    state["result"] = result
+                state["settled"] = True
+        except BaseException as exc:  # noqa: BLE001 — surfaced to the caller
+            sess.rollback()
+            with lock:
+                if trans.is_active:
+                    trans.rollback()
+                state["error"] = exc
+                state["settled"] = True
+        finally:
+            sess.close()
+            if owns_conn:
+                conn.close()
+            done.set()
+
+    thread = threading.Thread(
+        target=worker, name=f"stage-{stage.name}-{run_id}", daemon=True
+    )
+    thread.start()
+    done.wait(timeout_seconds)
+    with lock:
+        if not state["settled"]:
+            state["abandoned"] = True
+            raise StageTimeout(
+                f"stage {stage.name!r} exceeded {timeout_seconds:.1f}s budget"
+            )
+    if "error" in state:
+        raise state["error"]
+    # The stage committed on another session; drop our stale identity map.
+    db.expire_all()
+    return state["result"]
+
+
 class Orchestrator:
     """Drives a VerificationRun through an ordered list of pipeline stages.
 
@@ -116,10 +206,28 @@ class Orchestrator:
         stages: Ordered list of PipelineStage instances.  Stages execute in
                 order; a failing stage is skipped (unavailable) but the run
                 continues.
+        stage_timeout_seconds: Per-stage time budget.  When set, each stage
+                runs in a worker thread on its own DB session and is recorded
+                as unavailable (its writes discarded) if it overruns.  None
+                keeps the original in-thread, shared-session behavior.
     """
 
-    def __init__(self, stages: list[PipelineStage]) -> None:
+    def __init__(
+        self,
+        stages: list[PipelineStage],
+        stage_timeout_seconds: float | None = None,
+    ) -> None:
         self.stages = stages
+        self.stage_timeout_seconds = stage_timeout_seconds
+
+    def _run_stage(
+        self, stage: PipelineStage, run_id: str, db: Session, context: dict
+    ) -> dict:
+        if self.stage_timeout_seconds is None:
+            return stage.run(run_id, db, context)
+        return _run_stage_isolated(
+            stage, run_id, db, context, self.stage_timeout_seconds
+        )
 
     # ------------------------------------------------------------------
     # Public: synchronous execution (used directly in tests and by the
@@ -156,7 +264,7 @@ class Orchestrator:
                 )
                 try:
                     before = context
-                    context = stage.run(run_id, db, context)
+                    context = self._run_stage(stage, run_id, db, context)
                     # Persist partial result visibility after each stage.
                     status = (
                         STAGE_UNAVAILABLE
