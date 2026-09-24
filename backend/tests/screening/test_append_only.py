@@ -129,3 +129,71 @@ def test_triggers_are_removed_on_downgrade(tmp_path, monkeypatch):
         }
     engine.dispose()
     assert not any("append_only" in n for n in names)
+
+
+@pytest.mark.parametrize("which", ["sqlite", "postgres"])
+def test_retention_jobs_run_cleanly_with_the_triggers_in_place(
+    which, tmp_path, monkeypatch
+):
+    """KYB retention and crypto-shredding never UPDATE/DELETE append-only rows.
+
+    If either did, the trigger would abort the whole retention pass in prod.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.db.retention import run_retention
+    from app.screening.retention import shred_expired
+    from tests.test_retention import (
+        _entity,
+        _linkedin_evidence,
+        _review,
+        _run,
+        _submission,
+    )
+
+    urls = _urls(tmp_path)
+    if which == "postgres" and len(urls) < 2:
+        pytest.skip("TEST_POSTGRES_URL not set")
+    url = urls[0] if which == "sqlite" else urls[1]
+    cfg = _migrated(url, monkeypatch)
+    engine = create_engine(url)
+    now = datetime(2032, 1, 1, tzinfo=timezone.utc)
+    try:
+        with Session(engine) as db:
+            ids = _seed(db)
+            long_ago = now - timedelta(days=4000)
+            sub = _submission(
+                db, entity=_entity(db, name="Acme"), submitted_at=long_ago
+            )
+            run = _run(db, submission=sub)
+            _review(db, run=run, decided_at=long_ago)
+            _linkedin_evidence(db, run=run)
+            subject = db.get(
+                ScreeningSubject,
+                db.get(
+                    ScreeningRun,
+                    db.get(ScreeningDecision, ids["screening_decision"]).run_id,
+                ).subject_id,
+            )
+            subject.relationship_ended_at = long_ago
+            db.commit()
+
+            def snapshot():
+                return {
+                    t: db.execute(
+                        text(f"SELECT * FROM {t} WHERE id = :id"), {"id": ids[t]}
+                    ).one()
+                    for t in _TABLES
+                }
+
+            before = snapshot()
+            counts = run_retention(db, now=now)
+            shredded = shred_expired(db, now=now)
+            db.commit()
+            db.expire_all()
+            assert counts["reviewed_pii"] == 1 and shredded == 1
+            assert snapshot() == before
+    finally:
+        engine.dispose()
+        if which == "postgres":
+            command.downgrade(cfg, "base")
