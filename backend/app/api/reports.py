@@ -33,6 +33,7 @@ from app.schemas.report import (
     ReportListResponse,
     ReportResponse,
     ReviewSummarySchema,
+    RunTimingSchema,
     ScoresSchema,
     SectionStatuses,
     SourceSummarySchema,
@@ -77,8 +78,23 @@ def _review_summary(db: Session, run_id: str) -> ReviewSummarySchema | None:
     )
 
 
+def _run_timing(run: VerificationRun) -> RunTimingSchema:
+    duration = None
+    if run.started_at is not None and run.finished_at is not None:
+        duration = (run.finished_at - run.started_at).total_seconds()
+    return RunTimingSchema(
+        status=run.status,
+        started_at=run.started_at.isoformat() if run.started_at else None,
+        finished_at=run.finished_at.isoformat() if run.finished_at else None,
+        duration_seconds=duration,
+        stages=dict(run.source_availability or {}),
+    )
+
+
 def _serialize_report(
-    report: Report, review: ReviewSummarySchema | None = None
+    report: Report,
+    review: ReviewSummarySchema | None = None,
+    run: VerificationRun | None = None,
 ) -> ReportResponse:
     """Convert a Report ORM row + its summary dict into a ReportResponse.
 
@@ -163,6 +179,7 @@ def _serialize_report(
         sources=sources,
         generated_at=generated_at,
         review=review,
+        run=_run_timing(run) if run is not None else None,
     )
 
 
@@ -289,7 +306,9 @@ def export_report(
         ),
     )
 
-    return _serialize_report(report, _review_summary(db, report.verification_run_id))
+    return _serialize_report(
+        report, _review_summary(db, report.verification_run_id), run
+    )
 
 
 @router.get(
@@ -328,4 +347,6 @@ def get_report(
             ),
         )
 
-    return _serialize_report(report, _review_summary(db, report.verification_run_id))
+    return _serialize_report(
+        report, _review_summary(db, report.verification_run_id), run
+    )
