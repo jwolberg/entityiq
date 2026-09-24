@@ -11,6 +11,7 @@ from app.api.reviews import router as reviews_router
 from app.api.submissions import router as submissions_router
 from app.api.workflow import router as workflow_router
 from app.auth.operator import auth_router, configure_session_store
+from app.screening.api import router as screening_router
 
 
 @asynccontextmanager
@@ -38,6 +39,7 @@ app.include_router(workflow_router)
 app.include_router(audit_router)
 app.include_router(api_clients_router)
 app.include_router(ownership_router)
+app.include_router(screening_router)
 
 
 @app.get("/health")
