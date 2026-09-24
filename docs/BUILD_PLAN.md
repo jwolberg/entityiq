@@ -78,7 +78,7 @@
   submitted-vs-discovered fields, and mark it reviewed.
 - Blockers: Open Decision #5 (data-source licensing) UNRESOLVED. OpenCorporates
   now needs an API token even for dev use (P4-T3 makes it configurable).
-  IPINFO_TOKEN production plan unresolved; free tier works. #4 blocks P2-T9;
+  IPINFO_TOKEN production plan unresolved; free tier works. #4 resolved 2026-09-24 (P2-T9 done);
   #7 blocks P3-T3.
 
 ---
@@ -294,7 +294,10 @@ _Track: Operator workbench_
     · Gap (2026-09-24): saved notes and review state are never read back → P4-T5.
 - P2-T9 — HQ visualization (map + address confidence)
   - Depends on: P2-T8; **Open decision #4 (map provider)** · AC: PRD § FE § HQ
-    Visualization · Status: Todo
+    Visualization · Status: Complete (2026-09-24) — Open Decision #4 resolved (OSM embed +
+    Nominatim). New `geocode_hq` stage (after consistency) emits coordinates + address
+    confidence (high: registry+submission agree / medium: registry only / low: self-reported
+    or conflicting); HqPanel on the detail page; live Nominatim lookup verified.
 - P2-T10 — Full operator actions + dashboard filters
   - Objective: correct submitted data + re-run, re-trigger analysis, add notes,
     export report; dashboard filters/search.
@@ -490,7 +493,7 @@ _Track: Integration & reporting API_
 22. P2-T11
 23. P2-T12
 24. P2-T8
-25. P2-T9   (blocked on Open decision #4 — rescheduled at 35)
+25. P2-T9   (rescheduled at 35)
 26. P2-T10
 27. P4-T1   ← start here (2026-09-24 assessment)
 28. P4-T3
@@ -500,7 +503,7 @@ _Track: Integration & reporting API_
 32. P4-T5
 33. P4-T6
 34. P5-T3
-35. P2-T9   (Open decision #4 — recommend Leaflet + OpenStreetMap, no key)
+35. P2-T9   (Open decision #4 resolved: OSM embed + Nominatim)
 36. P3-T2
 37. P5-T1
 38. P4-T2

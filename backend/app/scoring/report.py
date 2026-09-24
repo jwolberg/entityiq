@@ -83,6 +83,7 @@ _STAGE_SOURCES: dict[str, tuple[str, int]] = {
     "analyze_domain": ("domain", 2),
     "enrich_network_ip": ("ipinfo", 2),
     "web_evidence": ("web", 3),
+    "geocode_hq": ("geocode", 3),
 }
 
 

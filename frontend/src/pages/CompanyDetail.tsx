@@ -18,6 +18,7 @@ import { RegistrationDiff } from "../components/RegistrationDiff";
 import {
   ContactPanel,
   DomainPanel,
+  HqPanel,
   RegistryPanel,
   RiskAssessmentPanel,
 } from "../components/DetailPanels";
@@ -227,6 +228,15 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
           <section style={styles.section}>
             <h3 style={styles.sectionTitle}>Registry Information</h3>
             <RegistryPanel
+              evidence={report.evidence}
+              status={report.section_statuses.evidence}
+            />
+          </section>
+
+          {/* HQ Visualization */}
+          <section style={styles.section}>
+            <h3 style={styles.sectionTitle}>Headquarters</h3>
+            <HqPanel
               evidence={report.evidence}
               status={report.section_statuses.evidence}
             />

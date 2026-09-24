@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from app.adapters.domain import AnalyzeDomainStage
+from app.adapters.geocode import GeocodeAdapter, GeocodeHQStage
 from app.adapters.ipinfo import EnrichNetworkIPStage, IPInfoAdapter
 from app.adapters.opencorporates import OpenCorporatesAdapter, QueryRegistriesStage
 from app.adapters.sanctions import SanctionsScreeningStage
@@ -58,6 +59,7 @@ class Scenario:
     registry: list[dict] | None = None  # None → registry source unavailable
     ip: dict = field(default_factory=dict)
     html: str = ""
+    hq: tuple[float, float] | None = None  # recorded geocode (lat, lon)
 
 
 def _registry_company(name: str, number: str, status: str, jur: str, addr: str):
@@ -88,6 +90,7 @@ SCENARIOS: list[Scenario] = [
         country="US",
         billing_address="400 Pine Street, Seattle, WA 98101",
         requester_full_name="Maria Anders",
+        hq=(47.6114, -122.3366),
         source_ip="73.162.40.18",
         expected_tier="pre_clear",
         story="Established distributor: 20-year domain, registry match, clean.",
@@ -126,6 +129,7 @@ SCENARIOS: list[Scenario] = [
         country="US",
         billing_address="1 Innovation Way, Austin, TX 78701",
         requester_full_name="Dana Whitfield",
+        hq=(30.2672, -97.7431),
         source_ip="104.28.9.77",
         expected_tier="pre_clear",
         story="Mid-size manufacturer; all tiers corroborate the submission.",
@@ -162,6 +166,7 @@ SCENARIOS: list[Scenario] = [
         country="DE",
         billing_address="12 Hauptstrasse, Berlin 10115",
         requester_full_name="Jonas Becker",
+        hq=(52.5321, 13.3849),
         source_ip="185.220.101.33",
         expected_tier="review",
         story="Real-looking German firm, but no registry record found and the"
@@ -190,6 +195,7 @@ SCENARIOS: list[Scenario] = [
         country="US",
         billing_address="88 Harbor Blvd, Oakland, CA 94607",
         requester_full_name="Sam Ortega",
+        hq=(37.7955, -122.2789),
         source_ip="98.207.12.200",
         expected_tier="review",
         story="Young company: 8-month domain, registered name differs from the"
@@ -217,6 +223,7 @@ SCENARIOS: list[Scenario] = [
         country="GB",
         billing_address="Suite 400, 1 Canada Square, London",
         requester_full_name="Alex Reed",
+        hq=(51.5049, -0.0195),
         source_ip="159.89.14.2",
         expected_tier="escalate",
         story="Likely shell: 3-week-old domain, no mail server, no registry"
@@ -241,6 +248,7 @@ SCENARIOS: list[Scenario] = [
         country="CY",
         billing_address="5 Makariou Avenue, Limassol",
         requester_full_name="Ivan Petrov",
+        hq=(34.6786, 33.0413),
         source_ip="45.137.21.9",
         expected_tier="escalate",
         story="Name matches an entry on the (fictional) sanctions list.",
@@ -351,6 +359,11 @@ def _stages(s: Scenario) -> list:
         registry_http = _Http(
             200, {"results": {"companies": s.registry, "total_count": len(s.registry)}}
         )
+    geocode = (
+        [{"lat": str(s.hq[0]), "lon": str(s.hq[1]), "display_name": s.billing_address}]
+        if s.hq
+        else []
+    )
     return [
         NormalizeInputStage(),
         ResolveEntityCandidatesStage(),
@@ -364,6 +377,7 @@ def _stages(s: Scenario) -> list:
         EnrichNetworkIPStage(IPInfoAdapter(http_client=_Http(200, s.ip))),
         WebEvidenceStage(fetcher=_Web(s.html)),
         ConsistencyChecksStage(),
+        GeocodeHQStage(GeocodeAdapter(http_client=_Http(200, geocode))),
         ScoringStage(),
         StoreReportStage(),
     ]

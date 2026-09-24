@@ -178,6 +178,66 @@ describe("CompanyDetail", () => {
     vi.restoreAllMocks();
   });
 
+  it("renders the HQ map at the geocoded point with address confidence", async () => {
+    const geo = (field: string, value: string) => ({
+      id: `ev-geo-${field}`,
+      source: "geocode",
+      tier: 3,
+      field,
+      raw_value: value,
+      normalized_value: value,
+      confidence: 0.7,
+      attribution: { provider: "openstreetmap_nominatim" },
+      fetched_at: null,
+    });
+    const report = {
+      ...COMPLETE_REPORT,
+      evidence: [
+        ...COMPLETE_REPORT.evidence,
+        geo("hq_latitude", "47.6114"),
+        geo("hq_longitude", "-122.3366"),
+        geo("hq_display_name", "400 Pine Street, Seattle"),
+        geo("hq_address_source", "registry"),
+        geo("hq_address_confidence", "high"),
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ ok: true, json: async () => report })
+    );
+
+    render(
+      <Wrapper>
+        <CompanyDetail runId="run-abc" onBack={vi.fn()} />
+      </Wrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("hq-panel")).toBeDefined();
+    });
+    const map = screen.getByTestId("hq-map") as HTMLIFrameElement;
+    expect(map.src).toContain("openstreetmap.org/export/embed.html");
+    expect(map.src).toContain("marker=47.6114%2C-122.3366");
+    expect(screen.getByTestId("hq-confidence").textContent).toContain("High");
+    expect(screen.getByText("400 Pine Street, Seattle")).toBeDefined();
+  });
+
+  it("explains a missing HQ location instead of showing an empty map", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ ok: true, json: async () => COMPLETE_REPORT })
+    );
+    render(
+      <Wrapper>
+        <CompanyDetail runId="run-abc" onBack={vi.fn()} />
+      </Wrapper>
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("hq-empty")).toBeDefined();
+    });
+    expect(screen.queryByTestId("hq-map")).toBeNull();
+  });
+
   it("shows a saved review on reload instead of offering Mark Reviewed again", async () => {
     const report = {
       ...COMPLETE_REPORT,

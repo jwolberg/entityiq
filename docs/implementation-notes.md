@@ -1040,3 +1040,23 @@ locking down operator-only report reads.
   that silently re-tiers the demo fails CI.
 - All names, domains, and sanctions entries are fictional (the SDN CSV is a
   two-line demo list), so no real company appears as sanctioned.
+
+---
+
+## 2026-09-24 — P2-T9: HQ visualization (Open Decision #4 resolved)
+
+- Decision (applied from the assessment recommendation the user approved):
+  OpenStreetMap for the map, Nominatim for geocoding. No API key, and no
+  Leaflet: the map is OSM's own embed iframe, so there's no new npm
+  dependency. Tradeoff: no custom styling or clustering, and Nominatim's
+  policy (identifying UA, ≤1 req/s) rules out bulk use. Swap to a paid
+  geocoder at scale.
+- New pipeline stage `geocode_hq` after `consistency_checks`, so it can read
+  the billing-vs-registry comparison. It geocodes the registry legal address
+  when present, else the submitted billing address. Address confidence: high
+  (registry + submission agree), medium (registry only), low (self-reported
+  or conflicting). Display only; not yet a scoring input.
+- Process note: the adapter was written before its tests ran. To compensate,
+  I mutated it (confidence + source logic); the tests failed on the mutation
+  and passed on restore. Demo scenarios carry recorded coordinates, and a
+  live Nominatim lookup was verified once.

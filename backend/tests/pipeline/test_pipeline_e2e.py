@@ -17,6 +17,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
 from app.adapters.domain import AnalyzeDomainStage
+from app.adapters.geocode import GeocodeAdapter, GeocodeHQStage
 from app.adapters.ipinfo import EnrichNetworkIPStage, IPInfoAdapter
 from app.adapters.opencorporates import OpenCorporatesAdapter, QueryRegistriesStage
 from app.adapters.sanctions import SanctionsScreeningStage
@@ -159,6 +160,13 @@ def _stages(*, age_days: int, mx: list[str], txt: list[str], registry: dict):
         EnrichNetworkIPStage(IPInfoAdapter(http_client=_Http(200, _US_RESIDENTIAL_IP))),
         WebEvidenceStage(fetcher=_Web(_ACME_HTML)),
         ConsistencyChecksStage(),
+        GeocodeHQStage(
+            GeocodeAdapter(
+                http_client=_Http(
+                    200, [{"lat": "37.79", "lon": "-122.39", "display_name": "SF"}]
+                )
+            )
+        ),
         ScoringStage(),
         StoreReportStage(),
     ]

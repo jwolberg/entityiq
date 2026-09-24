@@ -100,6 +100,78 @@ function FieldRows({ rows }: { rows: Row[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// HQ Visualization (P2-T9) — OpenStreetMap embed, no API key or JS library
+// ---------------------------------------------------------------------------
+
+const CONFIDENCE_LABEL: Record<string, { text: string; tone: "ok" | "warn" }> = {
+  high: { text: "High — registry and submission agree", tone: "ok" },
+  medium: { text: "Medium — registry address only", tone: "ok" },
+  low: { text: "Low — self-reported or conflicting", tone: "warn" },
+};
+
+function osmEmbedUrl(lat: number, lon: number): string {
+  const d = 0.01; // ~1 km box around the point
+  const bbox = [lon - d, lat - d, lon + d, lat + d].join(",");
+  const params = new URLSearchParams({
+    bbox,
+    layer: "mapnik",
+    marker: `${lat},${lon}`,
+  });
+  return `https://www.openstreetmap.org/export/embed.html?${params}`;
+}
+
+interface HqPanelProps {
+  evidence: EvidenceItem[];
+  status: string; // section_statuses.evidence
+}
+
+export function HqPanel({ evidence, status }: HqPanelProps) {
+  if (status === "pending") return <Pending testId="hq-pending" />;
+  const get = (f: string) => evValue(findEvidence(evidence, f, "geocode"));
+  const lat = Number(get("hq_latitude"));
+  const lon = Number(get("hq_longitude"));
+  if (!get("hq_latitude") || Number.isNaN(lat) || Number.isNaN(lon)) {
+    return (
+      <NotAvailable
+        label="HQ location could not be determined from the registry or submitted address."
+        testId="hq-empty"
+      />
+    );
+  }
+  const confidence = CONFIDENCE_LABEL[get("hq_address_confidence") ?? "low"];
+  const source = get("hq_address_source");
+  return (
+    <div data-testid="hq-panel">
+      <iframe
+        title="Headquarters location"
+        src={osmEmbedUrl(lat, lon)}
+        style={styles.map}
+        loading="lazy"
+        data-testid="hq-map"
+      />
+      <FieldRows
+        rows={[
+          { label: "Address", value: get("hq_display_name") },
+          {
+            label: "Geocoded from",
+            value: source === "registry" ? "Registry legal address" : "Submitted billing address",
+          },
+        ]}
+      />
+      <div
+        style={{
+          ...styles.flag,
+          ...(confidence.tone === "warn" ? styles.flagWarn : styles.flagOk),
+        }}
+        data-testid="hq-confidence"
+      >
+        Address confidence: {confidence.text}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // DNS & Domain Intelligence (Tier-2)
 // ---------------------------------------------------------------------------
 
@@ -497,6 +569,13 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#374151",
     marginBottom: "0.5rem",
     textTransform: "capitalize" as React.CSSProperties["textTransform"],
+  },
+  map: {
+    width: "100%",
+    height: "240px",
+    border: "1px solid #e5e7eb",
+    borderRadius: "0.375rem",
+    marginBottom: "0.75rem",
   },
   evidenceSummary: {
     fontSize: "0.8rem",
