@@ -140,6 +140,18 @@ def _default_client_factory(url: str):
     return redis_lib.Redis.from_url(url, socket_connect_timeout=1, socket_timeout=1)
 
 
+def _redact(url: str) -> str:
+    """Drop userinfo (credentials) from a Redis URL before logging it."""
+    from urllib.parse import urlsplit, urlunsplit  # noqa: PLC0415
+
+    parts = urlsplit(url)
+    if not (parts.username or parts.password):
+        return url
+    host = parts.hostname or ""
+    netloc = f"***@{host}" + (f":{parts.port}" if parts.port else "")
+    return urlunsplit(parts._replace(netloc=netloc))
+
+
 def build_session_store(
     redis_url: str,
     *,
@@ -161,7 +173,7 @@ def build_session_store(
             "Operator sessions: Redis unreachable at %s (%s: %s). Falling "
             "back to in-memory sessions — they will NOT survive a restart "
             "or be shared across API instances until Redis is reachable.",
-            redis_url,
+            _redact(redis_url),
             type(exc).__name__,
             exc,
         )

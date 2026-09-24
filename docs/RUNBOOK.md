@@ -164,7 +164,9 @@ docker compose ps          # all 5 services should be Up (db/redis "healthy")
 an integration API key (prints the key once):
 
 ```bash
-docker compose exec -T api python -m app.seed
+# The compose DB is Postgres, so the demo seed needs the explicit opt-in
+# (it creates accounts with a public password; only do this on a throwaway DB).
+docker compose exec -T -e ENTITYIQ_ALLOW_DEMO_SEED=1 api python -m app.seed
 ```
 
 Verify:

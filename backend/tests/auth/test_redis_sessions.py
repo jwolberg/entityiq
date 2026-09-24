@@ -201,3 +201,16 @@ def test_clear_all_only_removes_session_keys_not_unrelated_redis_keys():
     store.clear_all()
 
     assert backend.get("some:other:app:key") == b"unrelated"
+
+
+def test_fallback_warning_never_logs_redis_credentials(caplog):
+    """Review finding: an auth-protected REDIS_URL must not reach the logs."""
+    import logging
+
+    from app.auth.session_store import InMemorySessionStore, build_session_store
+
+    with caplog.at_level(logging.WARNING):
+        store = build_session_store("redis://:s3cr3t-pass@127.0.0.1:1/0")
+    assert isinstance(store, InMemorySessionStore)
+    assert "s3cr3t-pass" not in caplog.text
+    assert "127.0.0.1" in caplog.text
