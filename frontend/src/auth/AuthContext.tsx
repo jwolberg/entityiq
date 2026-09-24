@@ -74,9 +74,6 @@ function SignInForm({ onSuccess }: SignInFormProps) {
 
   return (
     <div style={styles.page}>
-      {/* Full skyfi.com page captured as the backdrop; scrolls behind the
-          fixed sign-in prompt. */}
-      <img src="/skyfi-bg.png" alt="" style={styles.bg} />
       <div style={styles.overlay}>
         <div style={styles.card}>
           <h1 style={styles.title}>EntityIQ</h1>
@@ -168,17 +165,11 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: "100vh",
     width: "100%",
     backgroundColor: "#0b0f17",
+    backgroundImage:
+      "radial-gradient(circle at 20% 20%, #1e3a5f 0%, transparent 55%), " +
+      "radial-gradient(circle at 80% 80%, #2d1f4f 0%, transparent 50%)",
   },
-  // The captured skyfi.com page, rendered full-width so its entire content is
-  // visible and scrollable behind the sign-in prompt.
-  bg: {
-    display: "block",
-    width: "100%",
-    height: "auto",
-  },
-  // Fixed, full-viewport layer that keeps the prompt centered while the page
-  // scrolls behind it. pointerEvents:none lets scroll/clicks reach the
-  // background; the card re-enables them for itself.
+  // Fixed, full-viewport layer that keeps the prompt centered.
   overlay: {
     position: "fixed",
     inset: 0,

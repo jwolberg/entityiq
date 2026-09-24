@@ -799,23 +799,12 @@ locking down operator-only report reads.
 
 ---
 
-## 2026-05-31 — Demo: skyfi.com hero as login backdrop
+## 2026-05-31 — Demo: screenshot login backdrop (removed 2026-09-24)
 
-- Decision (not in spec): for a demo, the operator sign-in screen renders a
-  captured skyfi.com page as a full-width backdrop with the sign-in card pinned
-  centered on top. Requested directly by the user for the demo look.
-- Implementation: `frontend/public/skyfi-bg.png` is a full-page skyfi.com
-  screenshot (cookie banner removed before capture). `SignInForm` in
-  `frontend/src/auth/AuthContext.tsx` renders it via `<img src="/skyfi-bg.png">`
-  inside a fixed, centered overlay (`pointerEvents` lets the page scroll behind
-  the card).
-- Tradeoff: static screenshot, not the live site (avoids X-Frame-Options /
-  framing issues, keeps it self-contained). The ~1.3 MB PNG is committed as a
-  demo asset.
-- Follow-ups: demo-only chrome — revert to the plain card (or gate behind a flag)
-  before any real deployment. Sign-in is not functional yet: no operator is
-  seeded and EntityIQ's backend isn't running (port 8000 in use by another
-  project; Python 3.11+ not installed).
+- Decision (not in spec): for a demo, the operator sign-in screen rendered a
+  full-page website screenshot as a backdrop with the sign-in card pinned on top.
+- Removed 2026-09-24 when the repo was de-branded for public showcase use; the
+  sign-in page now uses a neutral CSS gradient and the PNG asset is deleted.
 
 ---
 
@@ -880,3 +869,18 @@ locking down operator-only report reads.
 - Tests: added operator-Bearer submit + no-auth-401 cases to
   `tests/test_submissions.py`. Backend 385 passed; frontend lint + 18 tests +
   build all pass.
+
+---
+
+## 2026-09-24 — De-branded for public showcase
+
+- The repo moved to GitHub (`jwolberg/entityiq`) as a portfolio project. All
+  references to the originating company were removed from the current tree.
+  Docs now describe a generic B2B platform with self-service enterprise
+  registration.
+- `docs/challenge.md` → `docs/problem-statement.md`, reworded in the project's
+  own voice; links updated in README, USERS, ARCHITECTURE, and both build plans.
+- Sign-in page: screenshot backdrop replaced with a neutral CSS gradient.
+- Web fetcher User-Agent contact URL now points at the GitHub repo.
+- Tradeoff (user decision): git history was NOT rewritten. Earlier commits
+  still contain the old name and the screenshot asset.

@@ -2,7 +2,7 @@
 
 ## Project
 - Name: EntityIQ — Enterprise Business Verification & Risk Intelligence Platform
-- Summary: When enterprises self-register for SkyFi, operators must decide — quickly
+- Summary: When enterprises self-register on a B2B platform, operators must decide — quickly
   and defensibly — whether a business is real, correctly represented, and safe to
   approve. EntityIQ ingests registration data, runs an authoritative-first,
   multi-source verification pipeline, and produces an explainable, layered risk
@@ -14,12 +14,12 @@
 - Approach / scope / metrics / tracks: /docs/STRATEGY.md
 - Technical design / open decisions: /docs/ARCHITECTURE.md
 - Personas / interfaces: /docs/USERS.md
-- Originating brief: /docs/challenge.md
+- Originating brief: /docs/problem-statement.md
 - UX clarifications: none present (/docs/ux.md absent)
 
 ## Planning Assumptions
 - **No `/docs/spec.md`.** Per the `plan` skill, the spec role is distributed across
-  PRD / STRATEGY / ARCHITECTURE / USERS / challenge; this plan reconciles them.
+  PRD / STRATEGY / ARCHITECTURE / USERS / problem statement; this plan reconciles them.
 - **Backend stack planned provisionally as Python + FastAPI** (ARCHITECTURE
   § Open decisions #1 recommendation). Confirmed in P0-T1; all implementation
   tickets depend on it.
@@ -29,7 +29,7 @@
   technical sequencing over PRD § Agentic Verification Pipeline (9 stages); both
   cover the same work. Conflict-resolution rule #3 applied.
 - **Operator auth for the MVP** is assumed session-based with a minimal provider;
-  ARCHITECTURE § 5 OIDC/SSO against SkyFi's IdP is the target once the IdP is known.
+  ARCHITECTURE § 5 OIDC/SSO against the host organization's IdP is the target once the IdP is known.
 - **MVP Tier-1 source assumed to be OpenCorporates** (most accessible structured
   API), pending Open decision #5 on data-source licensing/access.
 - **Skill-loader note:** the harness served a stale cached copy of this skill (the

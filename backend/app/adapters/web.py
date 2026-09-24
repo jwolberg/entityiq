@@ -113,7 +113,8 @@ class _HttpxFetcher:
                 follow_redirects=True,
                 headers={
                     "User-Agent": (
-                        "Mozilla/5.0 (compatible; EntityIQ/1.0; " "+https://skyfi.com)"
+                        "Mozilla/5.0 (compatible; EntityIQ/1.0; "
+                        "+https://github.com/jwolberg/entityiq)"
                     )
                 },
             )

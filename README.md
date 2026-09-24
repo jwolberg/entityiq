@@ -14,7 +14,7 @@ platform that augments human review; it does not auto-approve accounts.
 - [docs/PRD.md](docs/PRD.md) — product requirements
 - [docs/USERS.md](docs/USERS.md) — users and how they interface with the system
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — technical design and open decisions
-- [docs/challenge.md](docs/challenge.md) — originating brief
+- [docs/problem-statement.md](docs/problem-statement.md) — originating problem statement
 
 ## Status
 

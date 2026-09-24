@@ -1,6 +1,6 @@
 """ApiClient model — a service credential for an integrating system (P2-T12).
 
-Integrating systems (SkyFi's onboarding flow and other internal systems)
+Integrating systems (the host platform's onboarding flow and other internal systems)
 authenticate at the API boundary with an API key (ARCHITECTURE § 5).  Keys
 are never stored in plaintext: only a PBKDF2 hash and a short non-secret
 prefix (for identification in logs / UI) are persisted.
@@ -26,7 +26,7 @@ class ApiClient(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
 
-    # Human-readable system name, e.g. "skyfi-onboarding".  Unique.
+    # Human-readable system name, e.g. "platform-onboarding".  Unique.
     name: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
 
     # Non-secret key prefix (e.g. "eiq_ab12cd34") used to look up the row

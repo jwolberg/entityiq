@@ -19,13 +19,13 @@
 - Approach / scope / metrics / tracks: /docs/STRATEGY.md
 - Technical design / open decisions: /docs/ARCHITECTURE.md
 - Personas / interfaces: /docs/USERS.md
-- Originating brief: /docs/challenge.md
+- Originating brief: /docs/problem-statement.md
 - UX clarifications: none present (/docs/ux.md absent)
 
 ## Planning Assumptions
 - **Feature PRD is authoritative for this plan**; it extends and defers to the
   parent PRD. Where the feature PRD is silent, parent docs govern (conflict order:
-  PRD → STRATEGY → ARCHITECTURE → USERS → challenge).
+  PRD → STRATEGY → ARCHITECTURE → USERS → problem statement).
 - **Base platform is already built** (product BUILD_PLAN.md: Phase 2 complete).
   The adapter contract, evidence / `field_comparison` / `risk_assessment` data
   model, four-layer scoring, operator detail panels, and report/export API all
