@@ -322,7 +322,8 @@
   - Depends on: IC1-T7
   - Acceptance criteria covered: feature PRD §11 (Auditability); PRD § Auditability
     Requirements; ARCHITECTURE § 6
-  - Status: Todo
+  - Status: Complete (2026-09-24, backlog 0019) — no gap found; verified with
+    `backend/tests/api/test_identity_audit_and_score_history.py`.
 - IC4-T3 — PII review for requester-association data
   - Objective: Gate LinkedIn requester-association data behind role-based access +
     audit; align with retention policy.
