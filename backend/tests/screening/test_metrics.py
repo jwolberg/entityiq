@@ -37,6 +37,8 @@ def test_report_has_all_headline_numbers(tmp_path):
         "initials",
         "common_name_cluster",
         "partial_dob",
+        "corroborated_match",
+        "clean",
     }
 
 
@@ -70,3 +72,10 @@ def test_cli_exit_code(tmp_path, monkeypatch):
     monkeypatch.setattr(metrics, "gate", lambda r: [{"metric": "blocking_recall"}])
     assert metrics.main([str(tmp_path / "bad.json")]) == 1
     assert Path(tmp_path / "bad.json").exists()
+
+
+def test_corpus_exercises_every_disposition():
+    """The gate must see MATCH and auto-CLEAR, not only REVIEW."""
+    per_cat = metrics.build_report()["per_category"]
+    assert per_cat["corroborated_match"]["dispositions"] == {"MATCH": 10}
+    assert per_cat["clean"]["dispositions"] == {"CLEAR": 10}

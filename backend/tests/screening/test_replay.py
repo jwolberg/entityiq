@@ -16,7 +16,7 @@ from app.screening.retention import shred_expired
 from app.screening.scoring import DEFAULT_RULE
 from tests.screening.conftest import load_people
 
-CORPUS = load_corpus(Path(__file__).parent / "corpus" / "v1.json")
+CORPUS = load_corpus(Path(__file__).parent / "corpus" / "v2.json")
 MATCH_SUBJECT = {"name": "Teodor Vasilescu", "dob": "1962-08-30", "nationality": "RO"}
 
 

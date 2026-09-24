@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-OUT = Path(__file__).with_name("v1.json")
+OUT = Path(__file__).with_name("v2.json")
 
 
 def _rec(rid, primary, *, aliases=(), original=None, dobs=(), nat=(), docs=()):
@@ -257,7 +257,54 @@ def build() -> dict:
             _case(cid, "partial_dob", name, [rec["id"]] if hit else [], dob=subject_dob)
         )
 
-    return {"version": 1, "watchlist": watchlist, "cases": cases}
+    # 8. Corroborated matches: name + full DOB + passport all agree (MATCH).
+    corroborated = [
+        "Oleksandr Vyshnevetsky",
+        "Mariam Tadevosyan",
+        "Kwabena Asantewaa",
+        "Svetlana Rudakovskaya",
+        "Tariq Bensalimi",
+        "Jovana Petrovicic",
+        "Rashid Karimzadeh",
+        "Elif Canbolatli",
+        "Dmytro Hordiyenkiv",
+        "Nasrin Farahmandi",
+    ]
+    for i, name in enumerate(corroborated):
+        dob = f"19{60 + i}-0{i % 9 + 1}-1{i % 9}"
+        passport = {"type": "passport", "number": f"PX{900100 + i}", "country": "UT"}
+        rec = _rec(wid(), name, dobs=[{"date": dob}], docs=[passport])
+        watchlist.append(rec)
+        cid = f"C{len(cases) + 1:03d}"
+        cases.append(
+            _case(
+                cid,
+                "corroborated_match",
+                name,
+                [rec["id"]],
+                dob=dob,
+                documents=[passport],
+            )
+        )
+
+    # 9. Clean subjects: nobody on the list resembles them (auto-CLEAR).
+    clean = [
+        "Aurelio Fenwicke",
+        "Brunhilde Okonkwo-Lang",
+        "Cassius Thornquist",
+        "Delphine Mbatha-Ruiz",
+        "Evander Kowalczykow",
+        "Freya Nakashima-Holt",
+        "Gideon Ashworth-Obi",
+        "Hortensia Valderrama",
+        "Ignatius Pellegrinet",
+        "Juniper Vasquez-Lund",
+    ]
+    for name in clean:
+        cid = f"C{len(cases) + 1:03d}"
+        cases.append(_case(cid, "clean", name, [], dob="1990-01-01"))
+
+    return {"version": 2, "watchlist": watchlist, "cases": cases}
 
 
 if __name__ == "__main__":

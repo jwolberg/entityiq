@@ -1,5 +1,5 @@
 {
- "version": 1,
+ "version": 2,
  "watchlist": [
   {
    "id": "W001",
@@ -1332,6 +1332,236 @@
    ],
    "nationalities": [],
    "documents": []
+  },
+  {
+   "id": "W076",
+   "primary_name": "Oleksandr Vyshnevetsky",
+   "names": [
+    {
+     "name": "Oleksandr Vyshnevetsky",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1960-01-10"
+    }
+   ],
+   "nationalities": [],
+   "documents": [
+    {
+     "type": "passport",
+     "number": "PX900100",
+     "country": "UT"
+    }
+   ]
+  },
+  {
+   "id": "W077",
+   "primary_name": "Mariam Tadevosyan",
+   "names": [
+    {
+     "name": "Mariam Tadevosyan",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1961-02-11"
+    }
+   ],
+   "nationalities": [],
+   "documents": [
+    {
+     "type": "passport",
+     "number": "PX900101",
+     "country": "UT"
+    }
+   ]
+  },
+  {
+   "id": "W078",
+   "primary_name": "Kwabena Asantewaa",
+   "names": [
+    {
+     "name": "Kwabena Asantewaa",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1962-03-12"
+    }
+   ],
+   "nationalities": [],
+   "documents": [
+    {
+     "type": "passport",
+     "number": "PX900102",
+     "country": "UT"
+    }
+   ]
+  },
+  {
+   "id": "W079",
+   "primary_name": "Svetlana Rudakovskaya",
+   "names": [
+    {
+     "name": "Svetlana Rudakovskaya",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1963-04-13"
+    }
+   ],
+   "nationalities": [],
+   "documents": [
+    {
+     "type": "passport",
+     "number": "PX900103",
+     "country": "UT"
+    }
+   ]
+  },
+  {
+   "id": "W080",
+   "primary_name": "Tariq Bensalimi",
+   "names": [
+    {
+     "name": "Tariq Bensalimi",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1964-05-14"
+    }
+   ],
+   "nationalities": [],
+   "documents": [
+    {
+     "type": "passport",
+     "number": "PX900104",
+     "country": "UT"
+    }
+   ]
+  },
+  {
+   "id": "W081",
+   "primary_name": "Jovana Petrovicic",
+   "names": [
+    {
+     "name": "Jovana Petrovicic",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1965-06-15"
+    }
+   ],
+   "nationalities": [],
+   "documents": [
+    {
+     "type": "passport",
+     "number": "PX900105",
+     "country": "UT"
+    }
+   ]
+  },
+  {
+   "id": "W082",
+   "primary_name": "Rashid Karimzadeh",
+   "names": [
+    {
+     "name": "Rashid Karimzadeh",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1966-07-16"
+    }
+   ],
+   "nationalities": [],
+   "documents": [
+    {
+     "type": "passport",
+     "number": "PX900106",
+     "country": "UT"
+    }
+   ]
+  },
+  {
+   "id": "W083",
+   "primary_name": "Elif Canbolatli",
+   "names": [
+    {
+     "name": "Elif Canbolatli",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1967-08-17"
+    }
+   ],
+   "nationalities": [],
+   "documents": [
+    {
+     "type": "passport",
+     "number": "PX900107",
+     "country": "UT"
+    }
+   ]
+  },
+  {
+   "id": "W084",
+   "primary_name": "Dmytro Hordiyenkiv",
+   "names": [
+    {
+     "name": "Dmytro Hordiyenkiv",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1968-09-18"
+    }
+   ],
+   "nationalities": [],
+   "documents": [
+    {
+     "type": "passport",
+     "number": "PX900108",
+     "country": "UT"
+    }
+   ]
+  },
+  {
+   "id": "W085",
+   "primary_name": "Nasrin Farahmandi",
+   "names": [
+    {
+     "name": "Nasrin Farahmandi",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1969-01-10"
+    }
+   ],
+   "nationalities": [],
+   "documents": [
+    {
+     "type": "passport",
+     "number": "PX900109",
+     "country": "UT"
+    }
+   ]
   }
  ],
  "cases": [
@@ -2226,6 +2456,306 @@
    "expected_hits": [
     "W075"
    ]
+  },
+  {
+   "id": "C071",
+   "category": "corroborated_match",
+   "subject": {
+    "name": "Oleksandr Vyshnevetsky",
+    "dob": "1960-01-10",
+    "nationality": null,
+    "documents": [
+     {
+      "type": "passport",
+      "number": "PX900100",
+      "country": "UT"
+     }
+    ]
+   },
+   "expected_hits": [
+    "W076"
+   ]
+  },
+  {
+   "id": "C072",
+   "category": "corroborated_match",
+   "subject": {
+    "name": "Mariam Tadevosyan",
+    "dob": "1961-02-11",
+    "nationality": null,
+    "documents": [
+     {
+      "type": "passport",
+      "number": "PX900101",
+      "country": "UT"
+     }
+    ]
+   },
+   "expected_hits": [
+    "W077"
+   ]
+  },
+  {
+   "id": "C073",
+   "category": "corroborated_match",
+   "subject": {
+    "name": "Kwabena Asantewaa",
+    "dob": "1962-03-12",
+    "nationality": null,
+    "documents": [
+     {
+      "type": "passport",
+      "number": "PX900102",
+      "country": "UT"
+     }
+    ]
+   },
+   "expected_hits": [
+    "W078"
+   ]
+  },
+  {
+   "id": "C074",
+   "category": "corroborated_match",
+   "subject": {
+    "name": "Svetlana Rudakovskaya",
+    "dob": "1963-04-13",
+    "nationality": null,
+    "documents": [
+     {
+      "type": "passport",
+      "number": "PX900103",
+      "country": "UT"
+     }
+    ]
+   },
+   "expected_hits": [
+    "W079"
+   ]
+  },
+  {
+   "id": "C075",
+   "category": "corroborated_match",
+   "subject": {
+    "name": "Tariq Bensalimi",
+    "dob": "1964-05-14",
+    "nationality": null,
+    "documents": [
+     {
+      "type": "passport",
+      "number": "PX900104",
+      "country": "UT"
+     }
+    ]
+   },
+   "expected_hits": [
+    "W080"
+   ]
+  },
+  {
+   "id": "C076",
+   "category": "corroborated_match",
+   "subject": {
+    "name": "Jovana Petrovicic",
+    "dob": "1965-06-15",
+    "nationality": null,
+    "documents": [
+     {
+      "type": "passport",
+      "number": "PX900105",
+      "country": "UT"
+     }
+    ]
+   },
+   "expected_hits": [
+    "W081"
+   ]
+  },
+  {
+   "id": "C077",
+   "category": "corroborated_match",
+   "subject": {
+    "name": "Rashid Karimzadeh",
+    "dob": "1966-07-16",
+    "nationality": null,
+    "documents": [
+     {
+      "type": "passport",
+      "number": "PX900106",
+      "country": "UT"
+     }
+    ]
+   },
+   "expected_hits": [
+    "W082"
+   ]
+  },
+  {
+   "id": "C078",
+   "category": "corroborated_match",
+   "subject": {
+    "name": "Elif Canbolatli",
+    "dob": "1967-08-17",
+    "nationality": null,
+    "documents": [
+     {
+      "type": "passport",
+      "number": "PX900107",
+      "country": "UT"
+     }
+    ]
+   },
+   "expected_hits": [
+    "W083"
+   ]
+  },
+  {
+   "id": "C079",
+   "category": "corroborated_match",
+   "subject": {
+    "name": "Dmytro Hordiyenkiv",
+    "dob": "1968-09-18",
+    "nationality": null,
+    "documents": [
+     {
+      "type": "passport",
+      "number": "PX900108",
+      "country": "UT"
+     }
+    ]
+   },
+   "expected_hits": [
+    "W084"
+   ]
+  },
+  {
+   "id": "C080",
+   "category": "corroborated_match",
+   "subject": {
+    "name": "Nasrin Farahmandi",
+    "dob": "1969-01-10",
+    "nationality": null,
+    "documents": [
+     {
+      "type": "passport",
+      "number": "PX900109",
+      "country": "UT"
+     }
+    ]
+   },
+   "expected_hits": [
+    "W085"
+   ]
+  },
+  {
+   "id": "C081",
+   "category": "clean",
+   "subject": {
+    "name": "Aurelio Fenwicke",
+    "dob": "1990-01-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C082",
+   "category": "clean",
+   "subject": {
+    "name": "Brunhilde Okonkwo-Lang",
+    "dob": "1990-01-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C083",
+   "category": "clean",
+   "subject": {
+    "name": "Cassius Thornquist",
+    "dob": "1990-01-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C084",
+   "category": "clean",
+   "subject": {
+    "name": "Delphine Mbatha-Ruiz",
+    "dob": "1990-01-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C085",
+   "category": "clean",
+   "subject": {
+    "name": "Evander Kowalczykow",
+    "dob": "1990-01-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C086",
+   "category": "clean",
+   "subject": {
+    "name": "Freya Nakashima-Holt",
+    "dob": "1990-01-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C087",
+   "category": "clean",
+   "subject": {
+    "name": "Gideon Ashworth-Obi",
+    "dob": "1990-01-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C088",
+   "category": "clean",
+   "subject": {
+    "name": "Hortensia Valderrama",
+    "dob": "1990-01-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C089",
+   "category": "clean",
+   "subject": {
+    "name": "Ignatius Pellegrinet",
+    "dob": "1990-01-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C090",
+   "category": "clean",
+   "subject": {
+    "name": "Juniper Vasquez-Lund",
+    "dob": "1990-01-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
   }
  ]
 }

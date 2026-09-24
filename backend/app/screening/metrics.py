@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from app.screening.blocking import BlockingIndex
@@ -30,7 +30,7 @@ from app.screening.names import NORMALIZER_VERSION
 from app.screening.replay import compare_results
 from app.screening.scoring import DEFAULT_RULE, score_pair
 
-CORPUS_PATH = Path(__file__).resolve().parents[2] / "tests/screening/corpus/v1.json"
+CORPUS_PATH = Path(__file__).resolve().parents[2] / "tests/screening/corpus/v2.json"
 GATES = {"blocking_recall": 1.0, "reproducibility": 1.0}
 
 
@@ -48,7 +48,9 @@ def build_report(corpus_path: Path = CORPUS_PATH, rule: dict = DEFAULT_RULE) -> 
     overall = evaluate(corpus, blocker=blocker, scorer=scorer)
 
     review = reproduced = covered = 0
-    per_category: dict[str, dict] = defaultdict(lambda: {"cases": 0, "review": 0})
+    per_category: dict[str, dict] = defaultdict(
+        lambda: {"cases": 0, "review": 0, "dispositions": Counter()}
+    )
     for case in corpus.cases:
         bundle = {
             "subject": case.subject,
@@ -68,6 +70,7 @@ def build_report(corpus_path: Path = CORPUS_PATH, rule: dict = DEFAULT_RULE) -> 
         review += is_review
         per_category[case.category]["cases"] += 1
         per_category[case.category]["review"] += is_review
+        per_category[case.category]["dispositions"][result["disposition"]] += 1
 
     n = len(corpus.cases)
     return {
@@ -84,7 +87,11 @@ def build_report(corpus_path: Path = CORPUS_PATH, rule: dict = DEFAULT_RULE) -> 
         "coverage": round(covered / n, 4) if n else 1.0,
         "reproducibility": round(reproduced / n, 4) if n else 1.0,
         "per_category": {
-            cat: {**v, "abstention_rate": round(v["review"] / v["cases"], 4)}
+            cat: {
+                **v,
+                "dispositions": dict(sorted(v["dispositions"].items())),
+                "abstention_rate": round(v["review"] / v["cases"], 4),
+            }
             for cat, v in sorted(per_category.items())
         },
     }

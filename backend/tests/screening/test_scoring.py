@@ -14,7 +14,7 @@ from app.screening.scoring import (
     score_pair,
 )
 
-CORPUS = load_corpus(Path(__file__).parent / "corpus" / "v1.json")
+CORPUS = load_corpus(Path(__file__).parent / "corpus" / "v2.json")
 
 
 def _rec(name, *, dobs=(), nat=(), docs=(), aliases=(), pobs=()):

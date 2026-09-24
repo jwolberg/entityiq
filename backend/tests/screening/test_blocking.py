@@ -11,7 +11,7 @@ from app.screening.blocking import DEFAULT_CAP, BlockingIndex
 from app.screening.eval import evaluate, load_corpus
 from app.screening.names import NORMALIZER_VERSION, name_keys, tokens
 
-CORPUS = load_corpus(Path(__file__).parent / "corpus" / "v1.json")
+CORPUS = load_corpus(Path(__file__).parent / "corpus" / "v2.json")
 
 
 def _blocker(cap=DEFAULT_CAP):

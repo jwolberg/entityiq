@@ -11,7 +11,7 @@ import pytest
 from app.screening.eval import evaluate, load_corpus
 from tests.screening.corpus import generate
 
-CORPUS = Path(__file__).parent / "corpus" / "v1.json"
+CORPUS = Path(__file__).parent / "corpus" / "v2.json"
 CATEGORIES = {
     "transliteration",
     "inversion",
@@ -20,6 +20,8 @@ CATEGORIES = {
     "initials",
     "common_name_cluster",
     "partial_dob",
+    "corroborated_match",
+    "clean",
 }
 
 
