@@ -1138,3 +1138,17 @@ locking down operator-only report reads.
   a sanctions hit with a score of 22 was shown in green.
 - Demo dataset records a `system.submission_received` audit event per
   company, so the Activity panel isn't empty in a fresh demo.
+
+---
+
+## 2026-09-24 — Independent review follow-ups (PR #1)
+
+A fresh-context reviewer found no high-severity issues. Fixed:
+- Medium: `python -m app.seed` / `app.demo_data` could write demo accounts
+  (public password) into any DATABASE_URL. They now refuse non-SQLite URLs
+  unless `ENTITYIQ_ALLOW_DEMO_SEED=1`. Verified both refuse a Postgres URL.
+- Medium: an unexpected `hq_address_confidence` value would crash the detail
+  page (there's no error boundary). It now falls back to "low".
+Left open (design question, not a regression): any valid API key can read
+every company's report, not only its own submissions. That's fine for a
+single-tenant internal tool; multi-tenant would need per-client scoping.

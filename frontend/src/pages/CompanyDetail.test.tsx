@@ -178,6 +178,40 @@ describe("CompanyDetail", () => {
     vi.restoreAllMocks();
   });
 
+  it("treats an unknown address-confidence value as low instead of crashing", async () => {
+    const geo = (field: string, value: string) => ({
+      id: `ev-${field}`,
+      source: "geocode",
+      tier: 3,
+      field,
+      raw_value: value,
+      normalized_value: value,
+      confidence: 0.7,
+      attribution: null,
+      fetched_at: null,
+    });
+    const report = {
+      ...COMPLETE_REPORT,
+      evidence: [
+        ...COMPLETE_REPORT.evidence,
+        geo("hq_latitude", "47.6"),
+        geo("hq_longitude", "-122.3"),
+        geo("hq_address_confidence", "unexpected-value"),
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ ok: true, json: async () => report })
+    );
+    render(
+      <Wrapper>
+        <CompanyDetail runId="run-abc" onBack={vi.fn()} />
+      </Wrapper>
+    );
+    await waitFor(() => expect(screen.getByTestId("hq-confidence")).toBeDefined());
+    expect(screen.getByTestId("hq-confidence").textContent).toContain("Low");
+  });
+
   it("colors the headline score by triage tier and names the tier", async () => {
     const report = {
       ...COMPLETE_REPORT,
