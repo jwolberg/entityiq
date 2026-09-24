@@ -28,6 +28,7 @@ DEMO_PASSWORD = "entityiq-demo"
 DEMO_ACCOUNTS: list[tuple[str, str, str]] = [
     ("operator@demo.entityiq.dev", "Demo Operator", "operator"),
     ("lead@demo.entityiq.dev", "Demo Lead", "lead"),
+    ("examiner@demo.entityiq.dev", "Demo Examiner", "examiner"),
 ]
 DEMO_API_CLIENT = "demo-integration"
 

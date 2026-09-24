@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+import app.api.audit as audit_api
 import app.auth.operator as operator_auth
 import app.auth.service as service_auth
 import app.models  # noqa: F401
@@ -40,7 +41,12 @@ def api_env(tmp_path, monkeypatch):
         finally:
             db.close()
 
-    for dep in (screening_api._get_db, operator_auth._get_db, service_auth._get_db):
+    for dep in (
+        screening_api._get_db,
+        operator_auth._get_db,
+        service_auth._get_db,
+        audit_api._get_db,
+    ):
         app.dependency_overrides[dep] = get_db
 
     # Run the pipeline inline (no broker), using the same test database.

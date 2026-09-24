@@ -270,6 +270,24 @@ def get_current_operator(
 # ---------------------------------------------------------------------------
 
 
+ROLES = ("operator", "lead", "examiner")
+
+
+def require_lead_or_examiner(
+    operator: "Operator" = Depends(get_current_operator),
+) -> "Operator":
+    """FastAPI dependency: leads, or read-only examiners (ticket 0042)."""
+    if operator.role not in ("lead", "examiner"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "This view requires the 'lead' or 'examiner' role. "
+                f"Your role is '{operator.role}'."
+            ),
+        )
+    return operator
+
+
 def require_lead(
     operator: "Operator" = Depends(get_current_operator),
     db: Session = Depends(_get_db),
