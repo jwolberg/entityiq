@@ -586,27 +586,30 @@ describe("CompanyDetail", () => {
   });
 
   it("mark-reviewed updates status on success", async () => {
-    const mockFetch = vi
-      .fn()
-      // First call: GET /reports/run-abc
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => COMPLETE_REPORT,
-      })
-      // GET /audit/runs/run-abc (Activity panel mounts with the report)
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ events: [] }) })
-      // Second call: POST /reviews/run-abc
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          review_id: "rev-1",
-          run_id: "run-abc",
-          operator_id: "op-1",
-          review_status: "reviewed",
-          decided_at: "2026-05-26T11:00:00Z",
-          message: "Run marked as 'reviewed'.",
-        }),
-      });
+    // Routed by URL/method rather than call order: besides the report and
+    // the review POST, the Activity and Ownership panels each fire their
+    // own GET on mount (order between them is not guaranteed).
+    const mockFetch = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.startsWith("/api/reports/")) {
+        return { ok: true, json: async () => COMPLETE_REPORT };
+      }
+      if (init?.method === "POST" && url.startsWith("/api/reviews/")) {
+        return {
+          ok: true,
+          json: async () => ({
+            review_id: "rev-1",
+            run_id: "run-abc",
+            operator_id: "op-1",
+            review_status: "reviewed",
+            decided_at: "2026-05-26T11:00:00Z",
+            message: "Run marked as 'reviewed'.",
+          }),
+        };
+      }
+      // Activity panel (GET /audit/runs/*) + Ownership panel (GET
+      // /ownership/runs/*/challenges): an empty list either way.
+      return { ok: true, json: async () => ({ events: [] }) };
+    });
 
     vi.stubGlobal("fetch", mockFetch);
 
@@ -634,18 +637,20 @@ describe("CompanyDetail", () => {
   });
 
   it("shows review error when mark-reviewed fails", async () => {
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => COMPLETE_REPORT,
-      })
-      // GET /audit/runs/run-abc (Activity panel mounts with the report)
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ events: [] }) })
-      .mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ detail: "Conflict: already reviewed" }),
-      });
+    const mockFetch = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.startsWith("/api/reports/")) {
+        return { ok: true, json: async () => COMPLETE_REPORT };
+      }
+      if (init?.method === "POST" && url.startsWith("/api/reviews/")) {
+        return {
+          ok: false,
+          json: async () => ({ detail: "Conflict: already reviewed" }),
+        };
+      }
+      // Activity panel (GET /audit/runs/*) + Ownership panel (GET
+      // /ownership/runs/*/challenges): an empty list either way.
+      return { ok: true, json: async () => ({ events: [] }) };
+    });
 
     vi.stubGlobal("fetch", mockFetch);
 

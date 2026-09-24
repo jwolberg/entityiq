@@ -30,6 +30,10 @@ Signal catalog design rules
    Trust: long_lived_domain, registry_confirmed, consistent_addresses,
    tax_id_verified_active, active_employee_footprint, matching_contact_info,
    stable_web_presence, ssl_present, spf_configured, has_mx_records.
+   Trust (ticket 0003): domain_ownership_verified — DNS TXT / email / HTML
+   meta-tag all write the same evidence contract, so one check covers all
+   three; deliberately bounded (never "authorization" — PRD § Domain
+   Ownership Verification, USERS § 4).
 
 Cross-submission IP/ASN reuse (deferred from P2-T2)
 ------------------------------------------------------
@@ -575,6 +579,7 @@ def representation_confidence_signals(
         _append_web_contact_signals(signals, evidence_rows)
         _append_intake_signals(signals, evidence_rows)
         _append_linkedin_signals(signals, evidence_rows, fc_by_field)
+        _append_ownership_signals(signals, evidence_rows)
         return signals
 
     # Core field weights (PRD § Core Verification Philosophy — representation layer)
@@ -624,6 +629,7 @@ def representation_confidence_signals(
     _append_web_contact_signals(signals, evidence_rows)
     _append_intake_signals(signals, evidence_rows)
     _append_linkedin_signals(signals, evidence_rows, fc_by_field)
+    _append_ownership_signals(signals, evidence_rows)
 
     # Guard: if no signals produced (all fields unverified)
     if not signals:
@@ -902,6 +908,52 @@ def _append_intake_signals(signals: list[Signal], evidence_rows: list) -> None:
                 evidence_ids=[e.id for e in free_email],
             )
         )
+
+
+# Ticket 0003 (plan unit U24) — domain-ownership verification.  Bounded
+# on purpose: weight * 40 (see _layer_score_from_signals) is the max point
+# swing this signal can contribute, well short of driving the score to 0.
+# A verified challenge raises confidence; it is never treated as
+# organizational authorization (PRD § Domain Ownership Verification,
+# USERS § 4).
+_OWNERSHIP_TRUST_WEIGHT = 0.25
+
+
+def _append_ownership_signals(signals: list[Signal], evidence_rows: list) -> None:
+    """Domain-ownership verification trust signal (ticket 0003).
+
+    DNS TXT, email, and HTML meta-tag all write the identical evidence
+    contract (source="ownership", field="domain_ownership_verified",
+    normalized_value="true") once a challenge is verified — see
+    app.pipeline.ownership — so this one check covers all three methods.
+    An absent/incorrect token never reaches this evidence contract, so no
+    challenge attempt of any kind produces an elevated signal.
+    """
+    rows = [
+        e
+        for e in evidence_rows
+        if e.source == "ownership"
+        and e.field == "domain_ownership_verified"
+        and (e.normalized_value or "").lower() == "true"
+    ]
+    if not rows:
+        return
+    method = rows[0].raw_value or "a verified method"
+    signals.append(
+        Signal(
+            name="domain_ownership_verified",
+            layer="representation",
+            direction="trust",
+            weight=_OWNERSHIP_TRUST_WEIGHT,
+            description=(
+                f"Domain ownership verified via {method} — increases confidence "
+                "that the registrant controls the claimed domain. This does NOT "
+                "establish that the registrant is authorized to represent the "
+                "organization."
+            ),
+            evidence_ids=[e.id for e in rows],
+        )
+    )
 
 
 def _append_web_contact_signals(signals: list[Signal], evidence_rows: list) -> None:

@@ -11,6 +11,7 @@ from app.models.entity import Entity
 from app.models.evidence import Evidence
 from app.models.field_comparison import FieldComparison
 from app.models.operator import Operator
+from app.models.ownership_challenge import OwnershipChallenge
 from app.models.report import Report
 from app.models.review import Review
 from app.models.risk_assessment import RiskAssessment, risk_assessment_evidence
@@ -24,6 +25,7 @@ __all__ = [
     "Evidence",
     "FieldComparison",
     "Operator",
+    "OwnershipChallenge",
     "Report",
     "Review",
     "RiskAssessment",

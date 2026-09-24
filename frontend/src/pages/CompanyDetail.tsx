@@ -25,6 +25,7 @@ import {
   RiskAssessmentPanel,
 } from "../components/DetailPanels";
 import { OperatorActions } from "../components/OperatorActions";
+import { OwnershipPanel } from "../components/OwnershipPanel";
 import { ActivityPanel } from "../components/ActivityPanel";
 
 interface CompanyDetailProps {
@@ -416,6 +417,12 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
                 )}
               </div>
             )}
+          </section>
+
+          {/* Domain Ownership Verification (ticket 0003) */}
+          <section style={styles.section}>
+            <h3 style={styles.sectionTitle}>Domain Ownership Verification</h3>
+            <OwnershipPanel runId={runId} token={auth.token} />
           </section>
 
           {/* Operator Actions (re-run, correct + re-run, notes, export) */}
