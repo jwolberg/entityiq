@@ -41,6 +41,7 @@ from app.adapters.base import (
     AdapterResult,
     AdapterSuccess,
 )
+from app.adapters.retry import RetryingAdapter
 from app.models.evidence import Evidence
 
 logger = logging.getLogger(__name__)
@@ -493,7 +494,7 @@ class WebEvidenceStage:
     name = "web_evidence"
 
     def __init__(self, fetcher: WebFetcher | None = None) -> None:
-        self._adapter = WebAdapter(fetcher=fetcher)
+        self._adapter = RetryingAdapter(WebAdapter(fetcher=fetcher))
 
     def run(self, run_id: str, db: "Any", context: dict) -> dict:
         from app.adapters.base import AdapterSuccess  # noqa: PLC0415

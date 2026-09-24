@@ -366,6 +366,8 @@ class StoreReportStage:
     """
 
     name = "store_report"
+    # Runs even after the run budget is spent, so a report is always produced.
+    always_run = True
 
     def run(self, run_id: str, db: "Session", context: dict) -> dict:
         try:

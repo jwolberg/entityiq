@@ -38,7 +38,20 @@ celery_app.conf.update(
 )
 
 
-@celery_app.task(name="entityiq.run_verification")
+# Time budgets (ticket 0001, plan U21; PRD: analysis in under 2 hours).
+# The orchestrator enforces the run and stage budgets itself; Celery's soft
+# limit is a backstop above them and the hard limit a last resort.
+STAGE_TIMEOUT_SECONDS = float(os.environ.get("ENTITYIQ_STAGE_TIMEOUT_SECONDS", "600"))
+RUN_TIMEOUT_SECONDS = float(os.environ.get("ENTITYIQ_RUN_TIMEOUT_SECONDS", "5400"))
+_SOFT_TIME_LIMIT = int(RUN_TIMEOUT_SECONDS + 900)
+_HARD_TIME_LIMIT = _SOFT_TIME_LIMIT + 300
+
+
+@celery_app.task(
+    name="entityiq.run_verification",
+    soft_time_limit=_SOFT_TIME_LIMIT,
+    time_limit=_HARD_TIME_LIMIT,
+)
 def run_verification_task(run_id: str) -> None:
     """Celery task: drive a VerificationRun through the pipeline.
 
@@ -52,7 +65,11 @@ def run_verification_task(run_id: str) -> None:
     logger.info("run_verification_task: starting run %s", run_id)
     db = SessionLocal()
     try:
-        orch = Orchestrator(default_stages())
+        orch = Orchestrator(
+            default_stages(),
+            stage_timeout_seconds=STAGE_TIMEOUT_SECONDS,
+            run_timeout_seconds=RUN_TIMEOUT_SECONDS,
+        )
         orch.run_sync(run_id, db)
     finally:
         db.close()

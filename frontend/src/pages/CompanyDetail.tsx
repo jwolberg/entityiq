@@ -11,6 +11,7 @@ import {
   apiClient,
   CorrectableField,
   ReportResponse,
+  RunTiming,
   ReviewSummary,
 } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -104,6 +105,39 @@ function ScoreDisplay({ score, tier }: { score: number | null; tier?: string | n
   );
 }
 
+/** How often an in-flight report is re-fetched so partial results land live. */
+export const POLL_INTERVAL_MS = 5000;
+
+function isInFlight(report: ReportResponse): boolean {
+  if (report.run) return report.run.status === "pending" || report.run.status === "running";
+  return report.status === "pending" || report.status === "partial";
+}
+
+function formatDuration(seconds: number): string {
+  const s = Math.round(seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const rest = s % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${rest}s`;
+  return `${rest}s`;
+}
+
+function RunProgress({ run }: { run: RunTiming }) {
+  const stages = Object.values(run.stages);
+  const done = stages.filter((st) => st !== "pending").length;
+  const inFlight = run.status === "pending" || run.status === "running";
+  return (
+    <div style={styles.runProgress} data-testid="detail-run-progress">
+      {inFlight
+        ? `Analysis in progress: ${done} of ${stages.length} stages done. Updating automatically.`
+        : run.duration_seconds != null
+          ? `Analysis took ${formatDuration(run.duration_seconds)}.`
+          : null}
+    </div>
+  );
+}
+
 export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) {
   const { auth } = useAuth();
   const [report, setReport] = useState<ReportResponse | null>(null);
@@ -139,6 +173,29 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
       cancelled = true;
     };
   }, [runId, auth.token]);
+
+  // While the run is still going, quietly re-fetch so sections fill in as
+  // stages finish. A failed poll keeps the last good report on screen.
+  useEffect(() => {
+    if (!report || !isInFlight(report)) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      apiClient
+        .getReport(runId, auth.token)
+        .then((r) => {
+          if (cancelled) return;
+          setReport(r);
+          if (r.review) setReview(r.review);
+        })
+        .catch(() => {
+          if (!cancelled) setReport((prev) => (prev ? { ...prev } : prev));
+        });
+    }, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [report, runId, auth.token]);
 
   async function handleMarkReviewed() {
     if (!report) return;
@@ -213,6 +270,7 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
               {report.status}
             </span>
           </div>
+          {report.run && <RunProgress run={report.run} />}
 
           {/* Risk Score */}
           <section style={styles.section}>
@@ -426,6 +484,11 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: "#f3f4f6",
     padding: "0.1rem 0.4rem",
     borderRadius: "0.25rem",
+  },
+  runProgress: {
+    marginTop: "0.5rem",
+    fontSize: "0.85rem",
+    color: "#6b7280",
   },
   statusBadge: {
     display: "inline-block",

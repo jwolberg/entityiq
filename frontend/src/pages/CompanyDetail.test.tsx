@@ -6,7 +6,7 @@
  */
 
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
-import { CompanyDetail } from "./CompanyDetail";
+import { CompanyDetail, POLL_INTERVAL_MS } from "./CompanyDetail";
 import { AuthContext } from "../auth/AuthContext";
 import type { ReactNode } from "react";
 
@@ -168,6 +168,21 @@ const PARTIAL_REPORT = {
   sources: [],
   generated_at: null,
 };
+
+/** Serves report bodies in order from /reports/*, empty audit elsewhere. */
+function routedFetch(...reports: unknown[]) {
+  const queue = [...reports];
+  const reportCalls: string[] = [];
+  const mock = vi.fn(async (url: string) => {
+    if (url.startsWith("/api/reports/")) {
+      reportCalls.push(url);
+      const body = queue.length > 1 ? queue.shift() : queue[0];
+      return { ok: true, json: async () => body };
+    }
+    return { ok: true, json: async () => ({ events: [] }) };
+  });
+  return { mock, reportCalls };
+}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -458,6 +473,82 @@ describe("CompanyDetail", () => {
     // Diff shows pending notice
     expect(screen.getByTestId("diff-pending")).toBeDefined();
     // No crash
+  });
+
+  // Ticket 0001 (plan U21): partial results land without a manual reload.
+  it("re-fetches a partial report until the run completes, then stops", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const running = {
+        ...PARTIAL_REPORT,
+        run: {
+          status: "running",
+          started_at: "2026-09-24T12:00:00+00:00",
+          finished_at: null,
+          duration_seconds: null,
+          stages: { normalize_input: "complete", query_registries: "pending" },
+        },
+      };
+      const done = {
+        ...COMPLETE_REPORT,
+        run_id: "run-partial",
+        run: {
+          status: "complete",
+          started_at: "2026-09-24T12:00:00+00:00",
+          finished_at: "2026-09-24T12:01:30+00:00",
+          duration_seconds: 90,
+          stages: { normalize_input: "complete", query_registries: "complete" },
+        },
+      };
+      const { mock, reportCalls } = routedFetch(running, done);
+      vi.stubGlobal("fetch", mock);
+
+      render(
+        <Wrapper>
+          <CompanyDetail runId="run-partial" onBack={vi.fn()} />
+        </Wrapper>
+      );
+
+      await waitFor(() => expect(screen.getByTestId("score-pending")).toBeDefined());
+      expect(screen.getByTestId("detail-run-progress").textContent).toContain(
+        "1 of 2"
+      );
+
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+      await waitFor(() =>
+        expect(screen.getByTestId("detail-overall-score")).toBeDefined()
+      );
+      expect(screen.getByTestId("detail-run-progress").textContent).toContain(
+        "1m 30s"
+      );
+
+      // Complete: no further polling.
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
+      expect(reportCalls).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not poll a report that is already complete", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { mock, reportCalls } = routedFetch(COMPLETE_REPORT);
+      vi.stubGlobal("fetch", mock);
+
+      render(
+        <Wrapper>
+          <CompanyDetail runId="run-abc" onBack={vi.fn()} />
+        </Wrapper>
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("detail-overall-score")).toBeDefined()
+      );
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
+      expect(reportCalls).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("mark-reviewed updates status on success", async () => {

@@ -1141,6 +1141,58 @@ locking down operator-only report reads.
 
 ---
 
+## 2026-09-24 — P3-T1 / ticket 0001: timeouts, retries, run timing
+
+- **Each stage runs on its own DB session** when a stage timeout is set (the
+  Celery worker path). The user chose this over a shared session, which is
+  unsafe once a hung stage wakes up. The stage's transaction commits only if
+  it finishes in budget; otherwise everything it wrote is rolled back.
+  Context passed between stages is plain dicts, so there are no ORM objects
+  to break across sessions.
+- **No SAVEPOINTs on the production path.** pysqlite mishandles them by
+  default, and dev/demo run on SQLite. The stage session joins a plain
+  transaction in `rollback_only` mode. The tests that bind to a Connection use
+  SQLAlchemy's pysqlite SAVEPOINT recipe (tests/pipeline/_sqlite.py).
+- **The demo seed (`app.demo_data`) still runs the orchestrator without
+  timeouts** (the shared-session path). Real submissions go through the
+  worker. Smoke-tested the worker path on a migrated SQLite file with live
+  sources: complete in 13.5s, OpenCorporates unavailable (no token), no lock
+  errors.
+- **Defaults:** stage 600s, run 90 min, Celery soft limit run + 15 min and
+  hard limit + 20 min (under the PRD's 2h). Adapter retries: 3 attempts, 1s
+  doubling. The 1s floor respects Nominatim's 1 req/s policy. All
+  env-tunable (RUNBOOK). The test suite sets retry backoff to 0 in conftest.
+- **Existing bug fixed:** a Celery soft-limit exception used to be swallowed
+  as "stage unavailable" and the run reported `complete`. It now fails the
+  run with a clear reason and still assembles the partial report.
+- **UI:** the detail page polls every 5s only while the run is
+  pending/running. A failed poll keeps the last report on screen.
+- **Follow-ups:**
+  - An abandoned stage's thread keeps running until its own I/O returns.
+    Python can't kill threads, and the per-HTTP timeouts bound it.
+  - On Postgres, a hung stage holding a row lock could delay the
+    orchestrator's writes to the same row. Current stages don't lock
+    verification_run.
+  - CachedAdapter and RateLimitedAdapter exist but are still not wired into
+    any stage.
+- **Fresh-context review (same day).** It confirmed the timeout/commit
+  handshake has no race, and that `rollback_only` makes a stage's own commit
+  a no-op.
+  - Added a test that delivers the soft limit as a real SIGALRM while the
+    orchestrator is blocked on a hung stage (the way Celery does it). A
+    mutation check proves it guards the abandon-on-interrupt code.
+  - Documented two stage conventions in pipeline/base.py: return a new
+    context dict, and never call `db.rollback()` in a stage.
+  - Guarded RetryingAdapter.__getattr__ against recursion.
+  - Checked and not a bug: python-whois uses a 10s socket timeout on its
+    default path.
+  - Remaining risk: an abandoned stage holds a pooled DB connection until its
+    I/O timeouts expire.
+  - The UI poll has no cap, so a run whose worker died polls every 5s while
+    the tab is open.
+
+---
+
 ## 2026-09-24 — Open Decision #7 resolved with defaults (ADR-0002)
 
 - The user asked me to pick a value, so these are defaults and not a legal

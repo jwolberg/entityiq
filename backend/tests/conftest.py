@@ -13,6 +13,7 @@ live broker or Postgres worker session.  The orchestrator tests call run_sync()
 directly — they never go through the Celery path.
 """
 
+import os
 import unittest.mock as mock
 
 import pytest
@@ -25,6 +26,10 @@ import app.models  # noqa: F401 — registers all ORM models with Base.metadata
 from app.api.submissions import _get_db
 from app.db.session import Base
 from app.main import app
+
+# Adapter retries (ticket 0001) back off 1s+ by default; tests exercising
+# failure paths shouldn't sleep. test_retry.py covers the backoff explicitly.
+os.environ.setdefault("ENTITYIQ_ADAPTER_RETRY_BACKOFF_SECONDS", "0")
 
 
 @pytest.fixture(scope="session")

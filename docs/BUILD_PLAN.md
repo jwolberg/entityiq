@@ -334,7 +334,11 @@ _Track: Integration & reporting API_
   - Objective: record and expose run duration (`finished_at - started_at`);
     add a Celery soft time limit and per-stage timeout; retry transient adapter
     failures.
-  - Depends on: Phase 2 · AC: PRD § Performance Expectations · Status: Todo
+  - Depends on: Phase 2 · AC: PRD § Performance Expectations · Status: Complete (2026-09-24) —
+    per-stage timeout with isolated stage sessions (late writes discarded); bounded
+    retries via RetryingAdapter; run budget (skip sources, always score + store);
+    Celery soft/hard limits keep a partial report; run timing + stage progress on
+    GET /reports/{id}; detail page live-refreshes in-flight runs. Ticket 0001.
 - P3-T2 — Auditability completeness + lead audit views
   - Objective: `GET` audit-events API (per run and global), an Activity panel on
     the company detail page, and a lead-only audit view gated by the currently

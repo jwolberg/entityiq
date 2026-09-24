@@ -64,6 +64,7 @@ from app.adapters.base import (
     AdapterResult,
     AdapterSuccess,
 )
+from app.adapters.retry import RetryingAdapter
 from app.models.evidence import Evidence
 
 logger = logging.getLogger(__name__)
@@ -367,7 +368,7 @@ class SanctionsScreeningStage:
     name = "sanctions_screening"
 
     def __init__(self, fetcher: SdnListFetcher | None = None) -> None:
-        self._adapter = SanctionsAdapter(fetcher=fetcher)
+        self._adapter = RetryingAdapter(SanctionsAdapter(fetcher=fetcher))
 
     def run(self, run_id: str, db: "Any", context: dict) -> dict:
         from app.adapters.base import AdapterSuccess  # noqa: PLC0415
