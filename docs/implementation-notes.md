@@ -1519,3 +1519,69 @@ single-tenant internal tool; multi-tenant would need per-client scoping.
   no-op'ing it, since these tests need real post-correction evidence/scores.
 - **Validation:** `ruff check`/`ruff format --check` clean; `pytest` → 557
   passed (554 + 3 new).
+
+---
+
+## 2026-09-24 — Ticket 0002: PII retention + role-gated report access
+
+- **`work_email` deviates from "null the PII fields".** ADR-0002 §2 says to
+  null submitted PII fields on the reviewed/unreviewed schedule, and §3 says
+  no destructive migration is needed because the PII columns are already
+  nullable. `Submission.work_email` is `nullable=False`, so it can't
+  literally be nulled. Replaced it with a fixed placeholder
+  (`app.db.retention.ANONYMIZED_EMAIL`) instead — same effect (the real
+  address is gone), no migration. All other submitted-PII columns (tax_id,
+  billing_address, phone, requester_full_name, linkedin_url) are nulled as
+  written.
+- **Retention windows are computed in Python, not SQL.** SQLite drops tzinfo
+  on `DateTime(timezone=True)` reads even though Postgres preserves it
+  (verified directly against a throwaway SQLite engine). Rather than fight
+  per-dialect datetime comparisons, the job fetches not-yet-anonymized
+  candidate rows and compares cutoffs in Python after normalizing every
+  loaded datetime to aware-UTC (`app.db.retention._as_aware_utc`). Fine at
+  this MVP's scale; revisit with SQL-level filtering if the submission table
+  grows large enough for this to matter.
+- **"Reviewed" is decided per-submission, not per-run.** A submission can have
+  several verification runs (corrections trigger re-analysis). The retention
+  job uses the *latest* review decision across all of a submission's runs to
+  decide the reviewed-vs-unreviewed schedule and its cutoff.
+- **Idempotency has no dedicated flag column.** Re-running the job is a
+  structural no-op: network metadata is "done" once `user_agent`/
+  `forwarded_headers` are null and `source_ip` (if present) already carries a
+  CIDR suffix; PII is "done" once `work_email == ANONYMIZED_EMAIL`. Simpler
+  than a migration, and the job runs infrequently enough that the extra
+  per-row check is cheap.
+- **"Unauthorized PII access is denied and the attempt is audited"** is
+  implemented by auditing every `require_lead` 403 (`app/auth/operator.py`),
+  not a bespoke PII-specific check. Today the only lead-only surfaces are the
+  global audit log (`GET /audit/events`, which itself carries PII in event
+  payloads) and, from ticket 0026, API-key provisioning — both are covered by
+  the same gate, so centralizing the audit there avoided duplicating it per
+  route.
+- **Report redaction lives in `app/auth/pii.py`**, applied as one choke point
+  (`filter_summary_for_viewer`) both `GET /reports/{run_id}` and
+  `GET /reports/{run_id}/export` call. Raw network metadata is scoped
+  narrowly: the only place a literal IP address appears anywhere in the
+  report API today is `Evidence.attribution["source_url"]` on `ipinfo`
+  evidence (e.g. `https://ipinfo.io/73.162.40.18/json`) — Submission's own
+  `source_ip`/`user_agent`/`forwarded_headers` columns are never serialized
+  by any endpoint, so there was nothing else to gate there. Operators get the
+  derived `ipinfo` evidence fields (country, ASN, ...) with that one
+  IP-bearing attribution key stripped; integration API keys get no `ipinfo`
+  evidence/sources at all, plus the `billing_address` mismatch (contact PII)
+  removed from `mismatches`.
+- **A PII-view audit event is conditional, not unconditional**, via
+  `app.auth.pii.report_contains_pii()` — a report with no network metadata
+  and no contact-PII mismatches doesn't write a `report.viewed` event.
+  `report.exported` (pre-existing, ticket P2-T11) already audits every
+  export unconditionally, so export wasn't changed to add a second event.
+- **Test-suite fix, not a product change:** `tests/api/test_reports_pii.py`'s
+  `_client_as()` helper sets `app.dependency_overrides[get_principal]`
+  without its own teardown (it's a plain function, not a yielding fixture).
+  `app.dependency_overrides` is a dict on the process-wide FastAPI `app`
+  singleton, so a leftover override from one test module was leaking into
+  `tests/auth/test_service.py::test_submission_without_api_key_is_401`
+  further down the alphabetically-ordered test run, making it pass for the
+  wrong reason when run after `tests/api/*`. Fixed with an autouse
+  `_cleanup_dependency_overrides` fixture in that file; ran the two files
+  back-to-back afterward to confirm.

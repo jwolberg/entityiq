@@ -271,6 +271,9 @@ The API enqueues verification runs to Redis; the worker executes the pipeline.
 | `ENTITYIQ_TAX_ID_PROVIDER` | _(unset)_ | Tax-ID/FEIN verification provider. Unset = none configured: the `verify_tax_id` source reports *unavailable* (no signal, no penalty). `stub` = deterministic fictional records for demos. A live provider waits on IC0-T1 (Open Decision #5).
 | `ENTITYIQ_LINKEDIN_PROVIDER` | _(unset)_ | LinkedIn company-page data provider. Unset = none configured: `verify_linkedin` reports *unavailable* (no signal, no penalty). `stub` = deterministic fictional pages for demos. No scraping path exists; a live provider waits on IC0-T2.
 | `TRUSTED_PROXY_DEPTH` | `0` | Hops to walk back from the right of `X-Forwarded-For` to find the client IP. `0` = use the direct connection peer (correct when not behind a proxy). Set to the number of trusted proxies in front of the app. |
+| `ENTITYIQ_RETENTION_NETWORK_DAYS` | `90` | Days a submission's raw network metadata (`source_ip`/`user_agent`/`forwarded_headers`) is kept before the retention job truncates/nulls it (ADR-0002). |
+| `ENTITYIQ_RETENTION_REVIEWED_DAYS` | `1825` | Days after a review decision before the retention job nulls a reviewed submission's PII (ADR-0002). |
+| `ENTITYIQ_RETENTION_UNREVIEWED_DAYS` | `180` | Days after submission before the retention job nulls a never-reviewed submission's PII (ADR-0002). |
 
 ---
 
@@ -332,4 +335,23 @@ CI (GitHub Actions, `.github/workflows/ci.yml`) runs all of the above plus the f
 | POST | `/workflow/runs/{run_id}/notes` | Add review notes (operator auth; audited) |
 | POST | `/reviews/{run_id}` | Mark reviewed (operator auth required; audited) |
 
-Exact request/response shapes are in the live `/docs`.
+Exact request/response shapes are in the live `/docs`. Report responses are
+role-gated per ADR-0002 (`docs/decisions/0002-pii-retention-policy.md`): leads
+see raw network-metadata attribution, operators see the derived signals only,
+and integration API keys see neither that nor contact-PII mismatch fields.
+
+---
+
+## PII retention job (ADR-0002)
+
+Anonymizes submissions past their retention window in place — never a hard
+delete. Idempotent; safe to run repeatedly.
+
+```
+cd backend && python -m app.db.retention
+```
+
+Or via Celery (`entityiq.run_retention` in `app/worker.py`) if a worker is
+already running — this repo does not wire a beat schedule, so trigger it from
+cron/systemd-timer/etc. in a real deployment. Windows are configured via the
+`ENTITYIQ_RETENTION_*` env vars above.
