@@ -7,8 +7,8 @@ date: 2026-09-24
 
 # PRD — Individual Identity Screening (EntityIQ, second offering)
 
-**Author:** Jay Wolberg · **Date:** 2026-09-24 · **Status:** Draft; conflicts in §[17] need
-decisions before build planning.
+**Author:** Jay Wolberg · **Date:** 2026-09-24 · **Status:** Draft. C2, C3, C5 and C7 in §[17]
+were resolved 2026-09-24; the rest are recommendations awaiting confirmation.
 
 **What this is:** a second, parallel offering in the EntityIQ repo. The existing offering
 verifies **businesses** at registration (KYB, see [`PRD.md`](./PRD.md)). This one screens
@@ -387,18 +387,19 @@ lead/examiner.
 
 ## [17] Conflicts and decisions needed
 
-Each item names the conflict, the options, and a recommendation.
+Each item names the conflict, the options, and a recommendation. **Resolved** items record
+the owner's decision; the rest are open until confirmed.
 
 - **C1: Disposition vocabulary.** This PRD uses CLEAR / REVIEW / MATCH; KYB uses
   `pre_clear` / `review` / `escalate`. *Recommendation:* keep separate vocabularies per
   offering (they mean different things: "not this person" vs "business looks legitimate"),
   and share only the UI badge component.
-- **C2: Does CLEAR need a human?** KYB never auto-decides (`pre_clear` still waits for an
+- **C2: Does CLEAR need a human?** **Resolved 2026-09-24: guarded auto-CLEAR, as recommended.** KYB never auto-decides (`pre_clear` still waits for an
   operator). F12 only requires humans for REVIEW/MATCH. *Recommendation:* CLEAR is recorded
   as a **system disposition** that closes without human action, allowed only when every
   candidate scored below the clear threshold **and** no source was unavailable. It's sampled
   for QA by leads. This departs from KYB's rule and needs explicit sign-off.
-- **C3: Models and third-party data flow.** The existing product is "no ML, no black-box",
+- **C3: Models and third-party data flow.** **Resolved 2026-09-24: deterministic v1, as recommended.** The existing product is "no ML, no black-box",
   with no LLM dependency; this PRD adds model extraction and an optional calibrated model,
   both of which would send subject PII to a vendor. *Recommendation:* v1 ships
   **deterministic only** (structured lists, rule-based normalization/transliteration). Add
@@ -411,7 +412,7 @@ Each item names the conflict, the options, and a recommendation.
   covers both offerings. This conflicts with ADR-0002's anonymization of *submissions* only
   if it touches those tables. It doesn't: PII lives in `screening_subject`, and decision
   records reference it by id.
-- **C5: PII retention for screening subjects.** ADR-0002 covers KYB submissions. Screening
+- **C5: PII retention for screening subjects.** **Resolved 2026-09-24: crypto-shred after the 5-year AML period, as recommended. To be written up as an ADR in phase 1.** ADR-0002 covers KYB submissions. Screening
   records sit under AML record-keeping (typically 5 years after the relationship ends),
   which conflicts with minimization, and frozen inputs (F15) contain PII by design.
   *Recommendation:* a follow-on ADR in which decision records keep frozen inputs for the
@@ -420,7 +421,7 @@ Each item names the conflict, the options, and a recommendation.
 - **C6: Examiner role.** There's no read-only role today. *Recommendation:* add
   `examiner` (read-only, all screening and audit views, replay; no dispositions), with the
   same auth path and tests.
-- **C7: PEP and adverse-media sources.** These are licensed data (same class of problem as
+- **C7: PEP and adverse-media sources.** **Resolved 2026-09-24: official sanctions lists only in v1, as recommended.** These are licensed data (same class of problem as
   KYB Open Decision #5). *Recommendation:* v1 = official sanctions lists only (free);
   decide PEP and adverse-media providers in a separate ADR before phase 2.
 - **C8: Run budget per offering.** Ticket 0001's run/stage budgets are process-wide env vars
