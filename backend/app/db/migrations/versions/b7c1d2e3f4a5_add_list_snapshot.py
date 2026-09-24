@@ -4,7 +4,7 @@ Versioned record of each watchlist ingest, shared by business verification and
 individual screening.
 
 Revision ID: b7c1d2e3f4a5
-Revises: a1b2c3d4e5f6
+Revises: b3f7a2c9d4e1
 Create Date: 2026-09-24 22:00:00.000000
 
 """
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "b7c1d2e3f4a5"
-down_revision: Union[str, None] = "a1b2c3d4e5f6"
+down_revision: Union[str, None] = "b3f7a2c9d4e1"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
