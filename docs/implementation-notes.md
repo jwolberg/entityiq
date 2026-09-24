@@ -938,3 +938,21 @@ locking down operator-only report reads.
 - New runtime dependencies (approved via "move forward with recommendations"):
   `httpx==0.27.2` moved from dev to runtime; `python-whois==0.9.5` added. A
   pyproject test guards against runtime imports living only in the dev extra.
+
+---
+
+## 2026-09-24 — P4-T4: web contact extraction quality
+
+- Test cases come from the live stripe.com junk: `jane.diaz@example.com`,
+  `100000000000`, and "100 companies have". The last matched because the
+  address regex let "have" end in the "Ave" suffix.
+- Emails: placeholder domains and image-asset matches (`hero@2x.png`) are
+  dropped. Company-domain addresses sort first. The evidence payload carries
+  `on_company_domain`, and `web_contact_email_found` now requires it to be true
+  (a vendor's email on the page is not evidence the org runs the site).
+- Phones: 10–15 digits, must be formatted (a bare digit run is almost always a
+  statistic), no degenerate repeats. Tradeoff: an unformatted real number like
+  "4155550142" is now rejected.
+- Found while testing: `representation_confidence_signals` returned early when
+  there were no field comparisons and skipped web-contact signals, contrary to
+  its own comment. Fixed.

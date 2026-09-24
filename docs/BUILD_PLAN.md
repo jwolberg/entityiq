@@ -398,7 +398,10 @@ _Track: Integration & reporting API_
     numbers, and address false positives. Add fixtures from real saved pages.
     Only give `web_contact_email_found` trust credit for emails on the
     company's own domain.
-  - Depends on: — · AC: PRD § Tier 3; FE § Contact Information · Status: Todo
+  - Depends on: — · AC: PRD § Tier 3; FE § Contact Information · Status: Complete (2026-09-24) —
+    placeholder/asset emails dropped, company-domain emails first + `on_company_domain`
+    flag gates the trust signal; phones need 10–15 digits and formatting; address suffix
+    must be its own word. Cases taken from the live stripe.com run.
 - P4-T5 — Review state + notes read path
   - Objective: include review status, reviewer, and notes in `ReportResponse`.
     Show them on the company detail page. Hide or disable Mark Reviewed once a

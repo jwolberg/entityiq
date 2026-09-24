@@ -472,6 +472,7 @@ def representation_confidence_signals(
         # Still check IP/web signals — these are direct evidence signals,
         # not field-comparison-derived.
         _append_ip_signals(signals, evidence_rows)
+        _append_web_contact_signals(signals, evidence_rows)
         return signals
 
     # Core field weights (PRD § Core Verification Philosophy — representation layer)
@@ -591,7 +592,14 @@ def _append_ip_signals(signals: list[Signal], evidence_rows: list) -> None:
 
 def _append_web_contact_signals(signals: list[Signal], evidence_rows: list) -> None:
     """Append web contact signals to representation signals list."""
-    web_email_ev = [e for e in evidence_rows if e.field == "web_contacts_email"]
+    # Only an address on the company's own domain is evidence the organization
+    # runs this site; a vendor's or customer's email on the page is not.
+    web_email_ev = [
+        e
+        for e in evidence_rows
+        if e.field == "web_contacts_email"
+        and (e.raw_payload or {}).get("on_company_domain") is True
+    ]
     if web_email_ev:
         signals.append(
             Signal(
@@ -599,7 +607,7 @@ def _append_web_contact_signals(signals: list[Signal], evidence_rows: list) -> N
                 layer="representation",
                 direction="trust",
                 weight=0.15,
-                description="Contact email address found on company website.",
+                description="Company-domain contact email found on the website.",
                 evidence_ids=[e.id for e in web_email_ev[:1]],
             )
         )
