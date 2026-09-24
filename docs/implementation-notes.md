@@ -1284,3 +1284,48 @@ single-tenant internal tool; multi-tenant would need per-client scoping.
   pipeline → report → operator-review boundary (HTTP submit, HTTP report
   read before/after the pipeline runs, operator sign-in, mark-reviewed,
   unauthenticated-review rejection, and the resulting audit trail).
+
+---
+
+## 2026-09-24 — Redis-backed operator sessions (backlog 0024)
+
+- **Redis probed once, at FastAPI startup, not at import time.** Importing
+  `app.auth.operator` must never touch the network (tests import it freely).
+  `_store` defaults to `InMemorySessionStore` at import; `configure_session_store()`
+  is wired into a `lifespan` handler in `app/main.py` and tries Redis there.
+  Existing tests build `TestClient(app, ...)` without a `with` block, so
+  lifespan never runs for them and they keep getting the deterministic
+  in-memory store regardless of whether the dev machine happens to have a
+  live Redis — avoids the "tests behave differently depending on what's
+  running on localhost" trap.
+- **New env var `REDIS_URL`** (default `redis://localhost:6379/0`), separate
+  from `CELERY_BROKER_URL` even though they default to the same address —
+  sessions and the Celery broker are different concerns and an operator may
+  want them on different Redis DBs/instances. Session keys are namespaced
+  (`entityiq:session:*`) so the two never collide if they do share one Redis.
+- **TTL:** `RedisSessionStore` uses `SETEX`, so Redis's own key expiry
+  enforces `SESSION_TTL_HOURS` — no separate purge loop to keep in sync.
+- **`fakeredis` is not installed** (checked: not in the venv or
+  pyproject.toml). Per the "no new dependencies without approval" rule,
+  `backend/tests/auth/test_redis_sessions.py` hand-rolls a `_FakeRedis`
+  implementing the small slice of the redis-py interface the store uses
+  (`ping`/`setex`/`get`/`delete`/`scan_iter`), with an injectable clock so
+  TTL expiry is deterministic (no real sleeping).
+- **`clear_all()` on the Redis store only deletes its own `entityiq:session:*`
+  keys** (`SCAN` + `DELETE`), never `FLUSHDB` — the Redis instance may be
+  shared with the Celery broker.
+- **`_now()` late-binding:** `_store`'s in-memory fallback is constructed
+  with `now_func=lambda: _now()` rather than `now_func=_now`, so that
+  `tests/auth/test_sessions.py`'s `monkeypatch.setattr(op_auth, "_now", ...)`
+  (which reassigns the module attribute after the store already exists)
+  still takes effect. Passing the function object directly would have
+  captured the pre-monkeypatch reference and silently broken that test.
+- **Switched `app/main.py` from `@app.on_event("startup")` to a `lifespan`
+  context manager** — `on_event` is deprecated in FastAPI 0.111 and was
+  emitting a warning on every test run; `lifespan` is the direct replacement
+  and behaves identically for TestClient purposes (only runs inside a `with`
+  block).
+- Existing auth tests (`test_operator.py`, `test_sessions.py`) required no
+  changes — `_new_session_token` / `_get_operator_id_from_token` /
+  `invalidate_session` / `_clear_all_sessions` kept their exact signatures,
+  now delegating to whichever `SessionStore` is active.

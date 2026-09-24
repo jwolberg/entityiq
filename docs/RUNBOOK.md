@@ -185,7 +185,8 @@ The API enqueues verification runs to Redis; the worker executes the pipeline.
 | `CELERY_BROKER_URL` | `redis://localhost:6379/0` | Celery broker (when not in eager mode). |
 | `CELERY_RESULT_BACKEND` | `redis://localhost:6379/0` | Celery result backend. |
 | `OPENCORPORATES_API_TOKEN` | _(unset)_ | OpenCorporates API token. **Required for registry lookups**: the API returns 401 without one, and the registry source then shows as *unavailable* in the report. Production use also needs a license (Open Decision #5). |
-| `SESSION_TTL_HOURS` | `12` | Operator session lifetime. Sessions live in process memory, so they also end when the API restarts. |
+| `SESSION_TTL_HOURS` | `12` | Operator session lifetime, enforced by whichever session store is active (Redis TTL or the in-memory store's own expiry check). |
+| `REDIS_URL` | `redis://localhost:6379/0` | Backend for operator sessions (ticket 0024). Tried once at API startup; sessions are then shared across API instances and survive a restart. If unreachable, falls back to a single-process in-memory store and logs a startup warning — dev/demo work either way. Independent of `CELERY_BROKER_URL` (can point at the same Redis or a different one/DB). |
 | `IPINFO_TOKEN` | _(unset)_ | Optional ipinfo.io token. The free tier works without one; a paid token adds precise VPN/proxy/hosting flags. |
 | `ENTITYIQ_STAGE_TIMEOUT_SECONDS` | `600` | Per-stage budget in the Celery worker. An overrunning stage is marked unavailable and its writes are discarded. |
 | `ENTITYIQ_RUN_TIMEOUT_SECONDS` | `5400` | Whole-run budget (PRD: under 2h). Once spent, remaining sources are skipped; scoring and the report still run. Celery's soft limit is this + 15 min, the hard limit + 20 min. |
@@ -229,8 +230,10 @@ CI (GitHub Actions, `.github/workflows/ci.yml`) runs all of the above plus the f
 - **OpenCorporates adapter** uses the public API only. Production use requires a
   license agreement (Open Decision #5, unresolved) — do not point it at a paid
   plan/key without resolving that first.
-- **Auth is MVP-grade:** in-memory session store, no token expiry, PBKDF2 hashing.
-  Fine for dev; harden (persistent/JWT sessions, TTL) before production.
+- **Auth is MVP-grade:** opaque bearer tokens (PBKDF2 password hashing), a
+  Redis-backed session store with an in-memory fallback (ticket 0024,
+  `REDIS_URL`), TTL enforced via `SESSION_TTL_HOURS`. No JWT/OIDC yet — see
+  `app/auth/operator.py` docstring for the swap-in path.
 - **Reset local dev DB:** delete the SQLite file (`backend/entityiq-dev.db`) and
   re-run `alembic upgrade head`. The DB file and `.venv/`, `node_modules/` are
   gitignored.
