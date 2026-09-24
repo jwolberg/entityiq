@@ -1120,3 +1120,21 @@ locking down operator-only report reads.
   when present.
 - Not changed: the "risk level" filter still uses score bands, so "High (70+)"
   won't include a sanctions escalation at 22. Follow-up: filter by tier.
+
+---
+
+## 2026-09-24 — Screenshot pass fixes (HQ map, headline tier, demo activity)
+
+- HQ map: replaced the OSM `export/embed.html` iframe with a static 3×3 grid
+  of OSM tiles, a centred marker, attribution, and a "View on OpenStreetMap"
+  link. Why: the iframe came out blank in headless screenshots, and I couldn't
+  confirm it renders anywhere I could observe (the Chrome extension timed out
+  3×; I didn't sign in via real Chrome because that means typing a password).
+  Plain `<img>` tiles render in any browser, have no iframe dependency, and
+  are testable (exact tile URLs asserted). Tradeoff: no pan/zoom; the OSM link
+  covers that. OSM tile usage policy (light use, attribution) is respected.
+- Detail page headline score is colored by triage tier and names it
+  ("Triage: Escalate — … A human decides."). This matches the dashboard fix:
+  a sanctions hit with a score of 22 was shown in green.
+- Demo dataset records a `system.submission_received` audit event per
+  company, so the Activity panel isn't empty in a fresh demo.

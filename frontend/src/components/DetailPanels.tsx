@@ -100,7 +100,7 @@ function FieldRows({ rows }: { rows: Row[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// HQ Visualization (P2-T9) — OpenStreetMap embed, no API key or JS library
+// HQ Visualization (P2-T9) — static OpenStreetMap tile map, no key or library
 // ---------------------------------------------------------------------------
 
 const CONFIDENCE_LABEL: Record<string, { text: string; tone: "ok" | "warn" }> = {
@@ -109,15 +109,68 @@ const CONFIDENCE_LABEL: Record<string, { text: string; tone: "ok" | "warn" }> = 
   low: { text: "Low — self-reported or conflicting", tone: "warn" },
 };
 
-function osmEmbedUrl(lat: number, lon: number): string {
-  const d = 0.01; // ~1 km box around the point
-  const bbox = [lon - d, lat - d, lon + d, lat + d].join(",");
-  const params = new URLSearchParams({
-    bbox,
-    layer: "mapnik",
-    marker: `${lat},${lon}`,
-  });
-  return `https://www.openstreetmap.org/export/embed.html?${params}`;
+const TILE = 256;
+const ZOOM = 15;
+
+/** Web-Mercator tile coordinates (fractional) for a lat/lon at ZOOM. */
+function tileCoords(lat: number, lon: number): { x: number; y: number } {
+  const n = 2 ** ZOOM;
+  const r = (lat * Math.PI) / 180;
+  return {
+    x: ((lon + 180) / 360) * n,
+    y: ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * n,
+  };
+}
+
+/**
+ * 3×3 grid of OSM tiles positioned so the point sits at the frame centre.
+ * Plain <img> tiles (not an iframe embed) render everywhere, including
+ * headless screenshots, and need no JS map library.
+ */
+function StaticMap({ lat, lon }: { lat: number; lon: number }) {
+  const { x, y } = tileCoords(lat, lon);
+  const tx = Math.floor(x);
+  const ty = Math.floor(y);
+  const offsetX = TILE + (x - tx) * TILE; // point's px position inside the grid
+  const offsetY = TILE + (y - ty) * TILE;
+  const tiles = [];
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      tiles.push(
+        <img
+          key={`${dx},${dy}`}
+          src={`https://tile.openstreetmap.org/${ZOOM}/${tx + dx}/${ty + dy}.png`}
+          alt=""
+          width={TILE}
+          height={TILE}
+          style={{ position: "absolute", left: (dx + 1) * TILE, top: (dy + 1) * TILE }}
+        />
+      );
+    }
+  }
+  return (
+    <div style={styles.map} data-testid="hq-map" role="img" aria-label="Headquarters location map">
+      <div
+        style={{
+          position: "absolute",
+          left: `calc(50% - ${offsetX}px)`,
+          top: `calc(50% - ${offsetY}px)`,
+          width: TILE * 3,
+          height: TILE * 3,
+        }}
+      >
+        {tiles}
+      </div>
+      <div style={styles.marker} data-testid="hq-marker" />
+      <div style={styles.mapAttribution}>
+        ©{" "}
+        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">
+          OpenStreetMap
+        </a>{" "}
+        contributors
+      </div>
+    </div>
+  );
 }
 
 interface HqPanelProps {
@@ -142,13 +195,16 @@ export function HqPanel({ evidence, status }: HqPanelProps) {
   const source = get("hq_address_source");
   return (
     <div data-testid="hq-panel">
-      <iframe
-        title="Headquarters location"
-        src={osmEmbedUrl(lat, lon)}
-        style={styles.map}
-        loading="lazy"
-        data-testid="hq-map"
-      />
+      <StaticMap lat={lat} lon={lon} />
+      <a
+        href={`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`}
+        target="_blank"
+        rel="noreferrer"
+        style={styles.osmLink}
+        data-testid="hq-osm-link"
+      >
+        View on OpenStreetMap ↗
+      </a>
       <FieldRows
         rows={[
           { label: "Address", value: get("hq_display_name") },
@@ -571,11 +627,41 @@ const styles: Record<string, React.CSSProperties> = {
     textTransform: "capitalize" as React.CSSProperties["textTransform"],
   },
   map: {
+    position: "relative",
+    overflow: "hidden",
     width: "100%",
     height: "240px",
     border: "1px solid #e5e7eb",
     borderRadius: "0.375rem",
-    marginBottom: "0.75rem",
+    backgroundColor: "#e5e7eb",
+  },
+  marker: {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    width: "14px",
+    height: "14px",
+    marginLeft: "-7px",
+    marginTop: "-7px",
+    borderRadius: "50%",
+    backgroundColor: "#dc2626",
+    border: "3px solid #ffffff",
+    boxShadow: "0 0 0 1px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.4)",
+  },
+  mapAttribution: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    padding: "1px 6px",
+    fontSize: "0.7rem",
+    backgroundColor: "rgba(255,255,255,0.85)",
+    color: "#374151",
+  },
+  osmLink: {
+    display: "inline-block",
+    margin: "0.4rem 0 0.75rem",
+    fontSize: "0.8rem",
+    color: "#2563eb",
   },
   evidenceSummary: {
     fontSize: "0.8rem",

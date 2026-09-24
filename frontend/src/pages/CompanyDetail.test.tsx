@@ -178,6 +178,27 @@ describe("CompanyDetail", () => {
     vi.restoreAllMocks();
   });
 
+  it("colors the headline score by triage tier and names the tier", async () => {
+    const report = {
+      ...COMPLETE_REPORT,
+      scores: { ...COMPLETE_REPORT.scores, overall_score: 22, triage_tier: "escalate" },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ ok: true, json: async () => report })
+    );
+    render(
+      <Wrapper>
+        <CompanyDetail runId="run-abc" onBack={vi.fn()} />
+      </Wrapper>
+    );
+    await waitFor(() => expect(screen.getByTestId("detail-overall-score")).toBeDefined());
+    expect(
+      screen.getByTestId("detail-overall-score").getAttribute("style")
+    ).toContain("rgb(220, 38, 38)");
+    expect(screen.getByTestId("detail-triage-tier").textContent).toContain("Escalate");
+  });
+
   it("renders the HQ map at the geocoded point with address confidence", async () => {
     const geo = (field: string, value: string) => ({
       id: `ev-geo-${field}`,
@@ -215,9 +236,16 @@ describe("CompanyDetail", () => {
     await waitFor(() => {
       expect(screen.getByTestId("hq-panel")).toBeDefined();
     });
-    const map = screen.getByTestId("hq-map") as HTMLIFrameElement;
-    expect(map.src).toContain("openstreetmap.org/export/embed.html");
-    expect(map.src).toContain("marker=47.6114%2C-122.3366");
+    // Static tile map: the centre tile for (47.6114, -122.3366) at z15 is 5248/11443.
+    const tiles = [...screen.getByTestId("hq-map").querySelectorAll("img")].map(
+      (img) => img.getAttribute("src")
+    );
+    expect(tiles).toContain("https://tile.openstreetmap.org/15/5248/11443.png");
+    expect(tiles).toHaveLength(9);
+    expect(screen.getByTestId("hq-marker")).toBeDefined();
+    expect(screen.getByTestId("hq-osm-link").getAttribute("href")).toContain(
+      "mlat=47.6114&mlon=-122.3366"
+    );
     expect(screen.getByTestId("hq-confidence").textContent).toContain("High");
     expect(screen.getByText("400 Pine Street, Seattle")).toBeDefined();
   });
