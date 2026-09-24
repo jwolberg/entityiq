@@ -1,0 +1,2231 @@
+{
+ "version": 1,
+ "watchlist": [
+  {
+   "id": "W001",
+   "primary_name": "Dmitri Korolenko",
+   "names": [
+    {
+     "name": "Dmitri Korolenko",
+     "kind": "primary"
+    },
+    {
+     "name": "Дмитрий Короленко",
+     "kind": "original",
+     "script": "original"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1969-02-11"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W002",
+   "primary_name": "Sergei Volynsky",
+   "names": [
+    {
+     "name": "Sergei Volynsky",
+     "kind": "primary"
+    },
+    {
+     "name": "Сергей Волынский",
+     "kind": "original",
+     "script": "original"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1974-07-30"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W003",
+   "primary_name": "Yulia Chernovskaya",
+   "names": [
+    {
+     "name": "Yulia Chernovskaya",
+     "kind": "primary"
+    },
+    {
+     "name": "Юлия Черновская",
+     "kind": "original",
+     "script": "original"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1981-05-19"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W004",
+   "primary_name": "Aleksei Trubetskov",
+   "names": [
+    {
+     "name": "Aleksei Trubetskov",
+     "kind": "primary"
+    },
+    {
+     "name": "Алексей Трубецков",
+     "kind": "original",
+     "script": "original"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1966-12-03"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W005",
+   "primary_name": "Ksenia Miroshnikova",
+   "names": [
+    {
+     "name": "Ksenia Miroshnikova",
+     "kind": "primary"
+    },
+    {
+     "name": "Ксения Мирошникова",
+     "kind": "original",
+     "script": "original"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1990-09-09"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W006",
+   "primary_name": "Mohammed Al-Farouqi",
+   "names": [
+    {
+     "name": "Mohammed Al-Farouqi",
+     "kind": "primary"
+    },
+    {
+     "name": "محمد الفاروقي",
+     "kind": "original",
+     "script": "original"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1972-01-25"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W007",
+   "primary_name": "Yousef Haddadin",
+   "names": [
+    {
+     "name": "Yousef Haddadin",
+     "kind": "primary"
+    },
+    {
+     "name": "يوسف حدادين",
+     "kind": "original",
+     "script": "original"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1979-08-14"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W008",
+   "primary_name": "Abdulrahman Qassemi",
+   "names": [
+    {
+     "name": "Abdulrahman Qassemi",
+     "kind": "primary"
+    },
+    {
+     "name": "عبد الرحمن قاسمي",
+     "kind": "original",
+     "script": "original"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1963-04-02"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W009",
+   "primary_name": "Khaled Mansouri",
+   "names": [
+    {
+     "name": "Khaled Mansouri",
+     "kind": "primary"
+    },
+    {
+     "name": "خالد منصوري",
+     "kind": "original",
+     "script": "original"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1985-10-21"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W010",
+   "primary_name": "Hussein Tabbakh",
+   "names": [
+    {
+     "name": "Hussein Tabbakh",
+     "kind": "primary"
+    },
+    {
+     "name": "حسين طباخ",
+     "kind": "original",
+     "script": "original"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1977-03-17"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W011",
+   "primary_name": "ZHANG Weiming",
+   "names": [
+    {
+     "name": "ZHANG Weiming",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1970
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W012",
+   "primary_name": "LIANG Haoran",
+   "names": [
+    {
+     "name": "LIANG Haoran",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1971
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W013",
+   "primary_name": "PARK Jiwoo",
+   "names": [
+    {
+     "name": "PARK Jiwoo",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1972
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W014",
+   "primary_name": "TANAKA Hiroshi",
+   "names": [
+    {
+     "name": "TANAKA Hiroshi",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1973
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W015",
+   "primary_name": "NGUYEN Thanh Binh",
+   "names": [
+    {
+     "name": "NGUYEN Thanh Binh",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1974
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W016",
+   "primary_name": "KOVACS Bence",
+   "names": [
+    {
+     "name": "KOVACS Bence",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1975
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W017",
+   "primary_name": "CHEN Yuxuan",
+   "names": [
+    {
+     "name": "CHEN Yuxuan",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1976
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W018",
+   "primary_name": "OKAFOR Chidi",
+   "names": [
+    {
+     "name": "OKAFOR Chidi",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1977
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W019",
+   "primary_name": "HORVATH Zsofia",
+   "names": [
+    {
+     "name": "HORVATH Zsofia",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1978
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W020",
+   "primary_name": "WATANABE Emi",
+   "names": [
+    {
+     "name": "WATANABE Emi",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1979
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W021",
+   "primary_name": "Viktor Andreyevich Morozko",
+   "names": [
+    {
+     "name": "Viktor Andreyevich Morozko",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1960-03-01"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W022",
+   "primary_name": "Oksana Petrenkivna Savchuk",
+   "names": [
+    {
+     "name": "Oksana Petrenkivna Savchuk",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1961-03-02"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W023",
+   "primary_name": "Igor Stanislavovich Belyaknin",
+   "names": [
+    {
+     "name": "Igor Stanislavovich Belyaknin",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1962-03-03"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W024",
+   "primary_name": "Lyudmila Borisovna Kasatkina",
+   "names": [
+    {
+     "name": "Lyudmila Borisovna Kasatkina",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1963-03-04"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W025",
+   "primary_name": "Saeed bin Rashid Al-Kuwaitri",
+   "names": [
+    {
+     "name": "Saeed bin Rashid Al-Kuwaitri",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1964-03-05"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W026",
+   "primary_name": "Omar ibn Khalil Nasrallahi",
+   "names": [
+    {
+     "name": "Omar ibn Khalil Nasrallahi",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1965-03-06"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W027",
+   "primary_name": "Faisal bin Hamad Al-Dosarri",
+   "names": [
+    {
+     "name": "Faisal bin Hamad Al-Dosarri",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1966-03-07"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W028",
+   "primary_name": "Arman Serikovich Zhakenov",
+   "names": [
+    {
+     "name": "Arman Serikovich Zhakenov",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1967-03-08"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W029",
+   "primary_name": "Gulnara Timurovna Iskandrova",
+   "names": [
+    {
+     "name": "Gulnara Timurovna Iskandrova",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1968-03-09"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W030",
+   "primary_name": "Rustam Bakhtiyorovich Umarkulov",
+   "names": [
+    {
+     "name": "Rustam Bakhtiyorovich Umarkulov",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1969-03-01"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W031",
+   "primary_name": "William Harcourtney",
+   "names": [
+    {
+     "name": "William Harcourtney",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1955-11-20"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W032",
+   "primary_name": "Robert Ellingsworth",
+   "names": [
+    {
+     "name": "Robert Ellingsworth",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1956-11-21"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W033",
+   "primary_name": "Aleksandr Pechorsky",
+   "names": [
+    {
+     "name": "Aleksandr Pechorsky",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1957-11-22"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W034",
+   "primary_name": "Katherine Vandermolen",
+   "names": [
+    {
+     "name": "Katherine Vandermolen",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1958-11-23"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W035",
+   "primary_name": "Richard Blackstonley",
+   "names": [
+    {
+     "name": "Richard Blackstonley",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1959-11-24"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W036",
+   "primary_name": "Margaret Oyelowo-Finch",
+   "names": [
+    {
+     "name": "Margaret Oyelowo-Finch",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1960-11-25"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W037",
+   "primary_name": "Francisco Ybarrondo",
+   "names": [
+    {
+     "name": "Francisco Ybarrondo",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1961-11-26"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W038",
+   "primary_name": "Elizabeth Marchwood",
+   "names": [
+    {
+     "name": "Elizabeth Marchwood",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1962-11-27"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W039",
+   "primary_name": "Giuseppe Brancatello",
+   "names": [
+    {
+     "name": "Giuseppe Brancatello",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1963-11-28"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W040",
+   "primary_name": "Johannes Vrieslander",
+   "names": [
+    {
+     "name": "Johannes Vrieslander",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1964-11-20"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W041",
+   "primary_name": "John Patrick Wexfordham",
+   "names": [
+    {
+     "name": "John Patrick Wexfordham",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1970-04-10"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W042",
+   "primary_name": "Maria Luisa Castellanoz",
+   "names": [
+    {
+     "name": "Maria Luisa Castellanoz",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1971-04-11"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W043",
+   "primary_name": "David Aaron Kellerstein",
+   "names": [
+    {
+     "name": "David Aaron Kellerstein",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1972-04-12"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W044",
+   "primary_name": "Hannah Rose Pemberwick",
+   "names": [
+    {
+     "name": "Hannah Rose Pemberwick",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1973-04-13"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W045",
+   "primary_name": "Samuel Oduya Ekwensile",
+   "names": [
+    {
+     "name": "Samuel Oduya Ekwensile",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1974-04-14"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W046",
+   "primary_name": "Lucia Beatriz Montalvez",
+   "names": [
+    {
+     "name": "Lucia Beatriz Montalvez",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1975-04-15"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W047",
+   "primary_name": "Thomas Edward Ashcombe",
+   "names": [
+    {
+     "name": "Thomas Edward Ashcombe",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1976-04-16"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W048",
+   "primary_name": "Priya Lakshmi Venkatram",
+   "names": [
+    {
+     "name": "Priya Lakshmi Venkatram",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1977-04-17"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W049",
+   "primary_name": "Andrzej Marek Wolanski",
+   "names": [
+    {
+     "name": "Andrzej Marek Wolanski",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1978-04-18"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W050",
+   "primary_name": "Fatima Zahra Benkirane",
+   "names": [
+    {
+     "name": "Fatima Zahra Benkirane",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1979-04-10"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W051",
+   "primary_name": "Ahmed Khan",
+   "names": [
+    {
+     "name": "Ahmed Khan",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1965-01-10"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W052",
+   "primary_name": "Ahmed Khan",
+   "names": [
+    {
+     "name": "Ahmed Khan",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1978-01-11"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W053",
+   "primary_name": "Ahmed Khan",
+   "names": [
+    {
+     "name": "Ahmed Khan",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1991-01-12"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W054",
+   "primary_name": "Maria Garcia",
+   "names": [
+    {
+     "name": "Maria Garcia",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1965-02-10"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W055",
+   "primary_name": "Maria Garcia",
+   "names": [
+    {
+     "name": "Maria Garcia",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1978-02-11"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W056",
+   "primary_name": "Maria Garcia",
+   "names": [
+    {
+     "name": "Maria Garcia",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1991-02-12"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W057",
+   "primary_name": "Li Wei",
+   "names": [
+    {
+     "name": "Li Wei",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1965-03-10"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W058",
+   "primary_name": "Li Wei",
+   "names": [
+    {
+     "name": "Li Wei",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1978-03-11"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W059",
+   "primary_name": "Li Wei",
+   "names": [
+    {
+     "name": "Li Wei",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1991-03-12"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W060",
+   "primary_name": "Mohammed Ali",
+   "names": [
+    {
+     "name": "Mohammed Ali",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1965-04-10"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W061",
+   "primary_name": "Mohammed Ali",
+   "names": [
+    {
+     "name": "Mohammed Ali",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1978-04-11"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W062",
+   "primary_name": "Mohammed Ali",
+   "names": [
+    {
+     "name": "Mohammed Ali",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1991-04-12"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W063",
+   "primary_name": "John Smith",
+   "names": [
+    {
+     "name": "John Smith",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1965-05-10"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W064",
+   "primary_name": "John Smith",
+   "names": [
+    {
+     "name": "John Smith",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1978-05-11"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W065",
+   "primary_name": "John Smith",
+   "names": [
+    {
+     "name": "John Smith",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "date": "1991-05-12"
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W066",
+   "primary_name": "Teodor Vasilescu",
+   "names": [
+    {
+     "name": "Teodor Vasilescu",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1962
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W067",
+   "primary_name": "Ingrid Solheimsen",
+   "names": [
+    {
+     "name": "Ingrid Solheimsen",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1962
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W068",
+   "primary_name": "Rafael Quintanero",
+   "names": [
+    {
+     "name": "Rafael Quintanero",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1975,
+     "circa": true
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W069",
+   "primary_name": "Nadia Bouhaddou",
+   "names": [
+    {
+     "name": "Nadia Bouhaddou",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1975,
+     "circa": true
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W070",
+   "primary_name": "Emeka Nwachukwuma",
+   "names": [
+    {
+     "name": "Emeka Nwachukwuma",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "from_year": 1980,
+     "to_year": 1984
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W071",
+   "primary_name": "Soraya Hashemizadeh",
+   "names": [
+    {
+     "name": "Soraya Hashemizadeh",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "from_year": 1980,
+     "to_year": 1984
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W072",
+   "primary_name": "Pavel Dvorakek",
+   "names": [
+    {
+     "name": "Pavel Dvorakek",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1959,
+     "month": 7
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W073",
+   "primary_name": "Helena Lindqvistad",
+   "names": [
+    {
+     "name": "Helena Lindqvistad",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1959,
+     "month": 7
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W074",
+   "primary_name": "Arturo Benavidesco",
+   "names": [
+    {
+     "name": "Arturo Benavidesco",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "year": 1971
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  },
+  {
+   "id": "W075",
+   "primary_name": "Zeynep Karaosmanli",
+   "names": [
+    {
+     "name": "Zeynep Karaosmanli",
+     "kind": "primary"
+    }
+   ],
+   "dobs": [
+    {
+     "from_year": 1990,
+     "to_year": 1991
+    }
+   ],
+   "nationalities": [],
+   "documents": []
+  }
+ ],
+ "cases": [
+  {
+   "id": "C001",
+   "category": "transliteration",
+   "subject": {
+    "name": "Dmitriy Korolenko",
+    "dob": "1969-02-11",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W001"
+   ]
+  },
+  {
+   "id": "C002",
+   "category": "transliteration",
+   "subject": {
+    "name": "Sergey Volynskiy",
+    "dob": "1974-07-30",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W002"
+   ]
+  },
+  {
+   "id": "C003",
+   "category": "transliteration",
+   "subject": {
+    "name": "Iuliia Chernovskaia",
+    "dob": "1981-05-19",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W003"
+   ]
+  },
+  {
+   "id": "C004",
+   "category": "transliteration",
+   "subject": {
+    "name": "Alexey Trubetskov",
+    "dob": "1966-12-03",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W004"
+   ]
+  },
+  {
+   "id": "C005",
+   "category": "transliteration",
+   "subject": {
+    "name": "Kseniya Miroshnikova",
+    "dob": "1990-09-09",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W005"
+   ]
+  },
+  {
+   "id": "C006",
+   "category": "transliteration",
+   "subject": {
+    "name": "Muhammad al Faruqi",
+    "dob": "1972-01-25",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W006"
+   ]
+  },
+  {
+   "id": "C007",
+   "category": "transliteration",
+   "subject": {
+    "name": "Yusuf Hadadin",
+    "dob": "1979-08-14",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W007"
+   ]
+  },
+  {
+   "id": "C008",
+   "category": "transliteration",
+   "subject": {
+    "name": "Abd al-Rahman Kasimi",
+    "dob": "1963-04-02",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W008"
+   ]
+  },
+  {
+   "id": "C009",
+   "category": "transliteration",
+   "subject": {
+    "name": "Khalid Mansuri",
+    "dob": "1985-10-21",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W009"
+   ]
+  },
+  {
+   "id": "C010",
+   "category": "transliteration",
+   "subject": {
+    "name": "Husayn Tabakh",
+    "dob": "1977-03-17",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W010"
+   ]
+  },
+  {
+   "id": "C011",
+   "category": "inversion",
+   "subject": {
+    "name": "Weiming Zhang",
+    "dob": "1970-06-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W011"
+   ]
+  },
+  {
+   "id": "C012",
+   "category": "inversion",
+   "subject": {
+    "name": "Haoran Liang",
+    "dob": "1971-06-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W012"
+   ]
+  },
+  {
+   "id": "C013",
+   "category": "inversion",
+   "subject": {
+    "name": "Jiwoo Park",
+    "dob": "1972-06-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W013"
+   ]
+  },
+  {
+   "id": "C014",
+   "category": "inversion",
+   "subject": {
+    "name": "Hiroshi Tanaka",
+    "dob": "1973-06-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W014"
+   ]
+  },
+  {
+   "id": "C015",
+   "category": "inversion",
+   "subject": {
+    "name": "Thanh Binh Nguyen",
+    "dob": "1974-06-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W015"
+   ]
+  },
+  {
+   "id": "C016",
+   "category": "inversion",
+   "subject": {
+    "name": "Bence Kovacs",
+    "dob": "1975-06-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W016"
+   ]
+  },
+  {
+   "id": "C017",
+   "category": "inversion",
+   "subject": {
+    "name": "Yuxuan Chen",
+    "dob": "1976-06-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W017"
+   ]
+  },
+  {
+   "id": "C018",
+   "category": "inversion",
+   "subject": {
+    "name": "Chidi Okafor",
+    "dob": "1977-06-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W018"
+   ]
+  },
+  {
+   "id": "C019",
+   "category": "inversion",
+   "subject": {
+    "name": "Zsofia Horvath",
+    "dob": "1978-06-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W019"
+   ]
+  },
+  {
+   "id": "C020",
+   "category": "inversion",
+   "subject": {
+    "name": "Emi Watanabe",
+    "dob": "1979-06-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W020"
+   ]
+  },
+  {
+   "id": "C021",
+   "category": "patronymic",
+   "subject": {
+    "name": "Viktor Morozko",
+    "dob": "1960-03-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W021"
+   ]
+  },
+  {
+   "id": "C022",
+   "category": "patronymic",
+   "subject": {
+    "name": "Oksana Savchuk",
+    "dob": "1961-03-02",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W022"
+   ]
+  },
+  {
+   "id": "C023",
+   "category": "patronymic",
+   "subject": {
+    "name": "Igor Belyaknin",
+    "dob": "1962-03-03",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W023"
+   ]
+  },
+  {
+   "id": "C024",
+   "category": "patronymic",
+   "subject": {
+    "name": "Lyudmila Kasatkina",
+    "dob": "1963-03-04",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W024"
+   ]
+  },
+  {
+   "id": "C025",
+   "category": "patronymic",
+   "subject": {
+    "name": "Saeed Al-Kuwaitri",
+    "dob": "1964-03-05",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W025"
+   ]
+  },
+  {
+   "id": "C026",
+   "category": "patronymic",
+   "subject": {
+    "name": "Omar Nasrallahi",
+    "dob": "1965-03-06",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W026"
+   ]
+  },
+  {
+   "id": "C027",
+   "category": "patronymic",
+   "subject": {
+    "name": "Faisal Al-Dosarri",
+    "dob": "1966-03-07",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W027"
+   ]
+  },
+  {
+   "id": "C028",
+   "category": "patronymic",
+   "subject": {
+    "name": "Arman Zhakenov",
+    "dob": "1967-03-08",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W028"
+   ]
+  },
+  {
+   "id": "C029",
+   "category": "patronymic",
+   "subject": {
+    "name": "Gulnara Iskandrova",
+    "dob": "1968-03-09",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W029"
+   ]
+  },
+  {
+   "id": "C030",
+   "category": "patronymic",
+   "subject": {
+    "name": "Rustam Umarkulov",
+    "dob": "1969-03-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W030"
+   ]
+  },
+  {
+   "id": "C031",
+   "category": "nickname",
+   "subject": {
+    "name": "Bill Harcourtney",
+    "dob": "1955-11-20",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W031"
+   ]
+  },
+  {
+   "id": "C032",
+   "category": "nickname",
+   "subject": {
+    "name": "Bob Ellingsworth",
+    "dob": "1956-11-21",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W032"
+   ]
+  },
+  {
+   "id": "C033",
+   "category": "nickname",
+   "subject": {
+    "name": "Sasha Pechorsky",
+    "dob": "1957-11-22",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W033"
+   ]
+  },
+  {
+   "id": "C034",
+   "category": "nickname",
+   "subject": {
+    "name": "Kate Vandermolen",
+    "dob": "1958-11-23",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W034"
+   ]
+  },
+  {
+   "id": "C035",
+   "category": "nickname",
+   "subject": {
+    "name": "Dick Blackstonley",
+    "dob": "1959-11-24",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W035"
+   ]
+  },
+  {
+   "id": "C036",
+   "category": "nickname",
+   "subject": {
+    "name": "Peggy Oyelowo-Finch",
+    "dob": "1960-11-25",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W036"
+   ]
+  },
+  {
+   "id": "C037",
+   "category": "nickname",
+   "subject": {
+    "name": "Paco Ybarrondo",
+    "dob": "1961-11-26",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W037"
+   ]
+  },
+  {
+   "id": "C038",
+   "category": "nickname",
+   "subject": {
+    "name": "Liz Marchwood",
+    "dob": "1962-11-27",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W038"
+   ]
+  },
+  {
+   "id": "C039",
+   "category": "nickname",
+   "subject": {
+    "name": "Beppe Brancatello",
+    "dob": "1963-11-28",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W039"
+   ]
+  },
+  {
+   "id": "C040",
+   "category": "nickname",
+   "subject": {
+    "name": "Hans Vrieslander",
+    "dob": "1964-11-20",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W040"
+   ]
+  },
+  {
+   "id": "C041",
+   "category": "initials",
+   "subject": {
+    "name": "J. P. Wexfordham",
+    "dob": "1970-04-10",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W041"
+   ]
+  },
+  {
+   "id": "C042",
+   "category": "initials",
+   "subject": {
+    "name": "M. L. Castellanoz",
+    "dob": "1971-04-11",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W042"
+   ]
+  },
+  {
+   "id": "C043",
+   "category": "initials",
+   "subject": {
+    "name": "D. Kellerstein",
+    "dob": "1972-04-12",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W043"
+   ]
+  },
+  {
+   "id": "C044",
+   "category": "initials",
+   "subject": {
+    "name": "H R Pemberwick",
+    "dob": "1973-04-13",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W044"
+   ]
+  },
+  {
+   "id": "C045",
+   "category": "initials",
+   "subject": {
+    "name": "S. O. Ekwensile",
+    "dob": "1974-04-14",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W045"
+   ]
+  },
+  {
+   "id": "C046",
+   "category": "initials",
+   "subject": {
+    "name": "L. Montalvez",
+    "dob": "1975-04-15",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W046"
+   ]
+  },
+  {
+   "id": "C047",
+   "category": "initials",
+   "subject": {
+    "name": "T.E. Ashcombe",
+    "dob": "1976-04-16",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W047"
+   ]
+  },
+  {
+   "id": "C048",
+   "category": "initials",
+   "subject": {
+    "name": "P. L. Venkatram",
+    "dob": "1977-04-17",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W048"
+   ]
+  },
+  {
+   "id": "C049",
+   "category": "initials",
+   "subject": {
+    "name": "A. M. Wolanski",
+    "dob": "1978-04-18",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W049"
+   ]
+  },
+  {
+   "id": "C050",
+   "category": "initials",
+   "subject": {
+    "name": "F. Z. Benkirane",
+    "dob": "1979-04-10",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W050"
+   ]
+  },
+  {
+   "id": "C051",
+   "category": "common_name_cluster",
+   "subject": {
+    "name": "Ahmed Khan",
+    "dob": "1978-01-11",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W052"
+   ]
+  },
+  {
+   "id": "C052",
+   "category": "common_name_cluster",
+   "subject": {
+    "name": "Ahmed Khan",
+    "dob": "2001-01-15",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C053",
+   "category": "common_name_cluster",
+   "subject": {
+    "name": "Maria Garcia",
+    "dob": "1978-02-11",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W055"
+   ]
+  },
+  {
+   "id": "C054",
+   "category": "common_name_cluster",
+   "subject": {
+    "name": "Maria Garcia",
+    "dob": "2001-02-15",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C055",
+   "category": "common_name_cluster",
+   "subject": {
+    "name": "Li Wei",
+    "dob": "1978-03-11",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W058"
+   ]
+  },
+  {
+   "id": "C056",
+   "category": "common_name_cluster",
+   "subject": {
+    "name": "Li Wei",
+    "dob": "2001-03-15",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C057",
+   "category": "common_name_cluster",
+   "subject": {
+    "name": "Mohammed Ali",
+    "dob": "1978-04-11",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W061"
+   ]
+  },
+  {
+   "id": "C058",
+   "category": "common_name_cluster",
+   "subject": {
+    "name": "Mohammed Ali",
+    "dob": "2001-04-15",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C059",
+   "category": "common_name_cluster",
+   "subject": {
+    "name": "John Smith",
+    "dob": "1978-05-11",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W064"
+   ]
+  },
+  {
+   "id": "C060",
+   "category": "common_name_cluster",
+   "subject": {
+    "name": "John Smith",
+    "dob": "2001-05-15",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C061",
+   "category": "partial_dob",
+   "subject": {
+    "name": "Teodor Vasilescu",
+    "dob": "1962-08-30",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W066"
+   ]
+  },
+  {
+   "id": "C062",
+   "category": "partial_dob",
+   "subject": {
+    "name": "Ingrid Solheimsen",
+    "dob": "1963-08-30",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C063",
+   "category": "partial_dob",
+   "subject": {
+    "name": "Rafael Quintanero",
+    "dob": "1976-02-02",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W068"
+   ]
+  },
+  {
+   "id": "C064",
+   "category": "partial_dob",
+   "subject": {
+    "name": "Nadia Bouhaddou",
+    "dob": "1985-02-02",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C065",
+   "category": "partial_dob",
+   "subject": {
+    "name": "Emeka Nwachukwuma",
+    "dob": "1983-12-31",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W070"
+   ]
+  },
+  {
+   "id": "C066",
+   "category": "partial_dob",
+   "subject": {
+    "name": "Soraya Hashemizadeh",
+    "dob": "1986-01-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C067",
+   "category": "partial_dob",
+   "subject": {
+    "name": "Pavel Dvorakek",
+    "dob": "1959-07-04",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W072"
+   ]
+  },
+  {
+   "id": "C068",
+   "category": "partial_dob",
+   "subject": {
+    "name": "Helena Lindqvistad",
+    "dob": "1959-08-04",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": []
+  },
+  {
+   "id": "C069",
+   "category": "partial_dob",
+   "subject": {
+    "name": "Arturo Benavidesco",
+    "dob": "1971-01-01",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W074"
+   ]
+  },
+  {
+   "id": "C070",
+   "category": "partial_dob",
+   "subject": {
+    "name": "Zeynep Karaosmanli",
+    "dob": "1990-06-15",
+    "nationality": null,
+    "documents": []
+   },
+   "expected_hits": [
+    "W075"
+   ]
+  }
+ ]
+}
