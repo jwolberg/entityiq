@@ -17,7 +17,7 @@
  * No backend changes are required for this ticket.
  */
 
-import { EvidenceItem, ScoresData, SourceSummary } from "../api/client";
+import { EvidenceItem, MismatchItem, ScoresData, SourceSummary } from "../api/client";
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -535,7 +535,165 @@ export function RiskAssessmentPanel({
 // Styles (inline, consistent with the rest of the app)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Identity Corroboration (IC1-T6): tax ID (Tier 1) + LinkedIn (Tier 3)
+// ---------------------------------------------------------------------------
+
+interface IdentityCorroborationPanelProps {
+  evidence: EvidenceItem[];
+  status: string;
+  sources: SourceSummary[];
+  mismatches: MismatchItem[];
+}
+
+const TAX_STATUS: Record<string, { text: string; tone: "ok" | "warn" }> = {
+  verified: { text: "Verified", tone: "ok" },
+  inactive: { text: "Inactive or dissolved", tone: "warn" },
+  not_found: { text: "Not found", tone: "warn" },
+};
+
+function sourceUnavailable(sources: SourceSummary[], name: string): boolean {
+  return sources.some((s) => s.source === name && s.status === "unavailable");
+}
+
+function TaxIdSection({ evidence, sources }: { evidence: EvidenceItem[]; sources: SourceSummary[] }) {
+  const get = (f: string) => findEvidence(evidence, f, "tax_id");
+  const status = get("tax_id_status");
+  if (!status) {
+    return (
+      <NotAvailable
+        testId="identity-tax-id-unavailable"
+        label={
+          sourceUnavailable(sources, "tax_id")
+            ? "Tax-ID verification not available (no tax ID submitted, non-US, or no provider configured)."
+            : "Tax-ID verification not available for this run."
+        }
+      />
+    );
+  }
+  const statusCfg = TAX_STATUS[evValue(status) ?? ""] ?? { text: evValue(status) ?? "—", tone: "warn" as const };
+  const match = evValue(get("tax_id_name_match"));
+  const provider = status.attribution?.["provider"];
+  const rows: Row[] = [
+    { label: "Tax ID status", value: statusCfg.text, flag: statusCfg.tone === "warn" ? { text: "Check", tone: "warn" } : undefined },
+    {
+      label: "Registered name",
+      value: evValue(get("tax_id_registered_name")),
+      flag:
+        match === "match"
+          ? { text: "Name matches", tone: "ok" }
+          : match === "mismatch"
+            ? { text: "Name differs", tone: "warn" }
+            : undefined,
+      attribution: typeof provider === "string" ? provider : "tax_id",
+    },
+  ];
+  return (
+    <div data-testid="identity-tax-id">
+      <FieldRows rows={rows} />
+    </div>
+  );
+}
+
+function LinkedInSection({
+  evidence,
+  sources,
+  mismatches,
+}: {
+  evidence: EvidenceItem[];
+  sources: SourceSummary[];
+  mismatches: MismatchItem[];
+}) {
+  const get = (f: string) => findEvidence(evidence, f, "linkedin");
+  const presence = get("linkedin_presence");
+  if (!presence) {
+    return (
+      <NotAvailable
+        testId="identity-linkedin-unavailable"
+        label={
+          sourceUnavailable(sources, "linkedin")
+            ? "LinkedIn check not available (no page found by name and domain, or no provider configured)."
+            : "LinkedIn check not available for this run."
+        }
+      />
+    );
+  }
+  if (evValue(presence) !== "found") {
+    return (
+      <div style={styles.empty} data-testid="identity-linkedin-not-found">
+        The submitted LinkedIn company page does not exist.
+        <span style={{ ...styles.flag, ...styles.flagWarn }}>Check</span>
+      </div>
+    );
+  }
+  const url = evValue(get("linkedin_company_url"));
+  const attribution = attributionOf(presence);
+  const website = mismatches.find((m) => m.field_name === "linkedin_website");
+  const requester = evValue(get("linkedin_requester_match"));
+  const rows: Row[] = [
+    { label: "LinkedIn page name", value: evValue(get("linkedin_company_name")), attribution },
+    { label: "Employees", value: evValue(get("linkedin_employee_count")) },
+    { label: "Followers", value: evValue(get("linkedin_followers")) },
+    { label: "Founded", value: evValue(get("linkedin_founded_year")) },
+    {
+      label: "Website on LinkedIn",
+      value: evValue(get("linkedin_website")),
+      flag:
+        website?.match_status === "match"
+          ? { text: "Website matches", tone: "ok" }
+          : website?.match_status === "mismatch"
+            ? { text: "Website differs", tone: "warn" }
+            : undefined,
+    },
+  ];
+  if (requester === "true" || requester === "false") {
+    rows.push({
+      label: "Requester",
+      value: requester === "true" ? "Listed at this company" : "Not listed at this company",
+      flag: requester === "true" ? { text: "Requester associated", tone: "ok" } : undefined,
+    });
+  }
+  return (
+    <div data-testid="identity-linkedin">
+      {url && (
+        <div style={styles.row}>
+          <div style={styles.rowLabel}>Company page</div>
+          <div style={styles.rowValue}>
+            <a href={url} target="_blank" rel="noreferrer">
+              {url}
+            </a>
+          </div>
+        </div>
+      )}
+      <FieldRows rows={rows} />
+    </div>
+  );
+}
+
+export function IdentityCorroborationPanel({
+  evidence,
+  status,
+  sources,
+  mismatches,
+}: IdentityCorroborationPanelProps) {
+  if (status === "pending") return <Pending testId="identity-pending" />;
+  return (
+    <div data-testid="identity-panel">
+      <h4 style={styles.subheading}>Tax ID (authoritative)</h4>
+      <TaxIdSection evidence={evidence} sources={sources} />
+      <h4 style={styles.subheading}>LinkedIn (supporting)</h4>
+      <LinkedInSection evidence={evidence} sources={sources} mismatches={mismatches} />
+    </div>
+  );
+}
+
 const styles: Record<string, React.CSSProperties> = {
+  subheading: {
+    margin: "0.75rem 0 0.25rem",
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    color: "#374151",
+  },
   rows: {
     display: "flex",
     flexDirection: "column",

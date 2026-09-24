@@ -19,6 +19,8 @@ const FIELD_LABELS: Record<string, string> = {
   domain: "Domain",
   country: "Country",
   tax_id: "Tax ID",
+  tax_id_registered_name: "Registered Name (tax ID)",
+  linkedin_website: "Website (LinkedIn)",
   billing_address: "Billing Address",
   phone: "Phone",
 };

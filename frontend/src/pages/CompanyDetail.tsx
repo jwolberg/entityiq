@@ -20,6 +20,7 @@ import {
   ContactPanel,
   DomainPanel,
   HqPanel,
+  IdentityCorroborationPanel,
   RegistryPanel,
   RiskAssessmentPanel,
 } from "../components/DetailPanels";
@@ -328,7 +329,18 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
             />
           </section>
 
-          {/* Contact Information */}
+          {/* Identity Corroboration (IC1-T6) */}
+          <section style={styles.section}>
+            <h3 style={styles.sectionTitle}>Identity Corroboration</h3>
+            <IdentityCorroborationPanel
+              evidence={report.evidence}
+              status={report.section_statuses.evidence}
+              sources={report.sources}
+              mismatches={report.mismatches}
+            />
+          </section>
+
+                    {/* Contact Information */}
           <section style={styles.section}>
             <h3 style={styles.sectionTitle}>Contact Information</h3>
             <p style={styles.sectionNote}>
