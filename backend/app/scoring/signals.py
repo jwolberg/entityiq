@@ -292,6 +292,21 @@ def _tax_id_signals(evidence_rows: list) -> list[Signal]:
                 evidence_ids=[match_ev[0].id],
             )
         )
+    if status == "verified" and not match_ev:
+        # Provider confirmed the FEIN but returned no name to compare.
+        out.append(
+            Signal(
+                name="tax_id_verified_name_unconfirmed",
+                layer="entity",
+                direction="trust",
+                weight=0.25,
+                description=(
+                    "Tax ID verified and active, but the source returned no "
+                    "registered name to compare with the submission."
+                ),
+                evidence_ids=[status_ev[0].id],
+            )
+        )
     if status == "verified" and match == "match":
         out.append(
             Signal(

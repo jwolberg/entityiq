@@ -145,4 +145,13 @@ describe("RegistrationDiff identity rows", () => {
     expect(screen.getByText("Registered Name (tax ID)")).toBeDefined();
     expect(screen.getByText("Website (LinkedIn)")).toBeDefined();
   });
+
+  it("shows the Tax ID row's discovered value as on file / not on file", () => {
+    const rows: MismatchItem[] = [
+      { id: "a", field_name: "tax_id", submitted_value: "99-0000000", discovered_value: "not_found", match_status: "mismatch", evidence_id: "e1" },
+    ];
+    render(<RegistrationDiff mismatches={rows} sectionStatus="complete" />);
+    expect(screen.getByText("Not on file")).toBeDefined();
+    expect(screen.queryByText("not_found")).toBeNull();
+  });
 });

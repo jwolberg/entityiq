@@ -25,6 +25,20 @@ const FIELD_LABELS: Record<string, string> = {
   phone: "Phone",
 };
 
+/** The Tax ID row compares "is it on file", not two values; say so plainly. */
+const TAX_ID_STATUS_TEXT: Record<string, string> = {
+  verified: "On file",
+  inactive: "On file (inactive)",
+  not_found: "Not on file",
+};
+
+function discoveredText(item: MismatchItem): string {
+  const value = item.discovered_value;
+  if (value == null) return "—";
+  if (item.field_name === "tax_id") return TAX_ID_STATUS_TEXT[value] ?? value;
+  return value;
+}
+
 function fieldLabel(fieldName: string): string {
   return FIELD_LABELS[fieldName] ?? fieldName.replace(/_/g, " ");
 }
@@ -131,7 +145,7 @@ export function RegistrationDiff({
                   <strong>{fieldLabel(item.field_name)}</strong>
                 </td>
                 <td style={styles.td}>{item.submitted_value ?? "—"}</td>
-                <td style={styles.td}>{item.discovered_value ?? "—"}</td>
+                <td style={styles.td}>{discoveredText(item)}</td>
                 <td style={{ ...styles.td, textAlign: "center" }}>
                   <StatusBadge
                     status={

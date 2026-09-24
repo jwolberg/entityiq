@@ -340,7 +340,7 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
             />
           </section>
 
-                    {/* Contact Information */}
+          {/* Contact Information */}
           <section style={styles.section}>
             <h3 style={styles.sectionTitle}>Contact Information</h3>
             <p style={styles.sectionNote}>

@@ -169,3 +169,23 @@ def test_tax_id_signals_still_fire_when_registry_evidence_is_missing():
     )
     assert "no_registry_evidence" in names
     assert "tax_id_verified_active" in names
+
+
+def test_verified_fein_without_a_registered_name_still_earns_weaker_trust():
+    """Review follow-up: a provider may confirm the FEIN but return no name."""
+    status = _ev("tax_id_status", "verified")
+    signals = entity_legitimacy_signals(_REGISTRY + [status])
+
+    sig = _signal(signals, "tax_id_verified_name_unconfirmed")
+    assert sig.direction == "trust"
+    assert sig.evidence_ids == [status.id]
+    assert (
+        sig.weight
+        < _signal(
+            entity_legitimacy_signals(
+                _REGISTRY + [status, _ev("tax_id_name_match", "match")]
+            ),
+            "tax_id_verified_active",
+        ).weight
+    )
+    assert "tax_id_verified_active" not in _names(signals)
