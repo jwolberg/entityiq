@@ -76,7 +76,7 @@
 - Blockers: Open Decision #5 (data-source licensing) UNRESOLVED. OpenCorporates
   now needs an API token even for dev use (P4-T3 makes it configurable).
   IPINFO_TOKEN production plan unresolved; free tier works. #4 resolved 2026-09-24 (P2-T9 done);
-  #7 blocks P3-T3.
+  #7 resolved 2026-09-24 (ADR-0002); P3-T3 unblocked.
 
 ---
 
@@ -344,7 +344,7 @@ _Track: Integration & reporting API_
     `GET /audit/events` (lead-only via `require_lead`, newest first, filterable); Activity
     timeline on the detail page; lead-only Audit Log page + nav link.
 - P3-T3 — PII retention & access policy
-  - Depends on: P0-T4; **Open decision #7** · AC: ARCHITECTURE § 6 (PII handling) · Status: Todo
+  - Depends on: P0-T4; Open decision #7 (resolved: ADR-0002) · AC: ARCHITECTURE § 6 (PII handling); ADR-0002 · Status: Todo
 - P3-T4 — Optional domain-ownership verification (email / DNS TXT / HTML meta)
   - Depends on: P1-T1 · AC: PRD § Domain Ownership Verification; USERS § 4 · Status: Todo
 - P3-T5 — Test coverage (BE + FE) + documentation

@@ -160,7 +160,8 @@ pipeline from per-source quirks and the PRD's known "scraping brittleness" risk.
 - **Idempotency** — submission endpoint is idempotent on a client-supplied key to
   tolerate retries from integrating systems.
 - **PII handling** — submissions, contact data, and network metadata are personal
-  data; access is role-gated, audited, and subject to a retention policy (TBD).
+  data; access is role-gated, audited, and subject to the retention policy in
+  [ADR-0002](./decisions/0002-pii-retention-policy.md).
 
 ## Open decisions
 
@@ -176,4 +177,4 @@ the alternative. Decisions #1–#3 were **resolved 2026-05-26** (see
 | 4 | HQ map provider | **Resolved 2026-09-24:** OpenStreetMap embed (iframe, no key/SDK) + Nominatim geocoding | Chosen for zero cost/keys in a demo. Nominatim policy: identifying User-Agent, ≤1 req/s — fine per submission, not for bulk; swap to a paid geocoder (Mapbox/Google) at scale. |
 | 5 | Data-source access | _Undecided_ | Registries, OpenCorporates, sanctions APIs, LinkedIn have real licensing/ToS limits (flagged in problem-statement.md). Confirms which Tier 1 sources are actually obtainable before pipeline design. |
 | 6 | Co-primary tiebreaker | _Unresolved_ | When operator-UX and API-consumer needs conflict, which wins? Carried from `STRATEGY.md`. |
-| 7 | PII retention policy | _Undecided_ | How long submissions, contacts, and network metadata are retained, and who may access them. |
+| 7 | PII retention policy | **Resolved 2026-09-24**: [ADR-0002](./decisions/0002-pii-retention-policy.md). Network metadata 90d, then /24; PII 5y after review / 180d if never reviewed; anonymize, never delete; audit kept. | How long submissions, contacts, and network metadata are retained, and who may access them. |
