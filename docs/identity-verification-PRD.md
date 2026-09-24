@@ -7,8 +7,9 @@ date: 2026-09-24
 
 # PRD — Individual Identity Screening (EntityIQ, second offering)
 
-**Author:** Jay Wolberg · **Date:** 2026-09-24 · **Status:** Draft. C2, C3, C5 and C7 in §[17]
-were resolved 2026-09-24; the rest are recommendations awaiting confirmation.
+**Author:** Jay Wolberg · **Date:** 2026-09-24 · **Status:** Approved for build. All conflicts in §[17] were resolved
+2026-09-24 (C1–C10). PEP/adverse media (C7 phase 3) and the model (C3 phase 4)
+are deferred.
 
 **What this is:** a second, parallel offering in the EntityIQ repo. The existing offering
 verifies **businesses** at registration (KYB, see [`PRD.md`](./PRD.md)). This one screens
@@ -390,7 +391,7 @@ lead/examiner.
 Each item names the conflict, the options, and a recommendation. **Resolved** items record
 the owner's decision; the rest are open until confirmed.
 
-- **C1: Disposition vocabulary.** This PRD uses CLEAR / REVIEW / MATCH; KYB uses
+- **C1: Disposition vocabulary.** **Resolved 2026-09-24: as recommended.** This PRD uses CLEAR / REVIEW / MATCH; KYB uses
   `pre_clear` / `review` / `escalate`. *Recommendation:* keep separate vocabularies per
   offering (they mean different things: "not this person" vs "business looks legitimate"),
   and share only the UI badge component.
@@ -405,7 +406,7 @@ the owner's decision; the rest are open until confirmed.
   **deterministic only** (structured lists, rule-based normalization/transliteration). Add
   the model path in phase 3 behind a provider ADR covering vendor, data processing terms,
   field minimization and model-risk documentation.
-- **C4: Append-only at the DB layer.** Today the audit log is append-only by convention
+- **C4: Append-only at the DB layer.** **Resolved 2026-09-24: as recommended.** Today the audit log is append-only by convention
   (no update/delete helpers). F14 requires database enforcement. *Recommendation:* add
   triggers that reject UPDATE/DELETE on `decision_record`, `disposition` and `audit_event`
   (Postgres `BEFORE UPDATE OR DELETE` raising; SQLite `RAISE(ABORT)`), in one migration that
@@ -418,21 +419,21 @@ the owner's decision; the rest are open until confirmed.
   *Recommendation:* a follow-on ADR in which decision records keep frozen inputs for the
   regulatory period and are then anonymized by **crypto-shredding** (per-subject encryption
   key destroyed), which preserves append-only while making PII unrecoverable.
-- **C6: Examiner role.** There's no read-only role today. *Recommendation:* add
+- **C6: Examiner role.** **Resolved 2026-09-24: as recommended.** There's no read-only role today. *Recommendation:* add
   `examiner` (read-only, all screening and audit views, replay; no dispositions), with the
   same auth path and tests.
 - **C7: PEP and adverse-media sources.** **Resolved 2026-09-24: official sanctions lists only in v1, as recommended.** These are licensed data (same class of problem as
   KYB Open Decision #5). *Recommendation:* v1 = official sanctions lists only (free);
   decide PEP and adverse-media providers in a separate ADR before phase 2.
-- **C8: Run budget per offering.** Ticket 0001's run/stage budgets are process-wide env vars
+- **C8: Run budget per offering.** **Resolved 2026-09-24: as recommended.** Ticket 0001's run/stage budgets are process-wide env vars
   sized for KYB's under-2h target; screening needs seconds. *Recommendation:* make budgets
   per-pipeline (Orchestrator args per offering, env `ENTITYIQ_SCREENING_*`), and route
   screening to its own Celery queue so long KYB runs can't starve it.
-- **C9: Coupling with KYB.** Officers and owners found by KYB are natural screening
+- **C9: Coupling with KYB.** **Resolved 2026-09-24: as recommended.** Officers and owners found by KYB are natural screening
   subjects. *Recommendation:* v1 allows an optional `kyb_entity_id` link and a manual
   "screen this officer" action; automatic cross-offering screening and feeding screening
   results into KYB risk scores come later and need their own decision.
-- **C10: Naming.** The repo, product and docs are named "EntityIQ" and are business-centric.
+- **C10: Naming.** **Resolved 2026-09-24: as recommended.** The repo, product and docs are named "EntityIQ" and are business-centric.
   *Recommendation:* keep the repo name; call the offerings "EntityIQ Business
   Verification" and "EntityIQ Individual Screening" in the UI and docs.
 

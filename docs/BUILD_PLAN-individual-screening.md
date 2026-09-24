@@ -27,10 +27,12 @@
 - **Resolved decisions (2026-09-24):** C2 guarded auto-CLEAR; C3 deterministic v1
   (no LLM/model, so no subject PII sent to vendors); C5 crypto-shred after the 5-year
   AML period; C7 official sanctions lists only in v1 (OFAC, UN, EU, UK).
-- **Open decisions are planned with their PRD recommendations** and confirmed in
-  IS0-T1 before the tickets that depend on them start: C1 separate disposition
-  vocabulary; C4 DB-level append-only triggers; C6 `examiner` role; C8 per-offering
-  budgets + a dedicated Celery queue; C9 optional manual KYB link; C10 offering names.
+- **All remaining conflicts were confirmed as recommended (2026-09-24, IS0-T1):**
+  C1 separate disposition vocabulary; C4 DB-level append-only triggers; C6 `examiner`
+  role; C8 per-offering budgets + a dedicated Celery queue; C9 optional manual KYB
+  link; C10 offering names.
+- **Deferred to icebox (2026-09-24):** Phase 3 (IS3-*, PEP + adverse media) and
+  Phase 4 (IS4-*, model), pending licensing and model decisions.
 - **New dependencies need approval** (global rule): per-subject encryption (C5) and
   transliteration/phonetic keys (F6). IS0-T2 decides them; nothing is added before.
 - **Deterministic first:** Phases 1–2 ship with no model. The calibrated model
@@ -95,7 +97,7 @@
   - Files likely involved: docs/identity-verification-PRD.md
   - Depends on: —
   - Acceptance criteria covered: PRD-IDV §[17]
-  - Status: Todo
+  - Status: Complete (2026-09-24)
 - IS0-T2 — Choose encryption and name-matching libraries (ADR)
   - Objective: Pick the libraries for per-subject envelope encryption (C5) and
     transliteration/phonetic keys (F6). Weigh maintenance, license, wheel
@@ -288,14 +290,14 @@
   - Files likely involved: docs/decisions/ (new ADR), PRD-IDV §[12]
   - Depends on: —
   - Acceptance criteria covered: PRD-IDV C7, §[12], §[10] (licensing)
-  - Status: Todo
+  - Status: Deferred (icebox 2026-09-24)
 - IS3-T2 — PEP list adapter and PEP scoring terms
   - Objective: Ingest the chosen PEP dataset as versioned snapshots; add terms for
     position, jurisdiction and relationship (RCA); list-type thresholds.
   - Files likely involved: backend/app/lists/, backend/app/screening/scoring.py, tests
   - Depends on: IS3-T1, IS2-T4
   - Acceptance criteria covered: PRD-IDV §[12], F13
-  - Status: Todo
+  - Status: Deferred (icebox 2026-09-24)
 - IS3-T3 — Adverse-media adapter with provenance-bearing claims
   - Objective: Ingest adverse media per IS3-T1. Every claim carries source,
     timestamp and locator (F2); the async completion updates the run's partial result
@@ -303,7 +305,7 @@
   - Files likely involved: backend/app/screening/adverse_media.py (new), tests
   - Depends on: IS3-T1, IS2-T4
   - Acceptance criteria covered: PRD-IDV F1–F3, N3, N4
-  - Status: Todo
+  - Status: Deferred (icebox 2026-09-24)
 
 ### Phase 4 — Calibrated judgment model (optional)
 **Goal**
@@ -321,14 +323,14 @@
   - Files likely involved: docs/decisions/ (new ADR)
   - Depends on: —
   - Acceptance criteria covered: PRD-IDV §[9], C3, N5
-  - Status: Todo
+  - Status: Deferred (icebox 2026-09-24)
 - IS4-T2 — Evidence-only model term with persisted outputs
   - Objective: Add `name_semantic_same` as a claim with probability and model version,
     persisted in the decision record; replay reads it and never re-queries.
   - Files likely involved: backend/app/screening/model_term.py (new), tests
   - Depends on: IS4-T1, IS2-T5
   - Acceptance criteria covered: PRD-IDV §[9], N1
-  - Status: Todo
+  - Status: Deferred (icebox 2026-09-24)
 
 ### Phase 5 — Ongoing monitoring
 **Goal**
