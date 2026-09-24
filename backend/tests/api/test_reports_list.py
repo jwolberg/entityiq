@@ -21,6 +21,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401 — registers ORM models with Base.metadata
 from app.api.reports import _get_db
+from app.auth.service import Principal, get_principal
 from app.db.session import Base
 from app.main import app
 from app.models.entity import Entity
@@ -73,9 +74,15 @@ def list_client(list_engine):
             db.close()
 
     app.dependency_overrides[_get_db] = override_get_db
+    # Report reads require a principal (P4-T6); auth itself is covered in
+    # tests/api/test_report_auth.py, so stand in an authenticated operator here.
+    app.dependency_overrides[get_principal] = lambda: Principal(
+        kind="operator", id="op-test", name="test@example.com", operator_id="op-test"
+    )
     client = TestClient(app, raise_server_exceptions=True)
     yield client
     app.dependency_overrides.pop(_get_db, None)
+    app.dependency_overrides.pop(get_principal, None)
 
 
 # ---------------------------------------------------------------------------

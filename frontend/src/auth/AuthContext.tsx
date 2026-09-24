@@ -141,6 +141,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [auth, setAuth] = useState<AuthState | null>(null);
 
   function signOut() {
+    if (auth) {
+      apiClient.signOut(auth.token).catch(() => {
+        // Network failure: the token still expires server-side (TTL).
+      });
+    }
     setAuth(null);
   }
 

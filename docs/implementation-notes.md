@@ -990,3 +990,21 @@ locking down operator-only report reads.
   creates a Review with status "reviewed" if none exists, so adding a note
   marks the run reviewed. The UI now reflects that via an `onNotesSaved`
   callback. Worth revisiting whether notes should imply review.
+
+---
+
+## 2026-09-24 — P4-T6: auth hardening
+
+- `GET /reports` and `GET /reports/{run_id}` now require `get_principal`
+  (operator Bearer or API key). The assessment only flagged the detail route,
+  but the list was open too, which exposed every company, score, and review
+  status. The UI already sent its token, so there's no frontend change for
+  this part.
+- Existing report-content tests override `get_principal`; auth is covered
+  separately in `tests/api/test_report_auth.py`.
+- `POST /auth/sign-out` (always 204) invalidates the token. The UI calls it
+  best-effort and clears local state regardless.
+- Sessions expire after `SESSION_TTL_HOURS` (default 12); expired tokens are
+  purged on lookup. The store is still in-memory and single-process: a
+  restart signs everyone out, and it won't work across multiple API workers.
+  Documented, not changed (Redis-backed store is the noted replacement).

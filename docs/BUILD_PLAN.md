@@ -413,7 +413,9 @@ _Track: Integration & reporting API_
 - P4-T6 — Auth hardening
   - Objective: require an operator token or API key on `GET /reports/{run_id}`.
     Make sign-out call the server to invalidate the session. Add a session TTL.
-  - Depends on: — · AC: ARCHITECTURE § 5; PRD § Operator Authentication · Status: Todo
+  - Depends on: — · AC: ARCHITECTURE § 5; PRD § Operator Authentication · Status: Complete (2026-09-24) —
+    `GET /reports` AND `GET /reports/{id}` now require an operator token or API key (the list
+    was also open, not just the detail); `POST /auth/sign-out` + UI calls it; 12h session TTL.
 
 ### Phase 5 — Showcase readiness
 **Goal**

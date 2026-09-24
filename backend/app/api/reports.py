@@ -178,6 +178,7 @@ def _serialize_report(
 )
 def list_reports(
     db: Session = Depends(_get_db),
+    _principal: Principal = Depends(get_principal),
 ) -> ReportListResponse:
     """Return a summary list of all reports for the operator dashboard.
 
@@ -297,6 +298,7 @@ def export_report(
 def get_report(
     run_id: str,
     db: Session = Depends(_get_db),
+    _principal: Principal = Depends(get_principal),
 ) -> ReportResponse:
     """Return the report for the given verification run ID.
 

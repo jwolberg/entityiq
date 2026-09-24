@@ -267,6 +267,18 @@ export const apiClient = {
     });
   },
 
+  /**
+   * POST /auth/sign-out — invalidate the session server-side (204, no body,
+   * so this bypasses the JSON-parsing request() helper). Best-effort: the
+   * caller clears local auth regardless of the outcome.
+   */
+  async signOut(token: string): Promise<void> {
+    await fetch("/api/auth/sign-out", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
+
   /** GET /reports — dashboard list */
   listReports(token: string): Promise<ReportListResponse> {
     // No trailing slash: the backend route is exactly "/reports". A trailing
