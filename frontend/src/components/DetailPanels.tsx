@@ -100,6 +100,136 @@ function FieldRows({ rows }: { rows: Row[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// HQ Visualization (P2-T9) — static OpenStreetMap tile map, no key or library
+// ---------------------------------------------------------------------------
+
+const CONFIDENCE_LABEL: Record<string, { text: string; tone: "ok" | "warn" }> = {
+  high: { text: "High — registry and submission agree", tone: "ok" },
+  medium: { text: "Medium — registry address only", tone: "ok" },
+  low: { text: "Low — self-reported or conflicting", tone: "warn" },
+};
+
+const TILE = 256;
+const ZOOM = 15;
+const HALF_W = 3; // tiles either side of the centre column
+
+/** Web-Mercator tile coordinates (fractional) for a lat/lon at ZOOM. */
+function tileCoords(lat: number, lon: number): { x: number; y: number } {
+  const n = 2 ** ZOOM;
+  const r = (lat * Math.PI) / 180;
+  return {
+    x: ((lon + 180) / 360) * n,
+    y: ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * n,
+  };
+}
+
+/**
+ * 7×3 grid of OSM tiles (wide enough for a full-width panel) positioned so
+ * the point sits at the frame centre.
+ * Plain <img> tiles (not an iframe embed) render everywhere, including
+ * headless screenshots, and need no JS map library.
+ */
+function StaticMap({ lat, lon }: { lat: number; lon: number }) {
+  const { x, y } = tileCoords(lat, lon);
+  const tx = Math.floor(x);
+  const ty = Math.floor(y);
+  const offsetX = HALF_W * TILE + (x - tx) * TILE; // point's px position in the grid
+  const offsetY = TILE + (y - ty) * TILE;
+  const tiles = [];
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -HALF_W; dx <= HALF_W; dx++) {
+      tiles.push(
+        <img
+          key={`${dx},${dy}`}
+          src={`https://tile.openstreetmap.org/${ZOOM}/${tx + dx}/${ty + dy}.png`}
+          alt=""
+          width={TILE}
+          height={TILE}
+          style={{ position: "absolute", left: (dx + HALF_W) * TILE, top: (dy + 1) * TILE }}
+        />
+      );
+    }
+  }
+  return (
+    <div style={styles.map} data-testid="hq-map" role="img" aria-label="Headquarters location map">
+      <div
+        style={{
+          position: "absolute",
+          left: `calc(50% - ${offsetX}px)`,
+          top: `calc(50% - ${offsetY}px)`,
+          width: TILE * (2 * HALF_W + 1),
+          height: TILE * 3,
+        }}
+      >
+        {tiles}
+      </div>
+      <div style={styles.marker} data-testid="hq-marker" />
+      <div style={styles.mapAttribution}>
+        ©{" "}
+        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">
+          OpenStreetMap
+        </a>{" "}
+        contributors
+      </div>
+    </div>
+  );
+}
+
+interface HqPanelProps {
+  evidence: EvidenceItem[];
+  status: string; // section_statuses.evidence
+}
+
+export function HqPanel({ evidence, status }: HqPanelProps) {
+  if (status === "pending") return <Pending testId="hq-pending" />;
+  const get = (f: string) => evValue(findEvidence(evidence, f, "geocode"));
+  const lat = Number(get("hq_latitude"));
+  const lon = Number(get("hq_longitude"));
+  if (!get("hq_latitude") || Number.isNaN(lat) || Number.isNaN(lon)) {
+    return (
+      <NotAvailable
+        label="HQ location could not be determined from the registry or submitted address."
+        testId="hq-empty"
+      />
+    );
+  }
+  const confidence = CONFIDENCE_LABEL[get("hq_address_confidence") ?? "low"];
+  const source = get("hq_address_source");
+  return (
+    <div data-testid="hq-panel">
+      <StaticMap lat={lat} lon={lon} />
+      <a
+        href={`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`}
+        target="_blank"
+        rel="noreferrer"
+        style={styles.osmLink}
+        data-testid="hq-osm-link"
+      >
+        View on OpenStreetMap ↗
+      </a>
+      <FieldRows
+        rows={[
+          { label: "Address", value: get("hq_display_name") },
+          {
+            label: "Geocoded from",
+            value: source === "registry" ? "Registry legal address" : "Submitted billing address",
+          },
+        ]}
+      />
+      <div
+        style={{
+          ...styles.flag,
+          ...(confidence.tone === "warn" ? styles.flagWarn : styles.flagOk),
+        }}
+        data-testid="hq-confidence"
+      >
+        Address confidence: {confidence.text}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // DNS & Domain Intelligence (Tier-2)
 // ---------------------------------------------------------------------------
 
@@ -327,7 +457,9 @@ export function RiskAssessmentPanel({
   const elevated = signals.filter((s) => s.direction === "elevated");
   const trust = signals.filter((s) => s.direction === "trust");
 
-  const evidenceCount = sources.reduce((n, s) => n + s.evidence_count, 0);
+  const available = sources.filter((s) => s.status !== "unavailable");
+  const unavailable = sources.filter((s) => s.status === "unavailable");
+  const evidenceCount = available.reduce((n, s) => n + s.evidence_count, 0);
 
   return (
     <div data-testid="risk-panel">
@@ -347,9 +479,15 @@ export function RiskAssessmentPanel({
 
       {/* Evidence summary */}
       <div style={styles.evidenceSummary} data-testid="risk-evidence-summary">
-        {sources.length} source{sources.length === 1 ? "" : "s"} ·{" "}
+        {available.length} source{available.length === 1 ? "" : "s"} ·{" "}
         {evidenceCount} evidence item{evidenceCount === 1 ? "" : "s"}
       </div>
+      {unavailable.length > 0 && (
+        <div style={styles.unavailableSources} data-testid="risk-unavailable-sources">
+          Unavailable during this run (confidence reduced):{" "}
+          {unavailable.map((s) => s.source).join(", ")}
+        </div>
+      )}
 
       {/* Risk flags */}
       <div style={styles.flagsSection}>
@@ -490,9 +628,55 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: "0.5rem",
     textTransform: "capitalize" as React.CSSProperties["textTransform"],
   },
+  map: {
+    position: "relative",
+    overflow: "hidden",
+    width: "100%",
+    height: "240px",
+    border: "1px solid #e5e7eb",
+    borderRadius: "0.375rem",
+    backgroundColor: "#e5e7eb",
+  },
+  marker: {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    width: "14px",
+    height: "14px",
+    marginLeft: "-7px",
+    marginTop: "-7px",
+    borderRadius: "50%",
+    backgroundColor: "#dc2626",
+    border: "3px solid #ffffff",
+    boxShadow: "0 0 0 1px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.4)",
+  },
+  mapAttribution: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    padding: "1px 6px",
+    fontSize: "0.7rem",
+    backgroundColor: "rgba(255,255,255,0.85)",
+    color: "#374151",
+  },
+  osmLink: {
+    display: "inline-block",
+    margin: "0.4rem 0 0.75rem",
+    fontSize: "0.8rem",
+    color: "#2563eb",
+  },
   evidenceSummary: {
     fontSize: "0.8rem",
     color: "#6b7280",
+    marginBottom: "1rem",
+  },
+  unavailableSources: {
+    fontSize: "0.8rem",
+    color: "#92400e",
+    backgroundColor: "#fef3c7",
+    padding: "0.4rem 0.6rem",
+    borderRadius: "0.375rem",
+    marginTop: "-0.5rem",
     marginBottom: "1rem",
   },
   flagsSection: {

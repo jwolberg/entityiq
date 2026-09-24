@@ -404,3 +404,58 @@ class TestWebEvidenceStage:
         new_ctx = stage.run(db_run.id, db_session, context)
 
         assert new_ctx["web_evidence"]["status"] == "not_found"
+
+
+# ---------------------------------------------------------------------------
+# P4-T4 — contact extraction quality (cases taken from a live stripe.com run)
+# ---------------------------------------------------------------------------
+
+_NOISY_HTML = """<html><head><title>Acme Corporation</title></head><body>
+<p>Over 100 companies have switched to Acme this year.</p>
+<p>Example customer: jane.diaz@example.com, logo hero@2x.png</p>
+<p>Processed 100000000000 API requests. Version 2.10.2024.</p>
+<p>Reach us at sales@acme.com or +1 (415) 555-0142.</p>
+<p>HQ: 1 Market Street, San Francisco, CA 94105</p>
+</body></html>"""
+
+
+def _fields(result) -> dict:
+    assert isinstance(result, AdapterSuccess)
+    return {e.field: e for e in result.evidence}
+
+
+def test_placeholder_and_asset_emails_are_rejected():
+    ev = _fields(
+        WebAdapter(fetcher=_FakeWebFetcher(text=_NOISY_HTML)).fetch(_make_context())
+    )
+    emails = ev["web_contacts_email"].raw_payload["emails"]
+    assert emails == ["sales@acme.com"]
+
+
+def test_company_domain_email_is_primary_and_flagged():
+    html = "<p>partner@othervendor.io and hello@acme.com</p>"
+    ev = _fields(WebAdapter(fetcher=_FakeWebFetcher(text=html)).fetch(_make_context()))
+    email = ev["web_contacts_email"]
+    assert email.raw_value == "hello@acme.com"
+    assert email.raw_payload["on_company_domain"] is True
+
+
+def test_off_domain_only_email_is_not_flagged_on_domain():
+    html = "<p>Contact partner@othervendor.io</p>"
+    ev = _fields(WebAdapter(fetcher=_FakeWebFetcher(text=html)).fetch(_make_context()))
+    assert ev["web_contacts_email"].raw_payload["on_company_domain"] is False
+
+
+def test_bare_digit_runs_are_not_phones():
+    ev = _fields(
+        WebAdapter(fetcher=_FakeWebFetcher(text=_NOISY_HTML)).fetch(_make_context())
+    )
+    assert ev["web_contacts_phone"].raw_payload["phones"] == ["+1 (415) 555-0142"]
+
+
+def test_address_requires_a_real_street_suffix_word():
+    ev = _fields(
+        WebAdapter(fetcher=_FakeWebFetcher(text=_NOISY_HTML)).fetch(_make_context())
+    )
+    addresses = ev["web_contacts_address"].raw_payload["addresses"]
+    assert addresses == ["1 Market Street"]

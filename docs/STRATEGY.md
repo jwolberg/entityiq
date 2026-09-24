@@ -7,7 +7,7 @@ last_updated: 2026-05-26
 
 ## Target problem
 
-When enterprises self-register for SkyFi, operators must decide whether each
+When enterprises self-register on a B2B platform, operators must decide whether each
 business is real, correctly represented, and safe to approve — but manual review
 is both unreliable (evidence is fragmented across inconsistent global registries
 with no single source of truth) and unscalable (capped by operator time, with

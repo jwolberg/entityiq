@@ -75,10 +75,23 @@ def _build_section_statuses(
     }
 
 
+# Pipeline stage name → (evidence source name, tier) for adapter stages, so an
+# unavailable stage can be listed under the same name its evidence would carry.
+_STAGE_SOURCES: dict[str, tuple[str, int]] = {
+    "query_registries": ("opencorporates", 1),
+    "sanctions_screening": ("sanctions", 1),
+    "analyze_domain": ("domain", 2),
+    "enrich_network_ip": ("ipinfo", 2),
+    "web_evidence": ("web", 3),
+    "geocode_hq": ("geocode", 3),
+}
+
+
 def _build_summary(
     evidence_rows: list,
     field_comparisons: list,
     assessment,
+    source_availability: dict | None = None,
 ) -> dict:
     """Build the denormalized summary dict stored on the Report row.
 
@@ -146,6 +159,20 @@ def _build_summary(
                 "attribution": ev.attribution,
             }
         sources[ev.source]["evidence_count"] += 1
+    for src in sources.values():
+        src["status"] = "available"
+    # Adapter stages whose source was down produced no evidence; list them so
+    # the operator sees the gap instead of a silently shorter source list.
+    for stage_name, status in (source_availability or {}).items():
+        mapped = _STAGE_SOURCES.get(stage_name)
+        if status == "unavailable" and mapped and mapped[0] not in sources:
+            sources[mapped[0]] = {
+                "source": mapped[0],
+                "tier": mapped[1],
+                "evidence_count": 0,
+                "attribution": None,
+                "status": "unavailable",
+            }
 
     # Triage section (P2-T7) — TriageResult derived from assessment signals
     triage: dict | None = None
@@ -285,7 +312,9 @@ def assemble_report(run_id: str, db: "Session") -> None:
     section_statuses = _build_section_statuses(
         run.source_availability, has_assessment=assessment is not None
     )
-    summary = _build_summary(evidence_rows, field_comparisons, assessment)
+    summary = _build_summary(
+        evidence_rows, field_comparisons, assessment, run.source_availability
+    )
 
     # Determine overall report status
     if all(v == "complete" for v in section_statuses.values()):

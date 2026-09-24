@@ -31,6 +31,34 @@ describe("Dashboard", () => {
     vi.restoreAllMocks();
   });
 
+  it("shows the triage tier so an escalated low-score company isn't shown as safe", async () => {
+    const items = [
+      {
+        run_id: "run-v",
+        report_id: "rep-v",
+        company_name: "Volga Maritime",
+        domain: "volga.example",
+        status: "complete",
+        overall_score: 22,
+        triage_tier: "escalate",
+        review_status: null,
+        generated_at: "2026-09-24T10:00:00Z",
+      },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ items, total: 1 }) })
+    );
+    render(
+      <Wrapper>
+        <Dashboard onSelect={vi.fn()} />
+      </Wrapper>
+    );
+    await waitFor(() => expect(screen.getByTestId("triage-badge")).toBeDefined());
+    expect(screen.getByTestId("triage-badge").textContent).toBe("Escalate");
+    expect(screen.getByText("22").getAttribute("style")).toContain("rgb(220, 38, 38)");
+  });
+
   it("renders loading state initially", () => {
     vi.stubGlobal(
       "fetch",

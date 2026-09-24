@@ -828,3 +828,42 @@ class TestTrustSignals:
         assert "registry_name_confirmed" in trust_names
         assert "registration_number_present" in trust_names
         assert "registry_status_active" in trust_names
+
+
+# ---------------------------------------------------------------------------
+# P4-T4 — web contact trust only for company-domain emails
+# ---------------------------------------------------------------------------
+
+
+def _web_email(on_domain: bool) -> Evidence:
+    ev = _ev("run-web", "web", 3, "web_contacts_email", "x@acme.com")
+    ev.raw_payload = {"emails": ["x@acme.com"], "on_company_domain": on_domain}
+    return ev
+
+
+def test_web_contact_trust_requires_company_domain_email():
+    from app.scoring.signals import representation_confidence_signals
+
+    on = {s.name for s in representation_confidence_signals([_web_email(True)], [])}
+    off = {s.name for s in representation_confidence_signals([_web_email(False)], [])}
+    assert "web_contact_email_found" in on
+    assert "web_contact_email_found" not in off
+
+
+# ---------------------------------------------------------------------------
+# P4-T2 — computed-but-dropped signals are now scored
+# ---------------------------------------------------------------------------
+
+
+def test_registry_identity_conflict_is_an_elevated_entity_signal():
+    ev = _ev("run-c", "opencorporates", 1, "registry_identity_conflict", "true")
+    signals = {s.name: s for s in entity_legitimacy_signals([ev])}
+    sig = signals["conflicting_company_identities"]
+    assert sig.direction == "elevated"
+    assert sig.evidence_ids == [ev.id]
+
+
+def test_free_email_domain_is_an_elevated_representation_signal():
+    ev = _ev("run-f", "submission", 0, "free_email_domain", "true")
+    signals = {s.name: s for s in representation_confidence_signals([ev], [])}
+    assert signals["free_email_domain"].direction == "elevated"

@@ -18,7 +18,7 @@ users (the operator UI and integrating systems) enter through the same API layer
    Enterprise registrant
             │ (registers)
             ▼
-   SkyFi onboarding flow ─┐                  Operator web app (React/TS)
+   Host onboarding flow  ─┐                  Operator web app (React/TS)
    Other internal systems ─┤                          │  ▲
             (submit │ ▲ report)                 (actions │ │ data)
                     ▼ │                                  ▼ │
@@ -139,7 +139,7 @@ pipeline from per-source quirks and the PRD's known "scraping brittleness" risk.
 
 ## 5. Authentication & authorization
 
-- **Operators / leads** — sign in via OIDC/SSO against SkyFi's IdP; session-based.
+- **Operators / leads** — sign in via OIDC/SSO against the host organization's IdP; session-based.
   **RBAC**: `operator` (review, correct, re-run) vs `lead` (oversight + audit).
   Every action is attributed and audited.
 - **Integrating systems** — authenticate at the API boundary with service
@@ -173,7 +173,7 @@ the alternative. Decisions #1–#3 were **resolved 2026-05-26** (see
 | 1 | Backend stack | **Python + FastAPI** ✅ resolved 2026-05-26 | Verification, web extraction (Playwright), and parsing/normalization (addresses, phone, WHOIS, DNS, sanctions) have the strongest ecosystem in Python — and these *are* the product (Tracks 1–2). Alt: **Node/TS** unifies language with the FE and `shared/`, at the cost of a weaker enrichment ecosystem. |
 | 2 | Job orchestration | **Celery + Redis** ✅ resolved 2026-05-26 | Mature, simple, fits Python and the async-run model. Alt: RQ (lighter) or Temporal (durable workflows, heavier) if pipeline complexity grows. |
 | 3 | `shared/` contents | **OpenAPI-generated TS types** ✅ resolved 2026-05-26 | If BE is Python, the shared contract is the API schema, with TS types generated for the FE — not shared runtime code. Revisit if stack #1 flips to Node/TS. |
-| 4 | HQ map provider | _Undecided_ | Needed for the HQ visualization (Mapbox / Google Maps / Leaflet+OSM). Licensing and cost differ. |
-| 5 | Data-source access | _Undecided_ | Registries, OpenCorporates, sanctions APIs, LinkedIn have real licensing/ToS limits (flagged in challenge.md). Confirms which Tier 1 sources are actually obtainable before pipeline design. |
+| 4 | HQ map provider | **Resolved 2026-09-24:** OpenStreetMap embed (iframe, no key/SDK) + Nominatim geocoding | Chosen for zero cost/keys in a demo. Nominatim policy: identifying User-Agent, ≤1 req/s — fine per submission, not for bulk; swap to a paid geocoder (Mapbox/Google) at scale. |
+| 5 | Data-source access | _Undecided_ | Registries, OpenCorporates, sanctions APIs, LinkedIn have real licensing/ToS limits (flagged in problem-statement.md). Confirms which Tier 1 sources are actually obtainable before pipeline design. |
 | 6 | Co-primary tiebreaker | _Unresolved_ | When operator-UX and API-consumer needs conflict, which wins? Carried from `STRATEGY.md`. |
 | 7 | PII retention policy | _Undecided_ | How long submissions, contacts, and network metadata are retained, and who may access them. |

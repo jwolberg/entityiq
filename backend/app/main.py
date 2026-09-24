@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.api.audit import router as audit_router
 from app.api.reanalysis import router as reanalysis_router
 from app.api.reports import router as reports_router
 from app.api.reviews import router as reviews_router
@@ -19,6 +20,7 @@ app.include_router(auth_router)
 app.include_router(reviews_router)
 app.include_router(reanalysis_router)
 app.include_router(workflow_router)
+app.include_router(audit_router)
 
 
 @app.get("/health")

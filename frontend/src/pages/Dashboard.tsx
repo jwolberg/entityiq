@@ -15,7 +15,20 @@ interface DashboardProps {
   onSelect: (runId: string) => void;
 }
 
-function scoreColor(score: number | null): string {
+const TIER_COLOR: Record<string, string> = {
+  escalate: "#dc2626",
+  review: "#d97706",
+  pre_clear: "#16a34a",
+};
+const TIER_LABEL: Record<string, string> = {
+  escalate: "Escalate",
+  review: "Review",
+  pre_clear: "Pre-clear",
+};
+
+/** Tier wins over the score band: a sanctions hit escalates even at score 22. */
+function scoreColor(score: number | null, tier?: string | null): string {
+  if (tier && TIER_COLOR[tier]) return TIER_COLOR[tier];
   if (score === null) return "#6b7280";
   if (score >= 70) return "#dc2626"; // high risk — red
   if (score >= 40) return "#d97706"; // medium risk — amber
@@ -224,6 +237,7 @@ export function Dashboard({ onSelect }: DashboardProps) {
               <th style={styles.th}>Domain</th>
               <th style={styles.th}>Analysis Date</th>
               <th style={{ ...styles.th, textAlign: "center" }}>Risk Score</th>
+              <th style={styles.th}>Triage</th>
               <th style={styles.th}>Review Status</th>
             </tr>
           </thead>
@@ -251,13 +265,29 @@ export function Dashboard({ onSelect }: DashboardProps) {
                     style={{
                       fontWeight: 700,
                       fontSize: "1rem",
-                      color: scoreColor(item.overall_score),
+                      color: scoreColor(item.overall_score, item.triage_tier),
                     }}
                     data-testid="risk-score"
                     aria-label={`Risk score: ${scoreLabel(item.overall_score)}`}
                   >
                     {scoreLabel(item.overall_score)}
                   </span>
+                </td>
+                <td style={styles.td}>
+                  {item.triage_tier && TIER_LABEL[item.triage_tier] ? (
+                    <span
+                      style={{
+                        ...badgeStyles.tier,
+                        color: TIER_COLOR[item.triage_tier],
+                        borderColor: TIER_COLOR[item.triage_tier],
+                      }}
+                      data-testid="triage-badge"
+                    >
+                      {TIER_LABEL[item.triage_tier]}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
                 </td>
                 <td style={styles.td}>{reviewBadge(item.review_status)}</td>
               </tr>
@@ -270,6 +300,15 @@ export function Dashboard({ onSelect }: DashboardProps) {
 }
 
 const badgeStyles: Record<string, React.CSSProperties> = {
+  tier: {
+    display: "inline-block",
+    padding: "0.125rem 0.5rem",
+    borderRadius: "9999px",
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    border: "1px solid",
+    backgroundColor: "#ffffff",
+  },
   pending: {
     display: "inline-block",
     padding: "0.125rem 0.5rem",

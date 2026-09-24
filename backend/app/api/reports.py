@@ -32,6 +32,7 @@ from app.schemas.report import (
     ReportListItemSchema,
     ReportListResponse,
     ReportResponse,
+    ReviewSummarySchema,
     ScoresSchema,
     SectionStatuses,
     SourceSummarySchema,
@@ -58,7 +59,27 @@ def _get_db():
 # ---------------------------------------------------------------------------
 
 
-def _serialize_report(report: Report) -> ReportResponse:
+def _review_summary(db: Session, run_id: str) -> ReviewSummarySchema | None:
+    review = (
+        db.query(Review)
+        .filter(Review.verification_run_id == run_id)
+        .order_by(Review.created_at.desc())
+        .first()
+    )
+    if review is None:
+        return None
+    decided = review.decided_at or review.updated_at or review.created_at
+    return ReviewSummarySchema(
+        status=review.status,
+        notes=review.notes,
+        reviewer_name=review.operator.full_name if review.operator else None,
+        decided_at=decided.isoformat() if decided else None,
+    )
+
+
+def _serialize_report(
+    report: Report, review: ReviewSummarySchema | None = None
+) -> ReportResponse:
     """Convert a Report ORM row + its summary dict into a ReportResponse.
 
     The summary is pre-assembled by StoreReportStage and stored as JSON.
@@ -124,6 +145,7 @@ def _serialize_report(report: Report) -> ReportResponse:
             tier=s["tier"],
             evidence_count=s["evidence_count"],
             attribution=s.get("attribution"),
+            status=s.get("status", "available"),
         )
         for s in summary.get("sources", [])
     ]
@@ -140,6 +162,7 @@ def _serialize_report(report: Report) -> ReportResponse:
         mismatches=mismatches,
         sources=sources,
         generated_at=generated_at,
+        review=review,
     )
 
 
@@ -155,6 +178,7 @@ def _serialize_report(report: Report) -> ReportResponse:
 )
 def list_reports(
     db: Session = Depends(_get_db),
+    _principal: Principal = Depends(get_principal),
 ) -> ReportListResponse:
     """Return a summary list of all reports for the operator dashboard.
 
@@ -183,6 +207,7 @@ def list_reports(
         summary = report.summary or {}
         scores_data = summary.get("scores") or {}
         overall_score = scores_data.get("overall_score")
+        triage_tier = scores_data.get("triage_tier")
 
         # Review status — None if no review row exists
         review = (
@@ -202,6 +227,7 @@ def list_reports(
                 domain=domain,
                 status=report.status,
                 overall_score=overall_score,
+                triage_tier=triage_tier,
                 review_status=review_status,
                 generated_at=generated_at,
             )
@@ -263,7 +289,7 @@ def export_report(
         ),
     )
 
-    return _serialize_report(report)
+    return _serialize_report(report, _review_summary(db, report.verification_run_id))
 
 
 @router.get(
@@ -274,6 +300,7 @@ def export_report(
 def get_report(
     run_id: str,
     db: Session = Depends(_get_db),
+    _principal: Principal = Depends(get_principal),
 ) -> ReportResponse:
     """Return the report for the given verification run ID.
 
@@ -301,4 +328,4 @@ def get_report(
             ),
         )
 
-    return _serialize_report(report)
+    return _serialize_report(report, _review_summary(db, report.verification_run_id))

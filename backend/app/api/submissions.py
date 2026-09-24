@@ -22,6 +22,7 @@ from app.db.session import SessionLocal
 from app.models.entity import Entity
 from app.models.submission import Submission
 from app.models.verification_run import VerificationRun
+from app.pipeline.normalize import is_free_email_domain as _is_free_email_domain
 from app.schemas.submission import SubmissionRequest, SubmissionResponse
 
 router = APIRouter(prefix="/submissions", tags=["submissions"])
@@ -29,53 +30,6 @@ router = APIRouter(prefix="/submissions", tags=["submissions"])
 # ---------------------------------------------------------------------------
 # Free / disposable email domain detection
 # ---------------------------------------------------------------------------
-
-_FREE_EMAIL_DOMAINS: frozenset[str] = frozenset(
-    {
-        "gmail.com",
-        "yahoo.com",
-        "yahoo.co.uk",
-        "hotmail.com",
-        "hotmail.co.uk",
-        "outlook.com",
-        "live.com",
-        "icloud.com",
-        "me.com",
-        "mac.com",
-        "aol.com",
-        "protonmail.com",
-        "proton.me",
-        "tutanota.com",
-        "mailinator.com",
-        "guerrillamail.com",
-        "throwam.com",
-        "temp-mail.org",
-        "yopmail.com",
-        "sharklasers.com",
-        "guerrillamailblock.com",
-        "grr.la",
-        "guerrillamail.info",
-        "guerrillamail.biz",
-        "guerrillamail.de",
-        "guerrillamail.net",
-        "guerrillamail.org",
-        "spam4.me",
-        "trashmail.com",
-        "trashmail.me",
-        "trashmail.net",
-        "dispostable.com",
-    }
-)
-
-
-def _is_free_email_domain(email: str) -> bool:
-    """Return True if the email uses a known free/disposable domain."""
-    try:
-        domain = email.split("@", 1)[1].lower()
-    except IndexError:
-        return False
-    return domain in _FREE_EMAIL_DOMAINS
-
 
 # ---------------------------------------------------------------------------
 # Trusted-IP extraction

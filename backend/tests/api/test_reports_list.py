@@ -21,6 +21,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401 — registers ORM models with Base.metadata
 from app.api.reports import _get_db
+from app.auth.service import Principal, get_principal
 from app.db.session import Base
 from app.main import app
 from app.models.entity import Entity
@@ -73,9 +74,15 @@ def list_client(list_engine):
             db.close()
 
     app.dependency_overrides[_get_db] = override_get_db
+    # Report reads require a principal (P4-T6); auth itself is covered in
+    # tests/api/test_report_auth.py, so stand in an authenticated operator here.
+    app.dependency_overrides[get_principal] = lambda: Principal(
+        kind="operator", id="op-test", name="test@example.com", operator_id="op-test"
+    )
     client = TestClient(app, raise_server_exceptions=True)
     yield client
     app.dependency_overrides.pop(_get_db, None)
+    app.dependency_overrides.pop(get_principal, None)
 
 
 # ---------------------------------------------------------------------------
@@ -233,3 +240,21 @@ def test_list_no_score(list_client, list_engine):
     assert match is not None
     assert match["overall_score"] is None
     assert match["status"] == "pending"
+
+
+def test_list_exposes_triage_tier(list_client, list_engine):
+    """The queue must show the tier: a sanctions hit escalates even at a low
+    score, so the score alone would render it as low risk."""
+    SessionMaker = sessionmaker(bind=list_engine, autocommit=False, autoflush=False)
+    db = SessionMaker()
+    try:
+        run_id, report_id = _make_report(db, "Volga Ltd", "volga.example", 22.0)
+        report = db.get(Report, report_id)
+        report.summary = {"scores": {"overall_score": 22.0, "triage_tier": "escalate"}}
+        db.commit()
+    finally:
+        db.close()
+
+    items = list_client.get("/reports").json()["items"]
+    match = next(i for i in items if i["run_id"] == run_id)
+    assert match["triage_tier"] == "escalate"

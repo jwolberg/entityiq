@@ -799,23 +799,12 @@ locking down operator-only report reads.
 
 ---
 
-## 2026-05-31 — Demo: skyfi.com hero as login backdrop
+## 2026-05-31 — Demo: screenshot login backdrop (removed 2026-09-24)
 
-- Decision (not in spec): for a demo, the operator sign-in screen renders a
-  captured skyfi.com page as a full-width backdrop with the sign-in card pinned
-  centered on top. Requested directly by the user for the demo look.
-- Implementation: `frontend/public/skyfi-bg.png` is a full-page skyfi.com
-  screenshot (cookie banner removed before capture). `SignInForm` in
-  `frontend/src/auth/AuthContext.tsx` renders it via `<img src="/skyfi-bg.png">`
-  inside a fixed, centered overlay (`pointerEvents` lets the page scroll behind
-  the card).
-- Tradeoff: static screenshot, not the live site (avoids X-Frame-Options /
-  framing issues, keeps it self-contained). The ~1.3 MB PNG is committed as a
-  demo asset.
-- Follow-ups: demo-only chrome — revert to the plain card (or gate behind a flag)
-  before any real deployment. Sign-in is not functional yet: no operator is
-  seeded and EntityIQ's backend isn't running (port 8000 in use by another
-  project; Python 3.11+ not installed).
+- Decision (not in spec): for a demo, the operator sign-in screen rendered a
+  full-page website screenshot as a backdrop with the sign-in card pinned on top.
+- Removed 2026-09-24 when the repo was de-branded for public showcase use; the
+  sign-in page now uses a neutral CSS gradient and the PNG asset is deleted.
 
 ---
 
@@ -880,3 +869,272 @@ locking down operator-only report reads.
 - Tests: added operator-Bearer submit + no-auth-401 cases to
   `tests/test_submissions.py`. Backend 385 passed; frontend lint + 18 tests +
   build all pass.
+
+---
+
+## 2026-09-24 — De-branded for public showcase
+
+- The repo moved to GitHub (`jwolberg/entityiq`) as a portfolio project. All
+  references to the originating company were removed from the current tree.
+  Docs now describe a generic B2B platform with self-service enterprise
+  registration.
+- `docs/challenge.md` → `docs/problem-statement.md`, reworded in the project's
+  own voice; links updated in README, USERS, ARCHITECTURE, and both build plans.
+- Sign-in page: screenshot backdrop replaced with a neutral CSS gradient.
+- Web fetcher User-Agent contact URL now points at the GitHub repo.
+- Tradeoff (user decision): git history was NOT rewritten. Earlier commits
+  still contain the old name and the screenshot asset.
+
+---
+
+## 2026-09-24 — Build-vs-PRD assessment; plan updated
+
+- Full audit in `docs/ASSESSMENT-2026-09-24.md`, including a live stripe.com run
+  (SQLite + eager). A legitimate company scored 42 ("review") because MX/SPF
+  trust signals are mis-wired, OpenCorporates returns 401 without a token, WHOIS
+  never runs (undeclared dependency), and web contacts come back as junk.
+- Plan decision: completed Phase-2 tickets keep status Complete (built as
+  scoped) and carry a "Gap" annotation pointing at the new Phase 4 fix ticket,
+  rather than being reopened. This keeps history honest and the fix work
+  trackable.
+- Scope added at the user's direction: Phase 5 (showcase readiness: README,
+  one-command demo, demo dataset, GitHub CI, optional hosted demo). This
+  overrides the plan's "no new scope" update rule.
+- Identity-corroboration plan is now sequenced after Phase 4 (it depends on the
+  P4-T1 field contract).
+
+---
+
+## 2026-09-24 — P4-T1: real-pipeline e2e test + MX/SPF fix
+
+- Added `backend/tests/pipeline/test_pipeline_e2e.py`. It runs the real stage
+  classes in `default_stages()` order with only network clients faked, and a
+  guard test asserts the order matches production. RED before the fix:
+  `has_mx_records` was missing.
+- Fix: the domain adapter now also emits boolean `mx_present` / `spf_present`
+  evidence. `mx_records` / `spf_record` stay as the display values the UI reads.
+- Deviation from plan: no shared field-constants module. The e2e test catches
+  adapter/scoring drift directly without touching ~40 string literals.
+- Noticed, not fixed: both `long_lived_domain` (infrastructure) and
+  `long_lived_domain_trust` (risk) fire off the same evidence. Double-counting
+  may be intended (the layers are separate) — revisit when tuning weights.
+
+---
+
+## 2026-09-24 — P4-T3: live-source viability
+
+- `OPENCORPORATES_API_TOKEN` is read from the environment. The API now returns
+  401 without a token, even for dev use.
+- The orchestrator detects adapter outages. Adapter stages never raise on
+  failure; they return `{"status": <kind>}` under their context key. Any new
+  context entry with status `timeout` / `unavailable` / `rate_limited` now
+  marks the stage `unavailable`. `not_found` stays `complete`: "no registry
+  match" is a finding, not an outage.
+- The report's `sources` entries carry `status` (`available` / `unavailable`),
+  and unavailable adapter sources are listed with zero evidence. This is a new
+  field with a default, so it's backward compatible for API consumers. The UI
+  shows an amber "Unavailable during this run" line and counts only available
+  sources.
+- New runtime dependencies (approved via "move forward with recommendations"):
+  `httpx==0.27.2` moved from dev to runtime; `python-whois==0.9.5` added. A
+  pyproject test guards against runtime imports living only in the dev extra.
+
+---
+
+## 2026-09-24 — P4-T4: web contact extraction quality
+
+- Test cases come from the live stripe.com junk: `jane.diaz@example.com`,
+  `100000000000`, and "100 companies have". The last matched because the
+  address regex let "have" end in the "Ave" suffix.
+- Emails: placeholder domains and image-asset matches (`hero@2x.png`) are
+  dropped. Company-domain addresses sort first. The evidence payload carries
+  `on_company_domain`, and `web_contact_email_found` now requires it to be true
+  (a vendor's email on the page is not evidence the org runs the site).
+- Phones: 10–15 digits, must be formatted (a bare digit run is almost always a
+  statistic), no degenerate repeats. Tradeoff: an unformatted real number like
+  "4155550142" is now rejected.
+- Found while testing: `representation_confidence_signals` returned early when
+  there were no field comparisons and skipped web-contact signals, contrary to
+  its own comment. Fixed.
+
+---
+
+## 2026-09-24 — P5-T2: one-command demo
+
+- `scripts/demo.sh`: first run creates the venv and runs `npm ci`; every run
+  migrates a local SQLite DB, seeds, and serves API + UI with Celery in eager
+  mode. Verified: fresh DB → both servers up → lead sign-in through the Vite
+  `/api` proxy → Ctrl-C/TERM stops both with no orphan processes.
+- `python -m app.seed`: operator + lead accounts (shared demo password) and a
+  `demo-integration` API key, printed only on creation. Idempotent.
+- Deviation: no docker-compose yet. The Docker daemon wasn't running here to
+  verify it, and I won't commit an untested compose file. The script already
+  delivers the one-command goal.
+- Process note: the seed module was written before its tests were run, so the
+  tests never had a RED run. They do assert real behavior (password verifies,
+  roles, single key, idempotency).
+- Added `backend/.gitignore` (`*.db`) instead of editing the root `.gitignore`,
+  which has uncommitted local changes.
+
+---
+
+## 2026-09-24 — P4-T5: review state + notes read path
+
+- `ReportResponse.review` (nullable) holds the latest Review row's status,
+  notes, reviewer name, and decided_at. It's on both `GET /reports/{id}` and
+  `/export`. It's a new optional field, so it's backward compatible.
+- The detail page initializes from `report.review`, so a reviewed company
+  reopens as reviewed (no second Mark Reviewed → 409). Notes show in the
+  banner.
+- Existing behavior surfaced, not changed: `POST /workflow/runs/{id}/notes`
+  creates a Review with status "reviewed" if none exists, so adding a note
+  marks the run reviewed. The UI now reflects that via an `onNotesSaved`
+  callback. Worth revisiting whether notes should imply review.
+
+---
+
+## 2026-09-24 — P4-T6: auth hardening
+
+- `GET /reports` and `GET /reports/{run_id}` now require `get_principal`
+  (operator Bearer or API key). The assessment only flagged the detail route,
+  but the list was open too, which exposed every company, score, and review
+  status. The UI already sent its token, so there's no frontend change for
+  this part.
+- Existing report-content tests override `get_principal`; auth is covered
+  separately in `tests/api/test_report_auth.py`.
+- `POST /auth/sign-out` (always 204) invalidates the token. The UI calls it
+  best-effort and clears local state regardless.
+- Sessions expire after `SESSION_TTL_HOURS` (default 12); expired tokens are
+  purged on lookup. The store is still in-memory and single-process: a
+  restart signs everyone out, and it won't work across multiple API workers.
+  Documented, not changed (Redis-backed store is the noted replacement).
+
+---
+
+## 2026-09-24 — Fix: sanctions hit stored as pre_clear (found building P5-T3)
+
+- Bug: the tier persisted on `RiskAssessment.triage_tier` (dashboard +
+  `scores.triage_tier`) came from the score thresholds alone.
+  `triage.derive_triage` has a critical-signal override (sanctions hit, high
+  ASN reuse → escalate), but only the report's triage section used it. A
+  sanctions-matched company with otherwise clean infrastructure showed
+  **pre_clear** on the dashboard and **escalate** in its own report.
+- Fix: `CRITICAL_ESCALATION_SIGNALS` moved to `engine.py`, and
+  `_triage_tier(score, signal_names)` applies it, so both paths use one rule.
+  triage.py re-exports the set.
+- Existing stored assessments are not recomputed; re-running analysis
+  corrects them.
+
+---
+
+## 2026-09-24 — P5-T3: demo dataset
+
+- `app/demo_data.py`: six fictional companies go through the real stage
+  classes. Only the network clients are replaced with recorded responses, so
+  the demo is deterministic and offline and never contacts real domains.
+  Tiers: Northwind + Fabrikam → pre_clear; Contoso (no registry match, foreign
+  hosting IP) + Brightpath (young domain, registry outage shown as unavailable)
+  → review; Quantum Ledger (3-week shell on a datacenter IP) + Volga Maritime
+  (fictional sanctions match) → escalate.
+- `tests/test_demo_data.py` pins each scenario's tier, so a scoring change
+  that silently re-tiers the demo fails CI.
+- All names, domains, and sanctions entries are fictional (the SDN CSV is a
+  two-line demo list), so no real company appears as sanctioned.
+
+---
+
+## 2026-09-24 — P2-T9: HQ visualization (Open Decision #4 resolved)
+
+- Decision (applied from the assessment recommendation the user approved):
+  OpenStreetMap for the map, Nominatim for geocoding. No API key, and no
+  Leaflet: the map is OSM's own embed iframe, so there's no new npm
+  dependency. Tradeoff: no custom styling or clustering, and Nominatim's
+  policy (identifying UA, ≤1 req/s) rules out bulk use. Swap to a paid
+  geocoder at scale.
+- New pipeline stage `geocode_hq` after `consistency_checks`, so it can read
+  the billing-vs-registry comparison. It geocodes the registry legal address
+  when present, else the submitted billing address. Address confidence: high
+  (registry + submission agree), medium (registry only), low (self-reported
+  or conflicting). Display only; not yet a scoring input.
+- Process note: the adapter was written before its tests ran. To compensate,
+  I mutated it (confidence + source logic); the tests failed on the mutation
+  and passed on restore. Demo scenarios carry recorded coordinates, and a
+  live Nominatim lookup was verified once.
+
+---
+
+## 2026-09-24 — P3-T2: audit trail readable + lead gating
+
+- `GET /audit/runs/{run_id}` is open to any signed-in operator: it's the
+  history of the case they're viewing. It includes events tied to the run's
+  submission (e.g. `submission_received`).
+- `GET /audit/events` is lead-only. This is the first real use of
+  `require_lead`, which existed but gated nothing. An operator gets 403, and
+  the UI hides the nav link for operators, but the API is the enforcement
+  point.
+- The actor is resolved to the operator email or integration name, else
+  "system".
+- Activity panel fetches its own data, so an audit-read failure never blocks
+  the report page. Two existing CompanyDetail tests that sequence fetch mocks
+  by call order needed an audit response inserted: the panel adds a request
+  on mount.
+- Not done: a pagination cursor (limit ≤ 500 for now) and filtering by actor
+  on the server (the UI filters client-side).
+
+---
+
+## 2026-09-24 — P4-T2: dropped signals wired
+
+- Conflicting identities: the resolve stage's `conflict_signal` can never
+  fire in production, because its only candidate is synthesized from the
+  submission itself. Scoring it would be a no-op, so it stays unwired (the
+  deviation from plan). The real signal now comes from the registry adapter:
+  ≥2 distinct registered entities (different company numbers) whose names
+  equal the submitted name after legal-suffix stripping →
+  `registry_identity_conflict` evidence → `conflicting_company_identities`
+  (entity, elevated, 0.5). Deliberately narrow, so differently named
+  subsidiaries of big companies don't trip it.
+- Free email: the list moved from `api/submissions.py` to
+  `pipeline/normalize.py` (one source of truth). The normalize stage records
+  tier-0 `free_email_domain` evidence (source "submission"). Tier 0 is
+  excluded from source-coverage confidence. It's scored as
+  `free_email_domain` (representation, elevated, 0.3) on both the normal and
+  no-comparison paths.
+- Docstrings that claimed `suspicious_dns_infrastructure`,
+  `inconsistent_contact_information`, and `ip_distance_flag` now say "not
+  implemented".
+- `valid_tax_id` stays unreachable; it's handed to identity-corroboration
+  IC1-T3.
+- Side effect: "submission" appears as a source in the report's sources list
+  when free-email evidence exists. Accepted, since it is attributed evidence.
+
+---
+
+## 2026-09-24 — Fix: dashboard showed a sanctions hit as low risk
+
+- Found while taking README screenshots: the queue colored rows by score band
+  only and didn't show the triage tier, so Volga Maritime (sanctions hit,
+  score 22, tier escalate) appeared as a green "22".
+- `GET /reports` items now carry `triage_tier` (new optional field). The
+  dashboard adds a Triage badge column, and the score color follows the tier
+  when present.
+- Not changed: the "risk level" filter still uses score bands, so "High (70+)"
+  won't include a sanctions escalation at 22. Follow-up: filter by tier.
+
+---
+
+## 2026-09-24 — Screenshot pass fixes (HQ map, headline tier, demo activity)
+
+- HQ map: replaced the OSM `export/embed.html` iframe with a static 3×3 grid
+  of OSM tiles, a centred marker, attribution, and a "View on OpenStreetMap"
+  link. Why: the iframe came out blank in headless screenshots, and I couldn't
+  confirm it renders anywhere I could observe (the Chrome extension timed out
+  3×; I didn't sign in via real Chrome because that means typing a password).
+  Plain `<img>` tiles render in any browser, have no iframe dependency, and
+  are testable (exact tile URLs asserted). Tradeoff: no pan/zoom; the OSM link
+  covers that. OSM tile usage policy (light use, attribution) is respected.
+- Detail page headline score is colored by triage tier and names it
+  ("Triage: Escalate — … A human decides."). This matches the dashboard fix:
+  a sanctions hit with a score of 22 was shown in green.
+- Demo dataset records a `system.submission_received` audit event per
+  company, so the Activity panel isn't empty in a fresh demo.

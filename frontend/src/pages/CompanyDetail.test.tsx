@@ -178,6 +178,157 @@ describe("CompanyDetail", () => {
     vi.restoreAllMocks();
   });
 
+  it("colors the headline score by triage tier and names the tier", async () => {
+    const report = {
+      ...COMPLETE_REPORT,
+      scores: { ...COMPLETE_REPORT.scores, overall_score: 22, triage_tier: "escalate" },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ ok: true, json: async () => report })
+    );
+    render(
+      <Wrapper>
+        <CompanyDetail runId="run-abc" onBack={vi.fn()} />
+      </Wrapper>
+    );
+    await waitFor(() => expect(screen.getByTestId("detail-overall-score")).toBeDefined());
+    expect(
+      screen.getByTestId("detail-overall-score").getAttribute("style")
+    ).toContain("rgb(220, 38, 38)");
+    expect(screen.getByTestId("detail-triage-tier").textContent).toContain("Escalate");
+  });
+
+  it("renders the HQ map at the geocoded point with address confidence", async () => {
+    const geo = (field: string, value: string) => ({
+      id: `ev-geo-${field}`,
+      source: "geocode",
+      tier: 3,
+      field,
+      raw_value: value,
+      normalized_value: value,
+      confidence: 0.7,
+      attribution: { provider: "openstreetmap_nominatim" },
+      fetched_at: null,
+    });
+    const report = {
+      ...COMPLETE_REPORT,
+      evidence: [
+        ...COMPLETE_REPORT.evidence,
+        geo("hq_latitude", "47.6114"),
+        geo("hq_longitude", "-122.3366"),
+        geo("hq_display_name", "400 Pine Street, Seattle"),
+        geo("hq_address_source", "registry"),
+        geo("hq_address_confidence", "high"),
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ ok: true, json: async () => report })
+    );
+
+    render(
+      <Wrapper>
+        <CompanyDetail runId="run-abc" onBack={vi.fn()} />
+      </Wrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("hq-panel")).toBeDefined();
+    });
+    // Static tile map: the centre tile for (47.6114, -122.3366) at z15 is 5248/11443.
+    const tiles = [...screen.getByTestId("hq-map").querySelectorAll("img")].map(
+      (img) => img.getAttribute("src")
+    );
+    expect(tiles).toContain("https://tile.openstreetmap.org/15/5248/11443.png");
+    expect(tiles).toHaveLength(21); // 7 × 3 grid
+    expect(screen.getByTestId("hq-marker")).toBeDefined();
+    expect(screen.getByTestId("hq-osm-link").getAttribute("href")).toContain(
+      "mlat=47.6114&mlon=-122.3366"
+    );
+    expect(screen.getByTestId("hq-confidence").textContent).toContain("High");
+    expect(screen.getByText("400 Pine Street, Seattle")).toBeDefined();
+  });
+
+  it("explains a missing HQ location instead of showing an empty map", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ ok: true, json: async () => COMPLETE_REPORT })
+    );
+    render(
+      <Wrapper>
+        <CompanyDetail runId="run-abc" onBack={vi.fn()} />
+      </Wrapper>
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("hq-empty")).toBeDefined();
+    });
+    expect(screen.queryByTestId("hq-map")).toBeNull();
+  });
+
+  it("shows a saved review on reload instead of offering Mark Reviewed again", async () => {
+    const report = {
+      ...COMPLETE_REPORT,
+      review: {
+        status: "reviewed",
+        notes: "Registry confirmed by phone.",
+        reviewer_name: "Rita Reviewer",
+        decided_at: "2026-09-20T15:00:00Z",
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ ok: true, json: async () => report })
+    );
+
+    render(
+      <Wrapper>
+        <CompanyDetail runId="run-abc" onBack={vi.fn()} />
+      </Wrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("reviewed-banner")).toBeDefined();
+    });
+    const banner = screen.getByTestId("reviewed-banner").textContent ?? "";
+    expect(banner).toContain("reviewed");
+    expect(banner).toContain("Rita Reviewer");
+    expect(screen.getByTestId("review-notes-display").textContent).toContain(
+      "Registry confirmed by phone."
+    );
+    expect(screen.queryByTestId("mark-reviewed-btn")).toBeNull();
+  });
+
+  it("lists unavailable sources instead of silently counting fewer", async () => {
+    const report = {
+      ...COMPLETE_REPORT,
+      sources: [
+        { source: "domain", tier: 2, evidence_count: 2, attribution: null, status: "available" },
+        { source: "opencorporates", tier: 1, evidence_count: 0, attribution: null, status: "unavailable" },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ ok: true, json: async () => report })
+    );
+
+    render(
+      <Wrapper>
+        <CompanyDetail runId="run-abc" onBack={vi.fn()} />
+      </Wrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("risk-panel")).toBeDefined();
+    });
+    expect(screen.getByTestId("risk-evidence-summary").textContent).toContain(
+      "1 source"
+    );
+    expect(screen.getByTestId("risk-unavailable-sources").textContent).toContain(
+      "opencorporates"
+    );
+  });
+
   it("renders submitted-vs-discovered fields with mismatch markers", async () => {
     vi.stubGlobal(
       "fetch",
@@ -317,6 +468,8 @@ describe("CompanyDetail", () => {
         ok: true,
         json: async () => COMPLETE_REPORT,
       })
+      // GET /audit/runs/run-abc (Activity panel mounts with the report)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ events: [] }) })
       // Second call: POST /reviews/run-abc
       .mockResolvedValueOnce({
         ok: true,
@@ -362,6 +515,8 @@ describe("CompanyDetail", () => {
         ok: true,
         json: async () => COMPLETE_REPORT,
       })
+      // GET /audit/runs/run-abc (Activity panel mounts with the report)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ events: [] }) })
       .mockResolvedValueOnce({
         ok: false,
         json: async () => ({ detail: "Conflict: already reviewed" }),

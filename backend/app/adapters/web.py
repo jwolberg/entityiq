@@ -60,10 +60,67 @@ _PHONE_RE = re.compile(
 
 # Heuristic: digits + whitespace + word (e.g. "123 Main Street", "42 Baker Rd")
 _ADDRESS_RE = re.compile(
-    r"\b\d{1,5}\s+[A-Za-z][A-Za-z0-9\s,\.]{5,50}(?:Street|St|Avenue|Ave|"
+    # The suffix must be its own word ("\s" before it): without that, "have"
+    # matched as "h" + "Ave" and "100 companies have" became an address.
+    r"\b\d{1,5}\s+[A-Za-z][A-Za-z0-9\s,\.]{2,50}?\s(?:Street|St|Avenue|Ave|"
     r"Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Court|Ct|Place|Pl|Way)\b",
     re.IGNORECASE,
 )
+
+
+# Domains used in docs/templates/sample content — never a real company contact.
+_PLACEHOLDER_EMAIL_DOMAINS = frozenset(
+    {
+        "example.com",
+        "example.org",
+        "example.net",
+        "domain.com",
+        "email.com",
+        "yourcompany.com",
+        "yourdomain.com",
+        "company.com",
+        "test.com",
+        "sentry.io",
+    }
+)
+_ASSET_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp")
+
+
+def _clean_emails(candidates: list[str], company_domain: str) -> list[str]:
+    """Drop placeholder/asset matches; company-domain addresses sort first."""
+    emails = []
+    for email in dict.fromkeys(c.lower().rstrip(".") for c in candidates):
+        mail_domain = email.split("@", 1)[1]
+        if mail_domain in _PLACEHOLDER_EMAIL_DOMAINS:
+            continue
+        if email.endswith(_ASSET_SUFFIXES):  # e.g. "hero@2x.png"
+            continue
+        emails.append(email)
+    return sorted(emails, key=lambda e: not _on_domain(e, company_domain))
+
+
+def _on_domain(email: str, company_domain: str) -> bool:
+    mail_domain = email.split("@", 1)[1]
+    return mail_domain == company_domain or mail_domain.endswith("." + company_domain)
+
+
+def _clean_phones(candidates: list[str]) -> list[str]:
+    """Keep strings that look like formatted phone numbers.
+
+    Rejects bare digit runs ("100000000000" — usually a statistic), anything
+    with fewer than 10 digits (dates, versions), and degenerate repeats.
+    """
+    phones = []
+    for raw in dict.fromkeys(c.strip() for c in candidates):
+        digits = re.sub(r"\D", "", raw)
+        if not 10 <= len(digits) <= 15:
+            continue
+        if raw.isdigit():  # no "+" and no separators → not presented as a phone
+            continue
+        if len(set(digits)) <= 2:
+            continue
+        phones.append(raw)
+    return phones
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +170,8 @@ class _HttpxFetcher:
                 follow_redirects=True,
                 headers={
                     "User-Agent": (
-                        "Mozilla/5.0 (compatible; EntityIQ/1.0; " "+https://skyfi.com)"
+                        "Mozilla/5.0 (compatible; EntityIQ/1.0; "
+                        "+https://github.com/jwolberg/entityiq)"
                     )
                 },
             )
@@ -332,9 +390,11 @@ class WebAdapter:
             evidence.append(_ev("web_brand", brand, confidence=0.65))
 
         # --- Contact extraction ---
-        emails_found = list({m.lower() for m in _EMAIL_RE.findall(plain_text)})
-        phones_found = list({p.strip() for p in _PHONE_RE.findall(plain_text)})
-        addresses_found = list({a.strip() for a in _ADDRESS_RE.findall(plain_text)})
+        emails_found = _clean_emails(_EMAIL_RE.findall(plain_text), domain)
+        phones_found = _clean_phones(_PHONE_RE.findall(plain_text))
+        addresses_found = list(
+            dict.fromkeys(a.strip() for a in _ADDRESS_RE.findall(plain_text))
+        )
 
         if emails_found:
             evidence.append(
@@ -342,7 +402,11 @@ class WebAdapter:
                     "web_contacts_email",
                     emails_found[0],
                     confidence=0.7,
-                    payload={"emails": emails_found[:10], "domain": domain},
+                    payload={
+                        "emails": emails_found[:10],
+                        "domain": domain,
+                        "on_company_domain": _on_domain(emails_found[0], domain),
+                    },
                 )
             )
         if phones_found:

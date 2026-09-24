@@ -9,13 +9,13 @@ Build an AI-assisted enterprise verification platform that evaluates whether:
 - The requester plausibly represents the organization
 - The registration presents elevated fraud, sanctions-evasion, or impersonation risk
 
-The system ingests registration data from SkyFi's self-service enterprise onboarding flow, performs automated multi-source verification and enrichment, and produces an explainable risk assessment report for human operators.
+The system ingests registration data from a B2B platform's self-service enterprise onboarding flow, performs automated multi-source verification and enrichment, and produces an explainable risk assessment report for human operators.
 
 The platform is intended to reduce manual review effort, improve consistency and accuracy, and identify suspicious or staged business identities.
 
 ## Problem Statement
 
-SkyFi allows enterprise customers to self-register for enterprise features.
+B2B platforms increasingly let enterprise customers self-register for enterprise features.
 
 This creates several risks:
 
@@ -34,7 +34,7 @@ Additionally:
 - Registries vary by country
 - Public business data quality varies widely
 
-SkyFi needs an automated intelligence and risk assessment system that:
+The platform needs an automated intelligence and risk assessment system that:
 
 - Collects evidence from authoritative and public sources
 - Verifies consistency between submitted and discovered information

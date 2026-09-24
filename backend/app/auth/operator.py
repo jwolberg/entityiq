@@ -36,7 +36,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import os
 import secrets
+import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -101,23 +103,39 @@ def verify_password(password: str, stored_hash: str) -> bool:
 # ---------------------------------------------------------------------------
 # In-memory session store (MVP — single-process)
 #
-# Maps session_token (str) → operator_id (str).
+# Maps session_token (str) → (operator_id, expires_at epoch seconds).
 # Replacement path: swap this dict for a Redis-backed store or JWT validation.
 # ---------------------------------------------------------------------------
 
-_session_store: dict[str, str] = {}
+SESSION_TTL_SECONDS: int = int(os.environ.get("SESSION_TTL_HOURS", "12")) * 3600
+
+_session_store: dict[str, tuple[str, float]] = {}
+
+
+def _now() -> float:
+    return time.time()
 
 
 def _new_session_token(operator_id: str) -> str:
     """Generate and store a new session token for the given operator."""
     token = secrets.token_urlsafe(32)
-    _session_store[token] = operator_id
+    _session_store[token] = (operator_id, _now() + SESSION_TTL_SECONDS)
     return token
 
 
 def _get_operator_id_from_token(token: str) -> str | None:
-    """Look up an operator_id from a session token.  Returns None if unknown."""
-    return _session_store.get(token)
+    """Look up an operator_id from a session token.
+
+    Returns None if the token is unknown or expired (expired tokens are purged).
+    """
+    entry = _session_store.get(token)
+    if entry is None:
+        return None
+    operator_id, expires_at = entry
+    if _now() >= expires_at:
+        _session_store.pop(token, None)
+        return None
+    return operator_id
 
 
 def invalidate_session(token: str) -> None:
@@ -278,9 +296,27 @@ class SignInResponse(BaseModel):
 # Auth router (POST /auth/sign-in)
 # ---------------------------------------------------------------------------
 
-from fastapi import APIRouter  # noqa: E402
+from fastapi import APIRouter, Response  # noqa: E402
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@auth_router.post(
+    "/sign-out",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    summary="Operator sign-out (invalidates the session token)",
+)
+def operator_sign_out(authorization: str | None = Header(default=None)) -> Response:
+    """Invalidate the caller's session token server-side.
+
+    Always 204: signing out an unknown/expired/missing token is a no-op, so
+    the client can call this unconditionally.
+    """
+    token = _extract_bearer_token(authorization)
+    if token:
+        invalidate_session(token)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @auth_router.post(

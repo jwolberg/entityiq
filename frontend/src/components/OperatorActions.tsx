@@ -14,6 +14,7 @@
 
 import { useState } from "react";
 import {
+  AddNotesResponse,
   apiClient,
   CorrectableField,
   CorrectAndRerunRequest,
@@ -26,6 +27,8 @@ interface OperatorActionsProps {
   submittedValues: Partial<Record<CorrectableField, string>>;
   /** Navigate to a (new) run — used after re-run / correct-and-re-run. */
   onOpenRun?: (runId: string) => void;
+  /** Called after notes are saved (saving notes also records a review). */
+  onNotesSaved?: (resp: AddNotesResponse) => void;
 }
 
 // Correctable fields in display order (must be a subset of CorrectableField).
@@ -46,6 +49,7 @@ export function OperatorActions({
   token,
   submittedValues,
   onOpenRun,
+  onNotesSaved,
 }: OperatorActionsProps) {
   // --- Re-run analysis ---
   const [rerunning, setRerunning] = useState(false);
@@ -125,7 +129,8 @@ export function OperatorActions({
     setSavingNotes(true);
     setActionError(null);
     try {
-      await apiClient.addNotes(runId, { notes: notes.trim() }, token);
+      const resp = await apiClient.addNotes(runId, { notes: notes.trim() }, token);
+      onNotesSaved?.(resp);
       setNotesSaved(true);
       setNotes("");
     } catch (err) {

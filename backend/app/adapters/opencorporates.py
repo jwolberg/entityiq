@@ -24,6 +24,7 @@ Default base URL: https://api.opencorporates.com/v0.4
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
@@ -112,7 +113,11 @@ class OpenCorporatesAdapter:
         self._http = http_client if http_client is not None else _default_http_client()
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
-        self._api_token = api_token
+        self._api_token = (
+            api_token
+            if api_token is not None
+            else os.environ.get("OPENCORPORATES_API_TOKEN")
+        )
 
     # ------------------------------------------------------------------
     # Public: SourceAdapter.fetch
@@ -217,7 +222,50 @@ class OpenCorporatesAdapter:
                 self._company_to_evidence(context, company, fetched_at)
             )
 
+        conflict = self._identity_conflict(context, results, fetched_at)
+        if conflict is not None:
+            evidence_rows.append(conflict)
+
         return AdapterSuccess(evidence=evidence_rows)
+
+    def _identity_conflict(
+        self, context: AdapterContext, results: list, fetched_at: datetime
+    ) -> Evidence | None:
+        """Flag ≥2 DISTINCT registered entities carrying exactly the submitted
+        name (legal suffixes ignored) — "which one is the applicant?".
+
+        Deliberately narrow: similarly-named subsidiaries ("Acme Europe BV")
+        are normal for large companies and are not a conflict.
+        """
+        from app.adapters.sanctions import _normalize_name  # noqa: PLC0415
+
+        if not context.company_name:
+            return None
+        wanted = _normalize_name(context.company_name)
+        matches: dict[str, dict] = {}
+        for item in results:
+            company = item.get("company", item)
+            name, number = company.get("name"), company.get("company_number")
+            if name and number and _normalize_name(name) == wanted:
+                matches[number] = {
+                    "name": name,
+                    "company_number": number,
+                    "jurisdiction": company.get("jurisdiction_code"),
+                }
+        if len(matches) < 2:
+            return None
+        return Evidence(
+            verification_run_id=context.run_id,
+            source=self.name,
+            tier=self.tier,
+            field="registry_identity_conflict",
+            raw_value="true",
+            normalized_value="true",
+            confidence=0.8,
+            raw_payload={"matches": list(matches.values())},
+            attribution={"provider": "opencorporates"},
+            fetched_at=fetched_at,
+        )
 
     def _company_to_evidence(
         self,

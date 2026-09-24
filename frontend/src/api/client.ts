@@ -62,6 +62,8 @@ export interface ReportListItem {
   domain: string;
   status: string; // "pending" | "partial" | "complete" | "failed"
   overall_score: number | null;
+  /** pre_clear | review | escalate (critical signals can escalate a low score) */
+  triage_tier?: string | null;
   review_status: string | null; // null = not reviewed yet
   generated_at: string | null;
 }
@@ -121,6 +123,8 @@ export interface SourceSummary {
   tier: number;
   evidence_count: number;
   attribution: Record<string, unknown> | null;
+  /** "unavailable" when the source was down (timeout / error / rate limit). */
+  status?: "available" | "unavailable";
 }
 
 export interface SectionStatuses {
@@ -128,6 +132,27 @@ export interface SectionStatuses {
   evidence: string;
   mismatches: string;
   sources: string;
+}
+
+export interface ReviewSummary {
+  status: string;
+  notes: string | null;
+  reviewer_name: string | null;
+  decided_at: string | null;
+}
+
+export interface AuditEvent {
+  id: string;
+  event_type: string;
+  actor: string;
+  description: string | null;
+  occurred_at: string;
+  run_id: string | null;
+  payload: Record<string, unknown> | null;
+}
+
+export interface AuditEventList {
+  events: AuditEvent[];
 }
 
 export interface ReportResponse {
@@ -140,6 +165,8 @@ export interface ReportResponse {
   mismatches: MismatchItem[];
   sources: SourceSummary[];
   generated_at: string | null;
+  /** Latest human review of this run; null until reviewed. */
+  review?: ReviewSummary | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -254,6 +281,28 @@ export const apiClient = {
       method: "POST",
       body: JSON.stringify(body),
     });
+  },
+
+  /**
+   * POST /auth/sign-out — invalidate the session server-side (204, no body,
+   * so this bypasses the JSON-parsing request() helper). Best-effort: the
+   * caller clears local auth regardless of the outcome.
+   */
+  async signOut(token: string): Promise<void> {
+    await fetch("/api/auth/sign-out", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
+
+  /** GET /audit/runs/{runId} — timeline for one run (any operator). */
+  getRunAudit(runId: string, token: string): Promise<AuditEventList> {
+    return request<AuditEventList>(`/audit/runs/${runId}`, {}, token);
+  },
+
+  /** GET /audit/events — global audit log (lead only; 403 otherwise). */
+  getAuditLog(token: string, limit = 200): Promise<AuditEventList> {
+    return request<AuditEventList>(`/audit/events?limit=${limit}`, {}, token);
   },
 
   /** GET /reports — dashboard list */

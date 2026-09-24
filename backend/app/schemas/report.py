@@ -64,6 +64,8 @@ class SourceSummarySchema(BaseModel):
     tier: int
     evidence_count: int
     attribution: dict[str, Any] | None = None
+    # "available" or "unavailable" (source down: timeout / error / rate limit).
+    status: str = "available"
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +91,15 @@ class SectionStatuses(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class ReviewSummarySchema(BaseModel):
+    """The human decision on a run (latest Review row), if any."""
+
+    status: str
+    notes: str | None = None
+    reviewer_name: str | None = None
+    decided_at: str | None = None
+
+
 class ReportResponse(BaseModel):
     """Full or partial report returned by GET /reports/{run_id}.
 
@@ -112,6 +123,9 @@ class ReportResponse(BaseModel):
 
     generated_at: str | None = None
 
+    # Null until an operator reviews the run.
+    review: ReviewSummarySchema | None = None
+
 
 # ---------------------------------------------------------------------------
 # List endpoint schema (GET /reports/)
@@ -131,6 +145,9 @@ class ReportListItemSchema(BaseModel):
     domain: str
     status: str  # report status: "pending" | "partial" | "complete" | "failed"
     overall_score: float | None = None
+    # pre_clear | review | escalate — may disagree with the score band when a
+    # critical signal (e.g. sanctions hit) forces escalation.
+    triage_tier: str | None = None
     review_status: str | None = None  # None = not yet reviewed
     generated_at: str | None = None
 

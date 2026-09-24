@@ -247,8 +247,8 @@ def test_stage_single_clear_submission():
     stage = ResolveEntityCandidatesStage()
     context = {
         "normalized": {
-            "company_name": "Skyfi Systems",
-            "domain": "skyfi.com",
+            "company_name": "Northwind Systems",
+            "domain": "northwind.com",
         }
     }
 

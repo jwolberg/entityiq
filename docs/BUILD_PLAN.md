@@ -2,7 +2,7 @@
 
 ## Project
 - Name: EntityIQ — Enterprise Business Verification & Risk Intelligence Platform
-- Summary: When enterprises self-register for SkyFi, operators must decide — quickly
+- Summary: When enterprises self-register on a B2B platform, operators must decide — quickly
   and defensibly — whether a business is real, correctly represented, and safe to
   approve. EntityIQ ingests registration data, runs an authoritative-first,
   multi-source verification pipeline, and produces an explainable, layered risk
@@ -14,12 +14,13 @@
 - Approach / scope / metrics / tracks: /docs/STRATEGY.md
 - Technical design / open decisions: /docs/ARCHITECTURE.md
 - Personas / interfaces: /docs/USERS.md
-- Originating brief: /docs/challenge.md
+- Originating brief: /docs/problem-statement.md
+- Latest build-vs-PRD audit: /docs/ASSESSMENT-2026-09-24.md (drives Phases 4–5)
 - UX clarifications: none present (/docs/ux.md absent)
 
 ## Planning Assumptions
 - **No `/docs/spec.md`.** Per the `plan` skill, the spec role is distributed across
-  PRD / STRATEGY / ARCHITECTURE / USERS / challenge; this plan reconciles them.
+  PRD / STRATEGY / ARCHITECTURE / USERS / problem statement; this plan reconciles them.
 - **Backend stack planned provisionally as Python + FastAPI** (ARCHITECTURE
   § Open decisions #1 recommendation). Confirmed in P0-T1; all implementation
   tickets depend on it.
@@ -29,7 +30,7 @@
   technical sequencing over PRD § Agentic Verification Pipeline (9 stages); both
   cover the same work. Conflict-resolution rule #3 applied.
 - **Operator auth for the MVP** is assumed session-based with a minimal provider;
-  ARCHITECTURE § 5 OIDC/SSO against SkyFi's IdP is the target once the IdP is known.
+  ARCHITECTURE § 5 OIDC/SSO against the host organization's IdP is the target once the IdP is known.
 - **MVP Tier-1 source assumed to be OpenCorporates** (most accessible structured
   API), pending Open decision #5 on data-source licensing/access.
 - **Skill-loader note:** the harness served a stale cached copy of this skill (the
@@ -58,9 +59,13 @@
 
 ## Current Status
 - Overall status: In Progress
-- Current phase: Phase 2 complete (except blocked P2-T9) → entering Phase 3
-- Current ticket: P3-T1 — Performance & partial-result UX (next)
-- Last completed: P2-T12 — API auth for integrating systems (2026-05-31)
+- Current phase: Phases 4–5 complete (2026-09-24) except P5-T5 (hosted demo: needs a
+  hosting decision) → next: identity-corroboration plan, then Phase 3 remainder
+- Current ticket: IC1-T1 (docs/BUILD_PLAN-identity-corroboration.md) — next
+- Last completed: P5-T1 — README + screenshots (2026-09-24)
+- 2026-09-24 pass: P4-T1..T6, P5-T1..T4, P2-T9, P3-T2 complete, plus fixes found
+  along the way (sanctions hit stored as pre_clear; dashboard/detail showed
+  escalations in green). Backend 439 tests, frontend 30.
 - Phase 2 status: complete except P2-T9 (blocked on Open Decision #4 — map provider)
 - Phase 0 exit criteria: Met (2026-05-26) — backend stack and orchestration
   confirmed; monorepo + lint/test/CI harness in place; Postgres + migrations +
@@ -68,11 +73,10 @@
 - Phase 1 exit criteria: Met (2026-05-26) — a submitted registration produces a
   stored, viewable report; an operator can sign in (audited), see
   submitted-vs-discovered fields, and mark it reviewed.
-- Blockers: Open Decision #5 (data-source licensing for OpenCorporates) remains
-  UNRESOLVED. Production use of the OpenCorporates adapter requires a license
-  agreement. Open Decision on IPINFO_TOKEN (production paid plan for full
-  privacy/VPN/proxy flags) is unresolved — free tier is operational. #4/#7
-  deferred to their tickets.
+- Blockers: Open Decision #5 (data-source licensing) UNRESOLVED. OpenCorporates
+  now needs an API token even for dev use (P4-T3 makes it configurable).
+  IPINFO_TOKEN production plan unresolved; free tier works. #4 resolved 2026-09-24 (P2-T9 done);
+  #7 blocks P3-T3.
 
 ---
 
@@ -256,6 +260,7 @@ _Track: Evidence & enrichment pipeline_
     distance/mismatch, reuse patterns; emit risk flags.
   - Depends on: P1-T2 · AC: PRD § Network & IP Intelligence (report + flags);
     ARCHITECTURE § 2 stage 5 · Status: Complete (2026-05-27)
+    · Gap (2026-09-24): `ip_distance_flag` is documented but not implemented; geography is country-equality only → P4-T2.
 - P2-T3 — Additional Tier-1 sources (gov registries, sanctions/watchlist)
   - Depends on: P1-T4; **Open decision #5** · AC: PRD § Tier 1 (sanctions/registries) · Status: Complete (2026-05-27) — OFAC SDN screening implemented; gov registries deferred per Open Decision #5.
 - P2-T4 — Tier-3 public web evidence (Playwright fallback)
@@ -270,6 +275,8 @@ _Track: Risk scoring & explainability_
     weighting; full elevated-risk and trust signal sets.
   - Depends on: P1-T7, P2-T2 · AC: PRD § Core Verification Philosophy, § Risk
     Signals, § Risk Scoring § Confidence Breakdown · Status: Complete (2026-05-27) — full PRD signal catalog in signals.py; cross-submission IP/ASN reuse implemented; 332 tests pass.
+    · Gaps (2026-09-24): MX/SPF trust signals are never triggered (field-name mismatch) → P4-T1;
+      conflict_signal, free-email, and valid_tax_id are not scored → P4-T2.
 - P2-T7 — Explainability + triage tiers
   - Objective: per-score evidence + attribution + contributing signals; triage tier
     (pre-clear low-risk vs escalate) feeding the operator queue.
@@ -281,9 +288,13 @@ _Track: Operator workbench_
   - Objective: DNS & domain panel, registry info, contact info w/ attribution, risk
     assessment panel (flags + operator notes).
   - Depends on: P1-T10, P2-T6 · AC: PRD § Company Detail View (all subsections) · Status: Complete (2026-05-31) — frontend-only; DomainPanel/RegistryPanel/ContactPanel (w/ source attribution)/RiskAssessmentPanel in components/DetailPanels.tsx, driven by existing report API; operator-notes textarea added to Mark-Reviewed; lint clean, 12 FE tests pass.
+    · Gap (2026-09-24): saved notes and review state are never read back → P4-T5.
 - P2-T9 — HQ visualization (map + address confidence)
   - Depends on: P2-T8; **Open decision #4 (map provider)** · AC: PRD § FE § HQ
-    Visualization · Status: Todo
+    Visualization · Status: Complete (2026-09-24) — Open Decision #4 resolved (OSM embed +
+    Nominatim). New `geocode_hq` stage (after consistency) emits coordinates + address
+    confidence (high: registry+submission agree / medium: registry only / low: self-reported
+    or conflicting); HqPanel on the detail page; live Nominatim lookup verified.
 - P2-T10 — Full operator actions + dashboard filters
   - Objective: correct submitted data + re-run, re-trigger analysis, add notes,
     export report; dashboard filters/search.
@@ -292,6 +303,7 @@ _Track: Operator workbench_
     components/OperatorActions.tsx wires the P2-T11 endpoints (re-run, correct +
     re-run [sends only changed fields], add notes, export JSON); Dashboard gains
     search + review-status + risk-band filters. lint clean, 18 FE tests pass.
+    · Gap (2026-09-24): reopening a reviewed run shows it unreviewed and returns a 409 → P4-T5.
 
 _Track: Integration & reporting API_
 - P2-T11 — Re-analysis + operator workflow endpoints + report export
@@ -319,9 +331,18 @@ _Track: Integration & reporting API_
 
 **Tickets**
 - P3-T1 — Performance & partial-result UX (< 2h target, timeouts/retries)
+  - Objective: record and expose run duration (`finished_at - started_at`);
+    add a Celery soft time limit and per-stage timeout; retry transient adapter
+    failures.
   - Depends on: Phase 2 · AC: PRD § Performance Expectations · Status: Todo
 - P3-T2 — Auditability completeness + lead audit views
-  - Depends on: P1-T9 · AC: PRD § Auditability Requirements; USERS § 3 · Status: Todo
+  - Objective: `GET` audit-events API (per run and global), an Activity panel on
+    the company detail page, and a lead-only audit view gated by the currently
+    unused `require_lead`.
+  - Depends on: P1-T9 · AC: PRD § Auditability Requirements; USERS § 3 · Status: Complete (2026-09-24) —
+    `GET /audit/runs/{id}` (any operator; run + its submission, oldest first) and
+    `GET /audit/events` (lead-only via `require_lead`, newest first, filterable); Activity
+    timeline on the detail page; lead-only Audit Log page + nav link.
 - P3-T3 — PII retention & access policy
   - Depends on: P0-T4; **Open decision #7** · AC: ARCHITECTURE § 6 (PII handling) · Status: Todo
 - P3-T4 — Optional domain-ownership verification (email / DNS TXT / HTML meta)
@@ -329,6 +350,128 @@ _Track: Integration & reporting API_
 - P3-T5 — Test coverage (BE + FE) + documentation
   - Depends on: Phase 2 · AC: PRD § Technical Success, § Code Quality Expectations;
     CLAUDE.md § Validation · Status: Todo
+
+---
+
+### Phase 4 — Real-data correctness (from 2026-09-24 assessment)
+**Goal**
+- Make scores and evidence trustworthy on real companies, not just on test
+  fixtures. Fixes gaps inside already-scoped PRD requirements; adds no scope.
+
+**Exit Criteria**
+- An end-to-end test drives `default_stages()` with fake adapters and asserts
+  that the expected signals fire.
+- A live run on a well-known legitimate company (e.g. stripe.com) lands in
+  `pre_clear` with registry, domain-age, MX, and SPF evidence and no junk
+  contacts.
+
+**Tickets**
+- P4-T1 — Real-pipeline integration test + evidence field contract
+  - Objective: add an integration test running the real stage list with
+    injected fake clients. Fix the MX/SPF field mismatch (adapter emits
+    `mx_records`/`spf_record`; scoring reads `mx_present`/`spf_present`). Define
+    the evidence field names as shared constants so adapters and signals can't
+    drift apart.
+  - Files likely involved: backend/app/adapters/domain.py, backend/app/scoring/signals.py,
+    backend/tests/pipeline/test_pipeline_e2e.py (new)
+  - Depends on: — · AC: PRD § Tier 2; § Trust Signals · Status: Complete (2026-09-24) —
+    tests/pipeline/test_pipeline_e2e.py drives the real stage list with faked clients;
+    domain adapter now emits boolean `mx_present`/`spf_present`. Shared-constants
+    module not added: the e2e test catches drift more cheaply.
+- P4-T2 — Wire computed-but-dropped signals; remove phantom claims
+  - Objective: persist resolve-stage `conflict_signal` as evidence and score it
+    ("multiple conflicting identities"). Persist free/disposable email as
+    evidence and score it. Implement or delete docstring-only signals
+    (`suspicious_dns_infrastructure`, `inconsistent_contact_information`,
+    `ip_distance_flag`). Leave `valid_tax_id` to identity-corroboration IC1-T3.
+  - Depends on: P4-T1 · AC: PRD § Elevated Risk Indicators; § Inputs · Status: Complete (2026-09-24) —
+    `conflicting_company_identities` (registry: ≥2 distinct entities with exactly the submitted
+    name) and `free_email_domain` (tier-0 intake evidence) are scored; phantom docstring claims
+    corrected to "not implemented". Deviation: resolve-stage `conflict_signal` left unwired —
+    its only candidate is synthesized from the submission, so it can never fire.
+- P4-T3 — Live-source viability + runtime dependencies
+  - Objective: add an `OPENCORPORATES_API_TOKEN` env var. Surface adapter
+    failures (401, unavailable) in the report's `sources` instead of dropping
+    them silently. Move `httpx` to the main dependencies, declare the WHOIS
+    library, and verify WHOIS domain age works live. Document every key in
+    RUNBOOK.
+  - Depends on: P4-T1; Open Decision #5 for *production* use only · AC: PRD § Tier 1–2;
+    ARCHITECTURE § 4 · Status: Complete (2026-09-24) — env token; outage
+    kinds (timeout/unavailable/rate_limited) mark the stage `unavailable` and the source
+    is listed with `status: unavailable` in the report + UI; httpx and python-whois
+    are runtime deps; WHOIS verified live (stripe.com → 1995).
+- P4-T4 — Web contact extraction quality
+  - Objective: reject placeholder emails (example.com etc.), invalid phone
+    numbers, and address false positives. Add fixtures from real saved pages.
+    Only give `web_contact_email_found` trust credit for emails on the
+    company's own domain.
+  - Depends on: — · AC: PRD § Tier 3; FE § Contact Information · Status: Complete (2026-09-24) —
+    placeholder/asset emails dropped, company-domain emails first + `on_company_domain`
+    flag gates the trust signal; phones need 10–15 digits and formatting; address suffix
+    must be its own word. Cases taken from the live stripe.com run.
+- P4-T5 — Review state + notes read path
+  - Objective: include review status, reviewer, and notes in `ReportResponse`.
+    Show them on the company detail page. Hide or disable Mark Reviewed once a
+    run is reviewed, so there's no 409 on reopen.
+  - Depends on: — · AC: PRD § Operator Actions; FE § Risk Assessment (operator notes) · Status: Complete (2026-09-24) —
+    `review` (status, notes, reviewer, decided_at) on report + export responses; detail page
+    loads it, shows notes, hides Mark Reviewed once reviewed; notes added via Operator
+    Actions update the banner.
+- P4-T6 — Auth hardening
+  - Objective: require an operator token or API key on `GET /reports/{run_id}`.
+    Make sign-out call the server to invalidate the session. Add a session TTL.
+  - Depends on: — · AC: ARCHITECTURE § 5; PRD § Operator Authentication · Status: Complete (2026-09-24) —
+    `GET /reports` AND `GET /reports/{id}` now require an operator token or API key (the list
+    was also open, not just the detail); `POST /auth/sign-out` + UI calls it; 12h session TTL.
+
+### Phase 5 — Showcase readiness
+**Goal**
+- Let an evaluator clone the repo (or open a link) and see a convincing,
+  working product in minutes. Scope added 2026-09-24 at the user's direction
+  (portfolio use); it serves PRD § Technical Success ("strong documentation").
+
+**Exit Criteria**
+- One command brings up API + UI with seeded demo data spanning all three
+  triage tiers. GitHub CI is green. The README explains the product with
+  screenshots.
+
+**Tickets**
+- P5-T1 — README rewrite
+  - Objective: what it is, why it's interesting (deterministic, explainable,
+    human-in-the-loop), architecture diagram, screenshots, quick start, status,
+    and links to PRD / ARCHITECTURE / ASSESSMENT.
+  - Depends on: P5-T2 (for screenshots) · Status: Complete (2026-09-24) — README rewritten with
+    quick start, capability table, pipeline diagram, quality, honest known gaps; screenshots
+    of the queue, a sanctions-escalation detail page, HQ map, and lead audit log captured
+    from the demo. Screenshot pass surfaced + fixed 2 UI bugs (tier not shown; blank map).
+- P5-T2 — One-command local demo
+  - Objective: seed script (operator + lead accounts, API key) and
+    docker-compose (API + UI; SQLite + eager by default, Postgres + Redis
+    profile). Replaces the inline Python snippets in RUNBOOK.
+  - Depends on: — · Status: Complete (2026-09-24) — `scripts/demo.sh` (no Docker:
+    venv + npm install on first run, SQLite + eager, seed, both servers) and idempotent
+    `python -m app.seed`. docker-compose deferred: Docker daemon unavailable to verify it,
+    and the script already meets the one-command goal.
+- P5-T3 — Demo dataset
+  - Objective: curated submissions that land in `pre_clear`, `review`, and
+    `escalate` (including a sanctions hit and a fresh-domain shell). They use
+    recorded adapter responses so the demo is deterministic and works offline,
+    with realistic source IPs so the network layer shows up.
+  - Depends on: P4-T1, P5-T2 · Status: Complete (2026-09-24) — `app/demo_data.py`: 6 fictional
+    companies (2 pre_clear, 2 review, 2 escalate incl. a fictional sanctions match) through
+    the real stage list with recorded responses; tiers pinned by tests; loaded by demo.sh.
+    Surfaced and fixed the sanctions→pre_clear tier bug.
+- P5-T4 — GitHub Actions CI
+  - Objective: port `.gitlab-ci.yml` (ruff, pytest, eslint, vitest, tsc) to
+    `.github/workflows/`. Remove the GitLab config and the untracked bun
+    template.
+  - Depends on: — · Status: Complete (2026-09-24) — backend (ruff, format,
+    pytest) + frontend (eslint, vitest, tsc + vite build) jobs; `.gitlab-ci.yml` removed.
+    First real run happens when the PR is pushed.
+- P5-T5 — Hosted demo (optional)
+  - Objective: deploy a read-mostly demo instance with seeded data and a
+    shared demo login.
+  - Depends on: P5-T2, P5-T3, P4-T6; **needs a hosting decision** · Status: Todo
 
 ---
 
@@ -357,27 +500,38 @@ _Track: Integration & reporting API_
 22. P2-T11
 23. P2-T12
 24. P2-T8
-25. P2-T9   (Open decision #4)
+25. P2-T9   (rescheduled at 35)
 26. P2-T10
-27. P3-T1
-28. P3-T2
-29. P3-T3   (Open decision #7)
-30. P3-T4
-31. P3-T5
+27. P4-T1   ← start here (2026-09-24 assessment)
+28. P4-T3
+29. P4-T4
+30. P5-T4
+31. P5-T2
+32. P4-T5
+33. P4-T6
+34. P5-T3
+35. P2-T9   (Open decision #4 resolved: OSM embed + Nominatim)
+36. P3-T2
+37. P5-T1
+38. P4-T2
+39. Identity corroboration plan (docs/BUILD_PLAN-identity-corroboration.md)
+40. P3-T1
+41. P3-T4
+42. P3-T3   (Open decision #7)
+43. P3-T5
+44. P5-T5   (hosting decision)
 
 ## Recommended Next Step
-- Start with: **P3-T1 — Performance & partial-result UX** (start of Phase 3)
-- Why this is next: Phase 2 is complete except P2-T9, which is blocked on Open
-  Decision #4 (map provider). The pipeline, scoring, operator workbench, reporting
-  API, and integration auth are all in place, so the natural next step is the
-  Phase-3 hardening bar: the < 2h analysis target with viewable partial results and
-  robust timeouts/retries (PRD § Performance Expectations). P3-T2 (auditability
-  completeness + lead audit views) is a strong follow-on — it builds directly on the
-  per-system attribution just added in P2-T12.
-- Note: Open Decision #5 (OpenCorporates + additional Tier-1 licensing) still
-  blocks *production* use of Tier-1 adapters; resolve before enabling live queries.
-  IPINFO_TOKEN production plan is also unresolved; free tier is operational.
-  Gov registries deferred (part of P2-T3) pending Open Decision #5 resolution.
+- Start with: **IC1-T1 — Tax-ID adapter scaffold + stub provider**
+  (docs/BUILD_PLAN-identity-corroboration.md). Its prerequisite P4-T1 is done.
+- Why: Phases 4–5 made the existing product correct on real data and presentable.
+  The largest remaining PRD gap is the representation layer: tax ID and LinkedIn are
+  captured but never verified, and `valid_tax_id` is unreachable.
+- Then: P3-T1 (run timing, stage timeouts), P3-T4 (domain-ownership verification),
+  P3-T3 (PII policy; Open Decision #7), P3-T5. Follow-ups noted in implementation
+  notes: triage-tier dashboard filter, Redis-backed sessions, docker-compose,
+  API-key provisioning UI.
+- Needs a human decision: P5-T5 hosting; OpenCorporates token/license (Open Decision #5).
 
 ## Deferred / Out of Scope
 - **Auto-approval / full automation of compliance decisions** — PRD § Non-Goals

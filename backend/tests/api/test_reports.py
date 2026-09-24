@@ -22,6 +22,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
 from app.api.reports import _get_db
+from app.auth.service import Principal, get_principal
 from app.db.session import Base
 from app.main import app
 from app.models.entity import Entity
@@ -79,9 +80,15 @@ def report_client(reports_engine):
 
     # Override the DB dependency for the reports router
     app.dependency_overrides[_get_db] = override_get_db
+    # Report reads require a principal (P4-T6); auth itself is covered in
+    # tests/api/test_report_auth.py, so stand in an authenticated operator here.
+    app.dependency_overrides[get_principal] = lambda: Principal(
+        kind="operator", id="op-test", name="test@example.com", operator_id="op-test"
+    )
     client = TestClient(app, raise_server_exceptions=True)
     yield client
     app.dependency_overrides.pop(_get_db, None)
+    app.dependency_overrides.pop(get_principal, None)
 
 
 # ---------------------------------------------------------------------------
@@ -355,3 +362,59 @@ def test_run_exists_no_report_returns_404(report_client, reports_engine):
     assert "not been assembled" in resp.json()["detail"].lower() or (
         "not found" in resp.json()["detail"].lower()
     )
+
+
+# ---------------------------------------------------------------------------
+# P4-T5 — review state + notes are readable on the report
+# ---------------------------------------------------------------------------
+
+
+def _scored_run(reports_engine) -> str:
+    SessionMaker = sessionmaker(bind=reports_engine, autocommit=False, autoflush=False)
+    setup_db = SessionMaker()
+    try:
+        run_id = _make_run_with_data(setup_db)
+        ScoringStage().run(run_id, setup_db, {})
+        StoreReportStage().run(run_id, setup_db, {})
+    finally:
+        setup_db.close()
+    return run_id
+
+
+def test_unreviewed_run_has_null_review(report_client, reports_engine):
+    run_id = _scored_run(reports_engine)
+    data = report_client.get(f"/reports/{run_id}").json()
+    assert data["review"] is None
+
+
+def test_reviewed_run_exposes_status_notes_and_reviewer(report_client, reports_engine):
+    from app.models.operator import Operator
+    from app.models.review import Review
+
+    run_id = _scored_run(reports_engine)
+    SessionMaker = sessionmaker(bind=reports_engine, autocommit=False, autoflush=False)
+    db = SessionMaker()
+    try:
+        op = Operator(
+            email="rev@example.com", full_name="Rita Reviewer", role="operator"
+        )
+        db.add(op)
+        db.flush()
+        db.add(
+            Review(
+                verification_run_id=run_id,
+                operator_id=op.id,
+                status="reviewed",
+                notes="Registry confirmed by phone.",
+                decided_at=datetime.now(tz=timezone.utc),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    review = report_client.get(f"/reports/{run_id}").json()["review"]
+    assert review["status"] == "reviewed"
+    assert review["notes"] == "Registry confirmed by phone."
+    assert review["reviewer_name"] == "Rita Reviewer"
+    assert review["decided_at"] is not None

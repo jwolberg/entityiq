@@ -45,6 +45,22 @@ STAGE_COMPLETE = "complete"
 STAGE_UNAVAILABLE = "unavailable"
 STAGE_PENDING = "pending"
 
+# AdapterFailure kinds that mean the SOURCE was down (vs. "not_found", which is
+# a legitimate finding).  Adapter stages never raise on these — they return a
+# context entry with this status — so the orchestrator must look for them or the
+# outage is recorded as "complete" and silently vanishes from the report.
+_OUTAGE_KINDS = frozenset({"timeout", "unavailable", "rate_limited"})
+
+
+def _stage_reported_outage(before: dict, after: dict) -> bool:
+    """True if the stage added/replaced a context entry with an outage status."""
+    for key, value in after.items():
+        if value is before.get(key):
+            continue
+        if isinstance(value, dict) and value.get("status") in _OUTAGE_KINDS:
+            return True
+    return False
+
 
 def default_stages() -> list[PipelineStage]:
     """Return the ordered list of registered pipeline stages.
@@ -62,10 +78,12 @@ def default_stages() -> list[PipelineStage]:
       5. enrich_network_ip            — IPinfo geo/ASN/VPN enrichment (P2-T2)
       6. web_evidence                 — Tier-3 public web evidence (P2-T4)
       7. consistency_checks           — submitted-vs-discovered comparisons (P1-T6)
+      7b. geocode_hq                  — HQ coordinates + address confidence (P2-T9)
       8. scoring                      — risk assessment v1 (P1-T7)
       9. store_report                 — assemble queryable report (P1-T7)
     """
     from app.adapters.domain import AnalyzeDomainStage  # noqa: PLC0415
+    from app.adapters.geocode import GeocodeHQStage  # noqa: PLC0415
     from app.adapters.ipinfo import EnrichNetworkIPStage  # noqa: PLC0415
     from app.adapters.opencorporates import QueryRegistriesStage  # noqa: PLC0415
     from app.adapters.sanctions import SanctionsScreeningStage  # noqa: PLC0415
@@ -85,6 +103,7 @@ def default_stages() -> list[PipelineStage]:
         EnrichNetworkIPStage(),
         WebEvidenceStage(),
         ConsistencyChecksStage(),
+        GeocodeHQStage(),
         ScoringStage(),
         StoreReportStage(),
     ]
@@ -136,9 +155,15 @@ class Orchestrator:
                     "Orchestrator: run %s starting stage %s", run_id, stage_name
                 )
                 try:
+                    before = context
                     context = stage.run(run_id, db, context)
                     # Persist partial result visibility after each stage.
-                    _update_stage_status(run, db, stage_name, STAGE_COMPLETE)
+                    status = (
+                        STAGE_UNAVAILABLE
+                        if _stage_reported_outage(before, context)
+                        else STAGE_COMPLETE
+                    )
+                    _update_stage_status(run, db, stage_name, status)
                     logger.info(
                         "Orchestrator: run %s stage %s complete",
                         run_id,

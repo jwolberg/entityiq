@@ -177,6 +177,58 @@ def format_tax_id(raw: str | None, country_iso: str | None) -> str | None:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Free / disposable email domains (PRD § Inputs: work email "must not be
+# disposable/free-email-only"; § Risk Signals: disposable/free email domains)
+# ---------------------------------------------------------------------------
+
+FREE_EMAIL_DOMAINS: frozenset[str] = frozenset(
+    {
+        "gmail.com",
+        "yahoo.com",
+        "yahoo.co.uk",
+        "hotmail.com",
+        "hotmail.co.uk",
+        "outlook.com",
+        "live.com",
+        "icloud.com",
+        "me.com",
+        "mac.com",
+        "aol.com",
+        "protonmail.com",
+        "proton.me",
+        "tutanota.com",
+        "mailinator.com",
+        "guerrillamail.com",
+        "throwam.com",
+        "temp-mail.org",
+        "yopmail.com",
+        "sharklasers.com",
+        "guerrillamailblock.com",
+        "grr.la",
+        "guerrillamail.info",
+        "guerrillamail.biz",
+        "guerrillamail.de",
+        "guerrillamail.net",
+        "guerrillamail.org",
+        "spam4.me",
+        "trashmail.com",
+        "trashmail.me",
+        "trashmail.net",
+        "dispostable.com",
+    }
+)
+
+
+def is_free_email_domain(email: str) -> bool:
+    """Return True if the email uses a known free/disposable domain."""
+    try:
+        domain = email.split("@", 1)[1].lower()
+    except IndexError:
+        return False
+    return domain in FREE_EMAIL_DOMAINS
+
+
 class NormalizeInputStage:
     """First pipeline stage: normalize submitted fields.
 
@@ -214,5 +266,28 @@ class NormalizeInputStage:
             # Network metadata — captured server-side; used by EnrichNetworkIPStage.
             "source_ip": (sub.source_ip if sub else None),
         }
+
+        # Intake-derived evidence (tier 0: facts about the submission itself,
+        # not an external source — excluded from source-coverage confidence).
+        if email and is_free_email_domain(email):
+            from datetime import datetime, timezone  # noqa: PLC0415
+
+            from app.models.evidence import Evidence  # noqa: PLC0415
+
+            db.add(
+                Evidence(
+                    verification_run_id=run_id,
+                    source="submission",
+                    tier=0,
+                    field="free_email_domain",
+                    raw_value="true",
+                    normalized_value="true",
+                    confidence=1.0,
+                    raw_payload={"email_domain": email.split("@", 1)[1]},
+                    attribution={"provider": "submission"},
+                    fetched_at=datetime.now(tz=timezone.utc),
+                )
+            )
+            db.commit()
 
         return {**context, "normalized": normalized}

@@ -7,16 +7,23 @@
  */
 
 import { useEffect, useState } from "react";
-import { apiClient, CorrectableField, ReportResponse } from "../api/client";
+import {
+  apiClient,
+  CorrectableField,
+  ReportResponse,
+  ReviewSummary,
+} from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { RegistrationDiff } from "../components/RegistrationDiff";
 import {
   ContactPanel,
   DomainPanel,
+  HqPanel,
   RegistryPanel,
   RiskAssessmentPanel,
 } from "../components/DetailPanels";
 import { OperatorActions } from "../components/OperatorActions";
+import { ActivityPanel } from "../components/ActivityPanel";
 
 interface CompanyDetailProps {
   runId: string;
@@ -49,9 +56,25 @@ function submittedValuesFromReport(
   return out;
 }
 
-function ScoreDisplay({ score }: { score: number | null }) {
-  const color =
-    score === null ? "#6b7280" : score >= 70 ? "#dc2626" : score >= 40 ? "#d97706" : "#16a34a";
+const TIERS: Record<string, { label: string; color: string; note: string }> = {
+  pre_clear: { label: "Pre-clear", color: "#16a34a", note: "low observed risk — may fast-track" },
+  review: { label: "Review", color: "#d97706", note: "standard review" },
+  escalate: { label: "Escalate", color: "#dc2626", note: "needs close scrutiny" },
+};
+
+function ScoreDisplay({ score, tier }: { score: number | null; tier?: string | null }) {
+  const t = tier ? TIERS[tier] : undefined;
+  // Tier wins over the score band: a critical signal (e.g. sanctions hit)
+  // escalates regardless of score.
+  const color = t
+    ? t.color
+    : score === null
+      ? "#6b7280"
+      : score >= 70
+        ? "#dc2626"
+        : score >= 40
+          ? "#d97706"
+          : "#16a34a";
   return (
     <div style={{ textAlign: "center" }}>
       <div
@@ -69,6 +92,14 @@ function ScoreDisplay({ score }: { score: number | null }) {
       <div style={{ fontSize: "0.8rem", color: "#6b7280", marginTop: "0.25rem" }}>
         Overall Risk Score (0–100)
       </div>
+      {t && (
+        <div
+          style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: t.color, fontWeight: 600 }}
+          data-testid="detail-triage-tier"
+        >
+          Triage: {t.label} — {t.note}. A human decides.
+        </div>
+      )}
     </div>
   );
 }
@@ -80,7 +111,7 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
   const [error, setError] = useState<string | null>(null);
 
   // Mark-reviewed state
-  const [reviewStatus, setReviewStatus] = useState<string | null>(null);
+  const [review, setReview] = useState<ReviewSummary | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
@@ -94,6 +125,7 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
       .then((r) => {
         if (!cancelled) {
           setReport(r);
+          setReview(r.review ?? null);
           setLoading(false);
         }
       })
@@ -121,7 +153,12 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
         },
         auth.token
       );
-      setReviewStatus(resp.review_status);
+      setReview({
+        status: resp.review_status,
+        notes: notes.trim() || null,
+        reviewer_name: null,
+        decided_at: new Date().toISOString(),
+      });
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : "Failed to mark reviewed");
     } finally {
@@ -185,7 +222,10 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
                 Score computation is pending.
               </div>
             ) : (
-              <ScoreDisplay score={report.scores?.overall_score ?? null} />
+              <ScoreDisplay
+                score={report.scores?.overall_score ?? null}
+                tier={report.scores?.triage_tier}
+              />
             )}
           </section>
 
@@ -221,6 +261,15 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
             />
           </section>
 
+          {/* HQ Visualization */}
+          <section style={styles.section}>
+            <h3 style={styles.sectionTitle}>Headquarters</h3>
+            <HqPanel
+              evidence={report.evidence}
+              status={report.section_statuses.evidence}
+            />
+          </section>
+
           {/* Contact Information */}
           <section style={styles.section}>
             <h3 style={styles.sectionTitle}>Contact Information</h3>
@@ -246,12 +295,22 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
           {/* Mark Reviewed */}
           <section style={styles.section}>
             <h3 style={styles.sectionTitle}>Operator Action</h3>
-            {reviewStatus !== null ? (
+            {review !== null ? (
               <div
                 style={styles.reviewedBanner}
                 data-testid="reviewed-banner"
               >
-                Marked as <strong>{reviewStatus}</strong>.
+                Marked as <strong>{review.status}</strong>
+                {review.reviewer_name && <> by {review.reviewer_name}</>}
+                {review.decided_at && (
+                  <> on {new Date(review.decided_at).toLocaleDateString()}</>
+                )}
+                .
+                {review.notes && (
+                  <p style={styles.reviewNotes} data-testid="review-notes-display">
+                    {review.notes}
+                  </p>
+                )}
               </div>
             ) : (
               <div>
@@ -297,7 +356,21 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
               token={auth.token}
               submittedValues={submittedValuesFromReport(report)}
               onOpenRun={onOpenRun}
+              onNotesSaved={(resp) =>
+                setReview((prev) => ({
+                  status: resp.review_status,
+                  notes: resp.notes,
+                  reviewer_name: prev?.reviewer_name ?? null,
+                  decided_at: prev?.decided_at ?? resp.updated_at,
+                }))
+              }
             />
+          </section>
+
+          {/* Activity (audit timeline) */}
+          <section style={styles.section}>
+            <h3 style={styles.sectionTitle}>Activity</h3>
+            <ActivityPanel runId={runId} token={auth.token} />
           </section>
         </div>
       )}
@@ -409,6 +482,11 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "0.375rem",
     color: "#166534",
     fontSize: "0.875rem",
+  },
+  reviewNotes: {
+    margin: "0.5rem 0 0",
+    whiteSpace: "pre-wrap",
+    color: "#14532d",
   },
   notesLabel: {
     display: "block",

@@ -3,7 +3,7 @@
 Who interacts with EntityIQ and how. This documents the people and systems that
 use the platform, the job each is trying to do, and the interface surface each
 touches. Grounded in [STRATEGY.md](./STRATEGY.md), [PRD.md](./PRD.md), and
-[challenge.md](./challenge.md).
+[problem-statement.md](./problem-statement.md).
 
 ## At a glance
 
@@ -12,7 +12,7 @@ touches. Grounded in [STRATEGY.md](./STRATEGY.md), [PRD.md](./PRD.md), and
 | Verification operator | Human (co-primary user) | Operator web app (dashboard/workbench) | Review registrations, decide approve/reject, correct data, re-run analysis |
 | Integrating systems | Machine (co-primary user) | REST API | Submit registrations, pull reports, trigger re-analysis |
 | Compliance lead / manager | Human (secondary) | Operator web app (oversight + audit views) | Set policy, monitor consistency, defend decisions in audit |
-| Enterprise registrant | Human (subject, not an operator) | SkyFi onboarding flow + domain-ownership challenges | Submits registration data; optionally proves domain control |
+| Enterprise registrant | Human (subject, not an operator) | Host platform's onboarding flow + domain-ownership challenges | Submits registration data; optionally proves domain control |
 
 > EntityIQ has **two co-primary users** — the human operator and the integrating
 > systems. When their needs conflict (e.g. operator UX vs. API ergonomics), the
@@ -21,7 +21,7 @@ touches. Grounded in [STRATEGY.md](./STRATEGY.md), [PRD.md](./PRD.md), and
 
 ## 1. Verification operator (primary)
 
-**Who:** A frontline compliance operator at SkyFi facing a queue of self-registered
+**Who:** A frontline compliance operator at a B2B platform facing a queue of self-registered
 enterprise accounts, each needing an approve/reject call before the customer gets
 enterprise features.
 
@@ -51,7 +51,7 @@ operator decides.
 
 ## 2. Integrating systems (co-primary)
 
-**Who:** SkyFi's self-service onboarding flow plus other internal systems that need
+**Who:** The host platform's self-service onboarding flow plus other internal systems that need
 verification programmatically — not a person, a delivery and consumption channel.
 
 **Job to be done:** Submit a registration and get back a structured, queryable risk
@@ -98,7 +98,7 @@ auditability surface:
 
 ## 4. Enterprise registrant (subject — not an operator)
 
-**Who:** The person registering their company for SkyFi enterprise features. They
+**Who:** The person registering their company for the host platform's enterprise features. They
 are the **subject** of verification, not a user of the operator tool. They are also
 the actor whose claims and network footprint the platform scrutinizes for fraud,
 impersonation, and sanctions-evasion signals.
@@ -108,7 +108,7 @@ enterprise access with minimal friction.
 
 ### How they interface
 
-Indirectly, through SkyFi's existing **self-service onboarding flow** — which feeds
+Indirectly, through the host platform's existing **self-service onboarding flow** — which feeds
 EntityIQ via the submission API. The registrant does not log into EntityIQ. Their
 only direct touchpoint is **optional domain-ownership verification**, which EntityIQ
 may request to raise confidence:
@@ -129,7 +129,7 @@ may request to raise confidence:
 - **Integrating systems** authenticate at the API boundary (service credentials);
   submissions and report pulls are attributable to the calling system.
 - **Registrants** are never granted access to EntityIQ's operator surfaces; they
-  only see SkyFi's onboarding flow and any domain-ownership challenge presented to
+  only see the host platform's onboarding flow and any domain-ownership challenge presented to
   them.
 - The platform records operator actions, verification runs, risk-score changes,
   evidence sources used, and re-analysis history for auditability.
