@@ -10,6 +10,7 @@ from app.models.audit_event import AuditEvent
 from app.models.entity import Entity
 from app.models.evidence import Evidence
 from app.models.field_comparison import FieldComparison
+from app.models.list_snapshot import ListSnapshot
 from app.models.operator import Operator
 from app.models.ownership_challenge import OwnershipChallenge
 from app.models.report import Report
@@ -24,6 +25,7 @@ __all__ = [
     "Entity",
     "Evidence",
     "FieldComparison",
+    "ListSnapshot",
     "Operator",
     "OwnershipChallenge",
     "Report",
