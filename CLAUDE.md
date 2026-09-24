@@ -231,6 +231,12 @@ blockers and **never merge to main**. Mechanics live in each skill body
   `frontend/src`, `shared/` (OpenAPI contract, placeholder), `scripts/`.
 - Spec source of truth: `docs/PRD.md`, `docs/STRATEGY.md`, `docs/USERS.md`,
   `docs/BUILD_PLAN.md`. Keep beyond-spec ambition in check against them.
+- **Commit per ticket** (repeated from the global rules so cloud sessions
+  have it): one commit per build-plan ticket, message cites the ticket
+  ID/title, validation runs before the commit.
+- **Implementation notes:** append short, dated entries to
+  `docs/implementation-notes.md` for every decision the spec doesn't cover,
+  every deviation, tradeoff, surprise, or follow-up. Written for the human reviewer.
 - Demo data is fictional and deterministic (`python -m app.demo_data`,
   recorded source responses, no network) — keep it that way.
 
