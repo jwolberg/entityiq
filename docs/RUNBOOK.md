@@ -263,6 +263,13 @@ The API enqueues verification runs to Redis; the worker executes the pipeline.
 
 ## Individual screening: lists and monitoring
 
+Under docker-compose, export `ENTITYIQ_SCREENING_MASTER_KEY` before
+`docker compose up`. Without it, `POST /screenings` returns 503. The worker
+consumes both the default and `screening` queues. Verified 2026-09-24:
+compose on Postgres 16, OFAC ingested in the container, two screenings
+through the real worker (~1 s each), replay reproduced, examiner writes 403,
+and Postgres rejected an UPDATE on screening_decision.
+
 Load (or refresh) the official sanctions lists:
 
 ```bash

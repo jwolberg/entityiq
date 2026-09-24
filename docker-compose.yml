@@ -51,6 +51,8 @@ services:
       IPINFO_TOKEN: ${IPINFO_TOKEN:-}
       ENTITYIQ_TAX_ID_PROVIDER: ${ENTITYIQ_TAX_ID_PROVIDER:-}
       ENTITYIQ_LINKEDIN_PROVIDER: ${ENTITYIQ_LINKEDIN_PROVIDER:-}
+      # Individual screening master key (ADR-0004). Unset = intake returns 503.
+      ENTITYIQ_SCREENING_MASTER_KEY: ${ENTITYIQ_SCREENING_MASTER_KEY:-}
     ports:
       - "8000:8000"
     depends_on:
@@ -62,7 +64,8 @@ services:
   worker:
     build:
       context: ./backend
-    command: celery -A app.worker.celery_app worker --loglevel=info
+    # Default queue (business verification) + screening queue (ticket 0035).
+    command: celery -A app.worker.celery_app worker -Q celery,screening --loglevel=info
     environment:
       DATABASE_URL: postgresql+psycopg://entityiq:entityiq@db:5432/entityiq
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -73,6 +76,8 @@ services:
       IPINFO_TOKEN: ${IPINFO_TOKEN:-}
       ENTITYIQ_TAX_ID_PROVIDER: ${ENTITYIQ_TAX_ID_PROVIDER:-}
       ENTITYIQ_LINKEDIN_PROVIDER: ${ENTITYIQ_LINKEDIN_PROVIDER:-}
+      # Individual screening master key (ADR-0004). Unset = intake returns 503.
+      ENTITYIQ_SCREENING_MASTER_KEY: ${ENTITYIQ_SCREENING_MASTER_KEY:-}
     depends_on:
       db:
         condition: service_healthy
