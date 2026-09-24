@@ -155,6 +155,15 @@ export interface AuditEventList {
   events: AuditEvent[];
 }
 
+/** Run lifecycle + timing (ticket 0001). stages: stage → pending|complete|unavailable. */
+export interface RunTiming {
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_seconds: number | null;
+  stages: Record<string, string>;
+}
+
 export interface ReportResponse {
   run_id: string;
   report_id: string;
@@ -167,6 +176,8 @@ export interface ReportResponse {
   generated_at: string | null;
   /** Latest human review of this run; null until reviewed. */
   review?: ReviewSummary | null;
+  /** Run status, timing and per-stage progress. */
+  run?: RunTiming | null;
 }
 
 // ---------------------------------------------------------------------------
