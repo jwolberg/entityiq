@@ -32,6 +32,7 @@ from app.schemas.report import (
     ReportListItemSchema,
     ReportListResponse,
     ReportResponse,
+    ReviewSummarySchema,
     ScoresSchema,
     SectionStatuses,
     SourceSummarySchema,
@@ -58,7 +59,27 @@ def _get_db():
 # ---------------------------------------------------------------------------
 
 
-def _serialize_report(report: Report) -> ReportResponse:
+def _review_summary(db: Session, run_id: str) -> ReviewSummarySchema | None:
+    review = (
+        db.query(Review)
+        .filter(Review.verification_run_id == run_id)
+        .order_by(Review.created_at.desc())
+        .first()
+    )
+    if review is None:
+        return None
+    decided = review.decided_at or review.updated_at or review.created_at
+    return ReviewSummarySchema(
+        status=review.status,
+        notes=review.notes,
+        reviewer_name=review.operator.full_name if review.operator else None,
+        decided_at=decided.isoformat() if decided else None,
+    )
+
+
+def _serialize_report(
+    report: Report, review: ReviewSummarySchema | None = None
+) -> ReportResponse:
     """Convert a Report ORM row + its summary dict into a ReportResponse.
 
     The summary is pre-assembled by StoreReportStage and stored as JSON.
@@ -141,6 +162,7 @@ def _serialize_report(report: Report) -> ReportResponse:
         mismatches=mismatches,
         sources=sources,
         generated_at=generated_at,
+        review=review,
     )
 
 
@@ -264,7 +286,7 @@ def export_report(
         ),
     )
 
-    return _serialize_report(report)
+    return _serialize_report(report, _review_summary(db, report.verification_run_id))
 
 
 @router.get(
@@ -302,4 +324,4 @@ def get_report(
             ),
         )
 
-    return _serialize_report(report)
+    return _serialize_report(report, _review_summary(db, report.verification_run_id))

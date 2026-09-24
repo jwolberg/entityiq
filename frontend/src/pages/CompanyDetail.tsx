@@ -7,7 +7,12 @@
  */
 
 import { useEffect, useState } from "react";
-import { apiClient, CorrectableField, ReportResponse } from "../api/client";
+import {
+  apiClient,
+  CorrectableField,
+  ReportResponse,
+  ReviewSummary,
+} from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { RegistrationDiff } from "../components/RegistrationDiff";
 import {
@@ -80,7 +85,7 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
   const [error, setError] = useState<string | null>(null);
 
   // Mark-reviewed state
-  const [reviewStatus, setReviewStatus] = useState<string | null>(null);
+  const [review, setReview] = useState<ReviewSummary | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
@@ -94,6 +99,7 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
       .then((r) => {
         if (!cancelled) {
           setReport(r);
+          setReview(r.review ?? null);
           setLoading(false);
         }
       })
@@ -121,7 +127,12 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
         },
         auth.token
       );
-      setReviewStatus(resp.review_status);
+      setReview({
+        status: resp.review_status,
+        notes: notes.trim() || null,
+        reviewer_name: null,
+        decided_at: new Date().toISOString(),
+      });
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : "Failed to mark reviewed");
     } finally {
@@ -246,12 +257,22 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
           {/* Mark Reviewed */}
           <section style={styles.section}>
             <h3 style={styles.sectionTitle}>Operator Action</h3>
-            {reviewStatus !== null ? (
+            {review !== null ? (
               <div
                 style={styles.reviewedBanner}
                 data-testid="reviewed-banner"
               >
-                Marked as <strong>{reviewStatus}</strong>.
+                Marked as <strong>{review.status}</strong>
+                {review.reviewer_name && <> by {review.reviewer_name}</>}
+                {review.decided_at && (
+                  <> on {new Date(review.decided_at).toLocaleDateString()}</>
+                )}
+                .
+                {review.notes && (
+                  <p style={styles.reviewNotes} data-testid="review-notes-display">
+                    {review.notes}
+                  </p>
+                )}
               </div>
             ) : (
               <div>
@@ -297,6 +318,14 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
               token={auth.token}
               submittedValues={submittedValuesFromReport(report)}
               onOpenRun={onOpenRun}
+              onNotesSaved={(resp) =>
+                setReview((prev) => ({
+                  status: resp.review_status,
+                  notes: resp.notes,
+                  reviewer_name: prev?.reviewer_name ?? null,
+                  decided_at: prev?.decided_at ?? resp.updated_at,
+                }))
+              }
             />
           </section>
         </div>
@@ -409,6 +438,11 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "0.375rem",
     color: "#166534",
     fontSize: "0.875rem",
+  },
+  reviewNotes: {
+    margin: "0.5rem 0 0",
+    whiteSpace: "pre-wrap",
+    color: "#14532d",
   },
   notesLabel: {
     display: "block",

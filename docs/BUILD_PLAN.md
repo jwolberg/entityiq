@@ -406,7 +406,10 @@ _Track: Integration & reporting API_
   - Objective: include review status, reviewer, and notes in `ReportResponse`.
     Show them on the company detail page. Hide or disable Mark Reviewed once a
     run is reviewed, so there's no 409 on reopen.
-  - Depends on: — · AC: PRD § Operator Actions; FE § Risk Assessment (operator notes) · Status: Todo
+  - Depends on: — · AC: PRD § Operator Actions; FE § Risk Assessment (operator notes) · Status: Complete (2026-09-24) —
+    `review` (status, notes, reviewer, decided_at) on report + export responses; detail page
+    loads it, shows notes, hides Mark Reviewed once reviewed; notes added via Operator
+    Actions update the banner.
 - P4-T6 — Auth hardening
   - Objective: require an operator token or API key on `GET /reports/{run_id}`.
     Make sign-out call the server to invalidate the session. Add a session TTL.

@@ -178,6 +178,39 @@ describe("CompanyDetail", () => {
     vi.restoreAllMocks();
   });
 
+  it("shows a saved review on reload instead of offering Mark Reviewed again", async () => {
+    const report = {
+      ...COMPLETE_REPORT,
+      review: {
+        status: "reviewed",
+        notes: "Registry confirmed by phone.",
+        reviewer_name: "Rita Reviewer",
+        decided_at: "2026-09-20T15:00:00Z",
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ ok: true, json: async () => report })
+    );
+
+    render(
+      <Wrapper>
+        <CompanyDetail runId="run-abc" onBack={vi.fn()} />
+      </Wrapper>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("reviewed-banner")).toBeDefined();
+    });
+    const banner = screen.getByTestId("reviewed-banner").textContent ?? "";
+    expect(banner).toContain("reviewed");
+    expect(banner).toContain("Rita Reviewer");
+    expect(screen.getByTestId("review-notes-display").textContent).toContain(
+      "Registry confirmed by phone."
+    );
+    expect(screen.queryByTestId("mark-reviewed-btn")).toBeNull();
+  });
+
   it("lists unavailable sources instead of silently counting fewer", async () => {
     const report = {
       ...COMPLETE_REPORT,

@@ -91,6 +91,15 @@ class SectionStatuses(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class ReviewSummarySchema(BaseModel):
+    """The human decision on a run (latest Review row), if any."""
+
+    status: str
+    notes: str | None = None
+    reviewer_name: str | None = None
+    decided_at: str | None = None
+
+
 class ReportResponse(BaseModel):
     """Full or partial report returned by GET /reports/{run_id}.
 
@@ -113,6 +122,9 @@ class ReportResponse(BaseModel):
     sources: list[SourceSummarySchema] = []
 
     generated_at: str | None = None
+
+    # Null until an operator reviews the run.
+    review: ReviewSummarySchema | None = None
 
 
 # ---------------------------------------------------------------------------

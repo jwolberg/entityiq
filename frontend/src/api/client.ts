@@ -132,6 +132,13 @@ export interface SectionStatuses {
   sources: string;
 }
 
+export interface ReviewSummary {
+  status: string;
+  notes: string | null;
+  reviewer_name: string | null;
+  decided_at: string | null;
+}
+
 export interface ReportResponse {
   run_id: string;
   report_id: string;
@@ -142,6 +149,8 @@ export interface ReportResponse {
   mismatches: MismatchItem[];
   sources: SourceSummary[];
   generated_at: string | null;
+  /** Latest human review of this run; null until reviewed. */
+  review?: ReviewSummary | null;
 }
 
 // ---------------------------------------------------------------------------

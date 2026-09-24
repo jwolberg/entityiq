@@ -975,3 +975,18 @@ locking down operator-only report reads.
   roles, single key, idempotency).
 - Added `backend/.gitignore` (`*.db`) instead of editing the root `.gitignore`,
   which has uncommitted local changes.
+
+---
+
+## 2026-09-24 — P4-T5: review state + notes read path
+
+- `ReportResponse.review` (nullable) holds the latest Review row's status,
+  notes, reviewer name, and decided_at. It's on both `GET /reports/{id}` and
+  `/export`. It's a new optional field, so it's backward compatible.
+- The detail page initializes from `report.review`, so a reviewed company
+  reopens as reviewed (no second Mark Reviewed → 409). Notes show in the
+  banner.
+- Existing behavior surfaced, not changed: `POST /workflow/runs/{id}/notes`
+  creates a Review with status "reviewed" if none exists, so adding a note
+  marks the run reviewed. The UI now reflects that via an `onNotesSaved`
+  callback. Worth revisiting whether notes should imply review.
