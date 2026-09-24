@@ -1190,3 +1190,16 @@ locking down operator-only report reads.
     I/O timeouts expire.
   - The UI poll has no cap, so a run whose worker died polls every 5s while
     the tab is open.
+
+---
+
+## 2026-09-24 — Open Decision #7 resolved with defaults (ADR-0002)
+
+- The user asked me to pick a value, so these are defaults and not a legal
+  review. Network metadata is kept raw for 90 days, then the IP is truncated
+  to /24 and UA and headers are nulled. Submitted PII is kept 5 years after
+  review, or 180 days if the submission was never reviewed. Rows are
+  anonymized in place, never deleted. The audit log is untouched.
+- Every duration can be changed via env var. Revisit them with compliance
+  counsel before any real deployment.
+- This unblocks P3-T3 / backlog ticket 0002.
