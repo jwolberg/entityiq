@@ -62,7 +62,7 @@ def test_detail_has_terms_with_evidence_snapshots_rule_and_timing(api_env):
     assert d["decision"]["rule_version"] == 1
     assert d["decision"]["thresholds"] == {"clear_below": 0.35, "match_at": 0.9}
     assert d["decision"]["snapshot_ids"]
-    assert d["decision"]["normalizer_version"] == "n1"
+    assert d["decision"]["normalizer_version"] == "n2"
     assert d["run"]["started_at"] and d["run"]["duration_seconds"] is not None
     cand = d["candidates"][0]
     assert cand["record"]["source"] == "ofac_sdn"

@@ -30,6 +30,10 @@ from app.main import app
 # Adapter retries (ticket 0001) back off 1s+ by default; tests exercising
 # failure paths shouldn't sleep. test_retry.py covers the backoff explicitly.
 os.environ.setdefault("ENTITYIQ_ADAPTER_RETRY_BACKOFF_SECONDS", "0")
+# Screening list coverage (review finding #1): tests load fixture lists
+# under "ofac_sdn" with fixed dates; the coverage tests override both.
+os.environ.setdefault("ENTITYIQ_SCREENING_REQUIRED_SOURCES", "ofac_sdn")
+os.environ.setdefault("ENTITYIQ_SCREENING_MAX_LIST_AGE_DAYS", "36500")
 
 
 @pytest.fixture(scope="session")

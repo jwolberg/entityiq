@@ -13,6 +13,8 @@ API_PORT="${API_PORT:-8000}"
 UI_PORT="${UI_PORT:-5173}"
 export DATABASE_URL="sqlite:///${DEMO_DB:-$ROOT/backend/entityiq-demo.db}"
 export CELERY_TASK_ALWAYS_EAGER=true
+# The demo screens against its own fictional list only (not the real ones).
+export ENTITYIQ_SCREENING_REQUIRED_SOURCES="${ENTITYIQ_SCREENING_REQUIRED_SOURCES:-demo_watchlist}"
 # Individual screening encrypts subject data with a master key. The demo keeps
 # one in a local, gitignored file so data stays readable across restarts.
 KEY_FILE="$ROOT/backend/.screening-demo.key"

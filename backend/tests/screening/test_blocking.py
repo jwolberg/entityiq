@@ -124,3 +124,39 @@ def test_vowel_initial_skeleton_keeps_its_consonants():
     assert "sk:il" in name_keys("Iuliia")
     assert "sk:il" in name_keys("Yulia")
     assert "sk:i" not in name_keys("Iuliia")
+
+
+def test_nickname_true_hit_survives_a_large_surname_decoy_set():
+    """Review finding #2: a nickname hit only shared the surname key, so it
+    competed in the capped partial bucket and was dropped among decoys."""
+    decoys = [
+        {
+            "id": f"D{i:04d}",
+            "names": [{"name": f"Given{i} Harcourtney", "kind": "primary"}],
+        }
+        for i in range(500)
+    ]
+    hit = {"id": "HIT", "names": [{"name": "William Harcourtney", "kind": "primary"}]}
+    index = BlockingIndex.build(decoys + [hit])
+    got = [c.record_id for c in index.candidates("Bill Harcourtney")]
+    assert "HIT" in got
+
+
+def test_recall_holds_for_every_corpus_hit_among_realistic_decoy_volume():
+    """Recall gate at list scale: 200 surname decoys per true hit (~16k)."""
+    by_id = {r["id"]: r for r in CORPUS.watchlist}
+    decoys = []
+    for case in CORPUS.cases:
+        for hit in case.expected_hits:
+            surname = by_id[hit]["names"][0]["name"].split()[-1]
+            decoys += [
+                {
+                    "id": f"{hit}-D{i}",
+                    "names": [{"name": f"Zq{i}x {surname}", "kind": "primary"}],
+                }
+                for i in range(200)
+            ]
+    index = BlockingIndex.build(CORPUS.watchlist + decoys)
+    for case in CORPUS.cases:
+        got = {c.record_id for c in index.candidates(case.subject["name"])}
+        assert set(case.expected_hits) <= got, case.id

@@ -198,7 +198,7 @@ def test_pipeline_writes_a_frozen_decision(db):
 
     decision = db.query(ScreeningDecision).filter_by(run_id=run.id).one()
     assert decision.system_disposition == "REVIEW"
-    assert decision.normalizer_version == "n1"
+    assert decision.normalizer_version == "n2"
     assert decision.snapshot_ids and decision.rule_version_id
     assert decision.thresholds == DEFAULT_RULE["thresholds"]
     bundle = crypto.decrypt_for_subject(

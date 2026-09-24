@@ -18,6 +18,7 @@ from tests.screening.conftest import load_people
 
 @pytest.fixture
 def db(tmp_path, monkeypatch):
+    monkeypatch.setenv("ENTITYIQ_SCREENING_REQUIRED_SOURCES", "demo_watchlist")
     monkeypatch.setenv(
         "ENTITYIQ_SCREENING_MASTER_KEY", base64.b64encode(os.urandom(32)).decode()
     )

@@ -25,7 +25,7 @@ import re
 import jellyfish
 from anyascii import anyascii
 
-NORMALIZER_VERSION = "n1"
+NORMALIZER_VERSION = "n2"  # n2: nickname-canonical keys (review finding)
 
 PARTICLES = frozenset(
     {
@@ -80,9 +80,16 @@ def _skeleton(token: str) -> str:
 
 
 def token_keys(token: str) -> set[str]:
+    """Phonetic + skeleton keys; a nickname also carries its canonical name's
+    keys, so "Bill X" and "William X" share a given-name key and match on
+    every token (full matches are never capped at blocking)."""
     if len(token) < 2:
         return set()
-    return {f"mp:{jellyfish.metaphone(token)}", f"sk:{_skeleton(token)}"}
+    keys = {f"mp:{jellyfish.metaphone(token)}", f"sk:{_skeleton(token)}"}
+    canonical = canonical_given(token)
+    if canonical != token:
+        keys |= {f"mp:{jellyfish.metaphone(canonical)}", f"sk:{_skeleton(canonical)}"}
+    return keys
 
 
 def name_keys(name: str | None) -> set[str]:

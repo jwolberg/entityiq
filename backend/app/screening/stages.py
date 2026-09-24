@@ -65,20 +65,79 @@ def subject_names(pii: dict) -> list[str]:
     return [n for n in names if n]
 
 
+DEFAULT_REQUIRED_SOURCES = "ofac_sdn,un_consolidated,eu_fsf,uk_ofsi"
+
+
+def required_sources() -> list[str]:
+    import os  # noqa: PLC0415
+
+    raw = os.environ.get(
+        "ENTITYIQ_SCREENING_REQUIRED_SOURCES", DEFAULT_REQUIRED_SOURCES
+    )
+    return [s.strip() for s in raw.split(",") if s.strip()]
+
+
+def max_list_age_days() -> float:
+    import os  # noqa: PLC0415
+
+    return float(os.environ.get("ENTITYIQ_SCREENING_MAX_LIST_AGE_DAYS", "7"))
+
+
+def list_coverage(db: "Session", snapshot_ids: list[str]) -> dict[str, str]:
+    """``{"list:<source>": "complete"|"unavailable"}`` for every required list.
+
+    A required list with no snapshot, or whose latest snapshot is older than
+    ENTITYIQ_SCREENING_MAX_LIST_AGE_DAYS, is unavailable, and an unavailable
+    list blocks auto-CLEAR (C2, F9, N4).
+    """
+    from datetime import datetime, timedelta, timezone  # noqa: PLC0415
+
+    now = datetime.now(tz=timezone.utc)
+    latest = (
+        {
+            s.source: s
+            for s in db.query(ListSnapshot).filter(ListSnapshot.id.in_(snapshot_ids))
+        }
+        if snapshot_ids
+        else {}
+    )
+    coverage = {}
+    for source in required_sources():
+        snap = latest.get(source)
+        fresh = False
+        if snap is not None:
+            retrieved = snap.retrieved_at
+            if retrieved.tzinfo is None:
+                retrieved = retrieved.replace(tzinfo=timezone.utc)
+            fresh = now - retrieved <= timedelta(days=max_list_age_days())
+        coverage[f"list:{source}"] = "complete" if fresh else "unavailable"
+    return coverage
+
+
 class BlockCandidatesStage:
-    """Recall-first candidate generation against the current list snapshots."""
+    """Recall-first candidate generation against the current list snapshots.
+
+    Also records per-list coverage on the run (``list:<source>`` entries in
+    source_availability) so a missing or stale required list blocks
+    auto-CLEAR and shows as a coverage gap.
+    """
 
     name = "block_candidates"
 
     def run(self, run_id: str, db: "Session", context: dict) -> dict:
         snapshot_ids = current_snapshot_ids(db)
+        run = db.get(ScreeningRun, run_id)
+        run.source_availability = {
+            **(run.source_availability or {}),
+            **list_coverage(db, snapshot_ids),
+        }
+        db.commit()
         if not snapshot_ids:
             return {
                 **context,
                 "blocking": {"status": "unavailable", "message": "No lists loaded"},
             }
 
-        run = db.get(ScreeningRun, run_id)
         subject = db.get(ScreeningSubject, run.subject_id)
         pii = get_subject_pii(db, subject)
         index = _load_index(db, snapshot_ids)

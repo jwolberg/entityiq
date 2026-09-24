@@ -314,6 +314,8 @@ Crypto-shred retention for screening subjects (ADR-0004), also scheduled:
 | `ENTITYIQ_SCREENING_RETENTION_DAYS` | `1825` | Days after a subject's relationship ends before `python -m app.screening.retention` crypto-shreds it (ADR-0004). |
 | `ENTITYIQ_SCREENING_STAGE_TIMEOUT_SECONDS` | `10` | Per-stage budget for individual screening (separate from KYB's). |
 | `ENTITYIQ_SCREENING_RUN_TIMEOUT_SECONDS` | `60` | Whole-run budget for individual screening. Celery soft limit is this + 30 s, hard + 45 s. Screening tasks run on the `screening` queue: start a worker with `celery -A app.worker worker -Q screening` (and one for the default queue for KYB).
+| `ENTITYIQ_SCREENING_REQUIRED_SOURCES` | `ofac_sdn,un_consolidated,eu_fsf,uk_ofsi` | Lists that must be loaded **and fresh** for a CLEAR to auto-close. Any missing or stale one forces REVIEW and shows as a coverage gap. `demo.sh` sets it to `demo_watchlist`. |
+| `ENTITYIQ_SCREENING_MAX_LIST_AGE_DAYS` | `7` | A required list whose latest snapshot is older than this counts as unavailable. Run `app.lists.ingest` daily. |
 | `TRUSTED_PROXY_DEPTH` | `0` | Hops to walk back from the right of `X-Forwarded-For` to find the client IP. `0` = use the direct connection peer (correct when not behind a proxy). Set to the number of trusted proxies in front of the app. |
 | `ENTITYIQ_RETENTION_NETWORK_DAYS` | `90` | Days a submission's raw network metadata (`source_ip`/`user_agent`/`forwarded_headers`) is kept before the retention job truncates/nulls it (ADR-0002). |
 | `ENTITYIQ_RETENTION_REVIEWED_DAYS` | `1825` | Days after a review decision before the retention job nulls a reviewed submission's PII (ADR-0002). |
