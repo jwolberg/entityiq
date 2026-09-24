@@ -1616,3 +1616,27 @@ single-tenant internal tool; multi-tenant would need per-client scoping.
   contradict anything: the match evidence is a boolean derived fact, not the
   associated names themselves, so operator visibility doesn't leak the
   requester's actual PII.
+
+---
+
+## 2026-09-24 — Ticket 0026: lead-only API-key provisioning
+
+- **`require_lead`'s denial-audit (ticket 0002) applies here for free.** These
+  three routes only needed `Depends(require_lead)`, same as the existing
+  global audit log — an operator's 403 is centrally audited by
+  `app/auth/operator.py`, not duplicated per route.
+- **No new `ApiClient` column for "created by".** The model already existed
+  (P2-T12); attribution for who created/revoked a key comes from the
+  `operator.api_client_created` / `operator.api_client_revoked` audit events
+  (`operator_id` + `payload.api_client_id`), not a new FK. Kept the model
+  change surface at zero.
+- **Duplicate-name check is a pre-query, not a caught `IntegrityError`.**
+  `ApiClient.name` is already unique at the DB level; the route pre-checks
+  and returns 409 with a clear message. A concurrent double-create could
+  still race past the pre-check into a DB-level `IntegrityError` — accepted
+  as a known, narrow gap rather than adding transaction-retry machinery for
+  a low-traffic admin action.
+- **Frontend mirrors the existing AuditLog pattern exactly**: lead-only nav
+  link hidden client-side (the API is the real gate), a dedicated page
+  component, hash-based routing in `App.tsx`. No new dependency, no
+  react-router.

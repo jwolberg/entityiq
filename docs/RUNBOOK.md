@@ -334,6 +334,9 @@ CI (GitHub Actions, `.github/workflows/ci.yml`) runs all of the above plus the f
 | POST | `/workflow/runs/{run_id}/correct` | Correct fields + re-run (operator auth; audited) |
 | POST | `/workflow/runs/{run_id}/notes` | Add review notes (operator auth; audited) |
 | POST | `/reviews/{run_id}` | Mark reviewed (operator auth required; audited) |
+| POST | `/api-clients` | Create an integration API key; full key shown once (**lead only**; audited) |
+| GET | `/api-clients` | List integration API keys — prefix + metadata only, never the hash (**lead only**) |
+| POST | `/api-clients/{id}/revoke` | Revoke an integration API key; rejected on its next use (**lead only**; audited) |
 
 Exact request/response shapes are in the live `/docs`. Report responses are
 role-gated per ADR-0002 (`docs/decisions/0002-pii-retention-policy.md`): leads

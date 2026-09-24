@@ -14,11 +14,13 @@ import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { Dashboard } from "./pages/Dashboard";
 import { CompanyDetail } from "./pages/CompanyDetail";
 import { AuditLog } from "./pages/AuditLog";
+import { ApiKeys } from "./pages/ApiKeys";
 
 type Route =
   | { page: "dashboard" }
   | { page: "detail"; runId: string }
-  | { page: "audit" };
+  | { page: "audit" }
+  | { page: "api-keys" };
 
 function AppShell() {
   const { auth, signOut } = useAuth();
@@ -47,6 +49,15 @@ function AppShell() {
               data-testid="nav-audit-log"
             >
               Audit Log
+            </button>
+          )}
+          {auth.role === "lead" && (
+            <button
+              onClick={() => navigate({ page: "api-keys" })}
+              style={styles.signOutBtn}
+              data-testid="nav-api-keys"
+            >
+              API Keys
             </button>
           )}
           <span style={styles.operatorInfo}>
@@ -79,6 +90,7 @@ function AppShell() {
             onOpenRun={(runId) => navigate({ page: "detail", runId })}
           />
         )}
+        {route.page === "api-keys" && <ApiKeys token={auth.token} />}
       </main>
     </div>
   );
