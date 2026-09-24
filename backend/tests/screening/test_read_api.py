@@ -84,6 +84,19 @@ def test_reading_detail_is_audited(api_env):
     db.close()
 
 
+def test_queue_reads_are_audited_with_the_runs_shown(api_env):
+    match, review, _c = _seed_three(api_env)
+    api_env["client"].get(
+        "/screenings?limit=2&disposition=REVIEW", headers=api_env["auth"]["examiner"]
+    )
+    db = api_env["factory"]()
+    [event] = db.query(AuditEvent).filter_by(event_type="screening.queue_viewed")
+    assert event.payload["run_ids"] == [review]
+    assert event.payload["filters"] == {"disposition": "REVIEW"}
+    assert "Helena" not in str(event.payload)
+    db.close()
+
+
 def test_disposition_appends_rows_and_keeps_history(api_env):
     _m, review, _c = _seed_three(api_env)
     c, h = api_env["client"], api_env["auth"]["operator"]

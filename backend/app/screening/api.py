@@ -270,7 +270,21 @@ def list_screenings(
         db,
         "screening.queue_viewed",
         operator_id=operator.id,
-        payload={"count": len(items), "total": total, "offset": offset},
+        payload={
+            "run_ids": [i["run_id"] for i in items],
+            "total": total,
+            "offset": offset,
+            "filters": {
+                k: v
+                for k, v in {
+                    "disposition": disposition,
+                    "list_source": list_source,
+                    "older_than_days": older_than_days,
+                    "trigger": trigger,
+                }.items()
+                if v is not None
+            },
+        },
     )
     db.commit()
     return {"items": items, "total": total, "limit": limit, "offset": offset}
