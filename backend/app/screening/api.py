@@ -435,3 +435,42 @@ def dispose_screening(
     )
     db.commit()
     return {"disposition_id": row.id, "disposition": row.disposition}
+
+
+# ---------------------------------------------------------------------------
+# Replay (ticket 0040)
+# ---------------------------------------------------------------------------
+
+# Leads and examiners verify decisions; operators disposition them.
+_REPLAY_ROLES = ("lead", "examiner")
+
+
+@router.post("/{run_id}/replay")
+def replay_screening(
+    run_id: str,
+    db: Session = Depends(_get_db),
+    operator: Operator = Depends(get_current_operator),
+) -> dict:
+    from app.screening.replay import replay_decision  # noqa: PLC0415
+
+    if operator.role not in _REPLAY_ROLES:
+        raise HTTPException(
+            status_code=403, detail=f"Role '{operator.role}' cannot replay decisions."
+        )
+    _load_run(db, run_id)
+    decision = db.query(ScreeningDecision).filter_by(run_id=run_id).one_or_none()
+    if decision is None:
+        raise HTTPException(status_code=409, detail="The run has no decision yet.")
+    result = replay_decision(db, decision)
+    record_event(
+        db,
+        "screening.replayed",
+        operator_id=operator.id,
+        payload={
+            "run_id": run_id,
+            "reproduced": result["reproduced"],
+            "shredded": result["shredded"],
+        },
+    )
+    db.commit()
+    return result
