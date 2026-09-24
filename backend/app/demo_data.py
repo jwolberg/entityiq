@@ -441,8 +441,10 @@ def load_demo_data(db: Session) -> int:
 
 
 def main() -> None:
-    from app.db.session import SessionLocal  # noqa: PLC0415
+    from app.db.session import DATABASE_URL, SessionLocal  # noqa: PLC0415
+    from app.seed import check_seed_target  # noqa: PLC0415
 
+    check_seed_target(DATABASE_URL)
     db = SessionLocal()
     try:
         added = load_demo_data(db)

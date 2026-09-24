@@ -193,7 +193,8 @@ export function HqPanel({ evidence, status }: HqPanelProps) {
       />
     );
   }
-  const confidence = CONFIDENCE_LABEL[get("hq_address_confidence") ?? "low"];
+  const confidence =
+    CONFIDENCE_LABEL[get("hq_address_confidence") ?? ""] ?? CONFIDENCE_LABEL.low;
   const source = get("hq_address_source");
   return (
     <div data-testid="hq-panel">

@@ -49,3 +49,28 @@ def test_seed_is_idempotent(db):
     result = seed(db)
     assert result.created_accounts == []
     assert db.query(Operator).count() == len(DEMO_ACCOUNTS)
+
+
+# The seed creates accounts with a publicly documented password, so it must
+# refuse anything but a local SQLite database unless explicitly overridden.
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql+psycopg://entityiq:pw@db.internal:5432/entityiq",
+        "postgresql://u:p@localhost/entityiq",
+    ],
+)
+def test_seed_refuses_non_sqlite_database(url, monkeypatch):
+    from app.seed import UnsafeSeedTarget, check_seed_target
+
+    monkeypatch.delenv("ENTITYIQ_ALLOW_DEMO_SEED", raising=False)
+    with pytest.raises(UnsafeSeedTarget):
+        check_seed_target(url)
+
+
+def test_seed_allows_sqlite_and_explicit_override(monkeypatch):
+    from app.seed import check_seed_target
+
+    check_seed_target("sqlite:///./entityiq-demo.db")
+    monkeypatch.setenv("ENTITYIQ_ALLOW_DEMO_SEED", "1")
+    check_seed_target("postgresql://u:p@localhost/entityiq")
