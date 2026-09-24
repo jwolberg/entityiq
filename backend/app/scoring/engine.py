@@ -59,6 +59,17 @@ TRIAGE_PRE_CLEAR_MAX = 30  # overall_score ≤ 30 → pre_clear
 TRIAGE_ESCALATE_MIN = 70  # overall_score ≥ 70 → escalate
 # 31–69 → "review"
 
+# Signals that alone force "escalate" regardless of overall_score.  Lives here
+# (not triage.py) so the tier PERSISTED by the engine and the tier shown in the
+# report's triage section can never disagree.
+CRITICAL_ESCALATION_SIGNALS: frozenset[str] = frozenset(
+    {
+        "sanctions_hit",
+        "sanctions_hit_fraud_flag",
+        "ip_asn_reuse_high",
+    }
+)
+
 # ---------------------------------------------------------------------------
 # Layer weights for overall_score (v1: equal)
 # ---------------------------------------------------------------------------
@@ -240,8 +251,8 @@ def _compute_overall_score(layer_scores: dict[str, float]) -> float:
     return max(0.0, min(100.0, weighted_sum / total_weight))
 
 
-def _triage_tier(overall_score: float) -> str:
-    """Map overall score to a triage tier.
+def _triage_tier(overall_score: float, signal_names: set[str] | None = None) -> str:
+    """Map overall score to a triage tier; critical signals force escalate.
 
     pre_clear: ≤ 30 — low risk, operator may expedite review
     escalate:  ≥ 70 — high risk, requires close scrutiny
@@ -250,6 +261,8 @@ def _triage_tier(overall_score: float) -> str:
     INVARIANT: this is a TRIAGE SIGNAL, not an approval decision.
     The human operator decides; the tier is a queue-management aid.
     """
+    if signal_names and signal_names & CRITICAL_ESCALATION_SIGNALS:
+        return "escalate"
     if overall_score <= TRIAGE_PRE_CLEAR_MAX:
         return "pre_clear"
     if overall_score >= TRIAGE_ESCALATE_MIN:
@@ -324,10 +337,10 @@ class ScoringEngine:
             "risk": risk_score,
         }
         overall = _compute_overall_score(layer_scores)
-        tier = _triage_tier(overall)
         confidence = _compute_confidence(evidence_rows)
 
         all_signals = entity_signals + infra_signals + rep_signals + risk_signals
+        tier = _triage_tier(overall, {s.name for s in all_signals})
 
         return ScoringResult(
             entity_score=entity_score,

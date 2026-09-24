@@ -36,6 +36,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.scoring.engine import (
+    CRITICAL_ESCALATION_SIGNALS,
     TRIAGE_ESCALATE_MIN,
     TRIAGE_PRE_CLEAR_MAX,
     ScoringResult,
@@ -77,14 +78,9 @@ class TriageResult:
         }
 
 
-# Names of signals that alone justify escalation regardless of overall score.
-_CRITICAL_ESCALATION_SIGNALS: frozenset[str] = frozenset(
-    {
-        "sanctions_hit",
-        "sanctions_hit_fraud_flag",
-        "ip_asn_reuse_high",
-    }
-)
+# Names of signals that alone justify escalation regardless of overall score
+# (defined in engine so the persisted tier uses the same rule).
+_CRITICAL_ESCALATION_SIGNALS = CRITICAL_ESCALATION_SIGNALS
 
 
 def derive_triage(result: ScoringResult) -> TriageResult:

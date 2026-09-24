@@ -594,3 +594,41 @@ def _make_ev_with_id(
     )
     ev.id = str(uuid.uuid4())
     return ev
+
+
+# ---------------------------------------------------------------------------
+# P5-T3 finding — critical signals must drive the STORED triage tier
+# ---------------------------------------------------------------------------
+
+
+def test_sanctions_hit_escalates_even_when_everything_else_is_clean():
+    """A sanctions match on an otherwise pristine company used to be stored as
+    pre_clear (score-only tier) while the report summary said escalate."""
+    from app.models.evidence import Evidence
+    from app.scoring.engine import ScoringEngine
+
+    def ev(source, tier, field, value):
+        e = Evidence(
+            verification_run_id="run-x",
+            source=source,
+            tier=tier,
+            field=field,
+            raw_value=value,
+            normalized_value=value,
+            confidence=0.95,
+            fetched_at=datetime.now(tz=timezone.utc),
+        )
+        e.id = str(uuid.uuid4())
+        return e
+
+    evidence = [
+        ev("sanctions", 1, "sanctions_hit", "VOLGA MARITIME TRADING"),
+        ev("opencorporates", 1, "company_name", "Volga Maritime Trading Ltd"),
+        ev("domain", 2, "domain_age_days", "4000"),
+        ev("domain", 2, "mx_present", "true"),
+        ev("domain", 2, "spf_present", "true"),
+        ev("domain", 2, "ssl_issuer", "DigiCert"),
+    ]
+    result = ScoringEngine().score(evidence, [])
+    assert result.overall_score < 70  # the score alone would not escalate...
+    assert result.triage_tier == "escalate"  # ...the sanctions hit must override

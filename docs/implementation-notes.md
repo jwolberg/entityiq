@@ -1008,3 +1008,19 @@ locking down operator-only report reads.
   purged on lookup. The store is still in-memory and single-process: a
   restart signs everyone out, and it won't work across multiple API workers.
   Documented, not changed (Redis-backed store is the noted replacement).
+
+---
+
+## 2026-09-24 — Fix: sanctions hit stored as pre_clear (found building P5-T3)
+
+- Bug: the tier persisted on `RiskAssessment.triage_tier` (dashboard +
+  `scores.triage_tier`) came from the score thresholds alone.
+  `triage.derive_triage` has a critical-signal override (sanctions hit, high
+  ASN reuse → escalate), but only the report's triage section used it. A
+  sanctions-matched company with otherwise clean infrastructure showed
+  **pre_clear** on the dashboard and **escalate** in its own report.
+- Fix: `CRITICAL_ESCALATION_SIGNALS` moved to `engine.py`, and
+  `_triage_tier(score, signal_names)` applies it, so both paths use one rule.
+  triage.py re-exports the set.
+- Existing stored assessments are not recomputed; re-running analysis
+  corrects them.
