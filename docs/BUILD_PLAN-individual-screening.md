@@ -155,7 +155,7 @@
 - IS1-T5 — Per-subject envelope encryption and crypto-shred
   - Objective: Encrypt subject PII and frozen inputs with a per-subject data key,
     wrapped by a master key from env. Shredding destroys the data key after the
-    retention period; a scheduled job applies it. Write ADR-0003 for the policy (C5).
+    retention period; a scheduled job applies it. Write ADR-0004 for the policy (C5); ADR-0003 records the libraries.
   - Files likely involved: backend/app/screening/crypto.py (new),
     backend/app/screening/retention.py (new), docs/decisions/ (ADR-0003), RUNBOOK
   - Depends on: IS1-T3, IS0-T2

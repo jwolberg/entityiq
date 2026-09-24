@@ -73,6 +73,31 @@ class ScreeningSubject(Base):
     )
 
 
+class ScreeningSubjectKey(Base):
+    """A subject's data key, wrapped by the master key (ADR-0004).
+
+    Not append-only: crypto-shredding sets ``wrapped_key`` to NULL.
+    """
+
+    __tablename__ = "screening_subject_key"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    subject_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("screening_subject.id"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    wrapped_key: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    destroyed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
 class ScreeningRuleVersion(Base):
     """Versioned weights + thresholds (F13). Rows are never edited."""
 

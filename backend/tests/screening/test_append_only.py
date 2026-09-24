@@ -118,7 +118,7 @@ def test_update_and_delete_are_rejected_inserts_still_work(
 def test_triggers_are_removed_on_downgrade(tmp_path, monkeypatch):
     url = f"sqlite:///{tmp_path / 'down.db'}"
     cfg = _migrated(url, monkeypatch)
-    command.downgrade(cfg, "-1")
+    command.downgrade(cfg, "d9e3f4a5b6c7")  # the revision before the triggers
     engine = create_engine(url)
     with engine.connect() as conn:
         names = {
