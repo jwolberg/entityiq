@@ -288,3 +288,32 @@ def test_format_tax_id_empty_input_returns_none():
 def test_format_tax_id_unknown_country_returns_stripped():
     """Stub: returns stripped value for any country."""
     assert format_tax_id("  ABC-123  ", "ZZ") == "ABC-123"
+
+
+# ---------------------------------------------------------------------------
+# P4-T2 — free/disposable email becomes scored evidence
+# ---------------------------------------------------------------------------
+
+
+def _intake_evidence(db, run_id):
+    from app.models.evidence import Evidence
+
+    return {
+        e.field: e
+        for e in db.query(Evidence).filter(Evidence.verification_run_id == run_id)
+    }
+
+
+def test_free_email_domain_is_recorded_as_intake_evidence(norm_session):
+    run = _make_run(norm_session, email="founder@gmail.com")
+    NormalizeInputStage().run(run.id, norm_session, {})
+    ev = _intake_evidence(norm_session, run.id)["free_email_domain"]
+    assert ev.normalized_value == "true"
+    assert ev.source == "submission"
+    assert ev.tier == 0  # intake metadata: must not count as source coverage
+
+
+def test_company_email_records_no_free_email_evidence(norm_session):
+    run = _make_run(norm_session, email="cto@acme.example")
+    NormalizeInputStage().run(run.id, norm_session, {})
+    assert "free_email_domain" not in _intake_evidence(norm_session, run.id)

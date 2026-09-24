@@ -1080,3 +1080,30 @@ locking down operator-only report reads.
   on mount.
 - Not done: a pagination cursor (limit ≤ 500 for now) and filtering by actor
   on the server (the UI filters client-side).
+
+---
+
+## 2026-09-24 — P4-T2: dropped signals wired
+
+- Conflicting identities: the resolve stage's `conflict_signal` can never
+  fire in production, because its only candidate is synthesized from the
+  submission itself. Scoring it would be a no-op, so it stays unwired (the
+  deviation from plan). The real signal now comes from the registry adapter:
+  ≥2 distinct registered entities (different company numbers) whose names
+  equal the submitted name after legal-suffix stripping →
+  `registry_identity_conflict` evidence → `conflicting_company_identities`
+  (entity, elevated, 0.5). Deliberately narrow, so differently named
+  subsidiaries of big companies don't trip it.
+- Free email: the list moved from `api/submissions.py` to
+  `pipeline/normalize.py` (one source of truth). The normalize stage records
+  tier-0 `free_email_domain` evidence (source "submission"). Tier 0 is
+  excluded from source-coverage confidence. It's scored as
+  `free_email_domain` (representation, elevated, 0.3) on both the normal and
+  no-comparison paths.
+- Docstrings that claimed `suspicious_dns_infrastructure`,
+  `inconsistent_contact_information`, and `ip_distance_flag` now say "not
+  implemented".
+- `valid_tax_id` stays unreachable; it's handed to identity-corroboration
+  IC1-T3.
+- Side effect: "submission" appears as a source in the report's sources list
+  when free-email evidence exists. Accepted, since it is attributed evidence.

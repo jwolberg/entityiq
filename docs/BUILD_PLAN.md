@@ -387,7 +387,11 @@ _Track: Integration & reporting API_
     evidence and score it. Implement or delete docstring-only signals
     (`suspicious_dns_infrastructure`, `inconsistent_contact_information`,
     `ip_distance_flag`). Leave `valid_tax_id` to identity-corroboration IC1-T3.
-  - Depends on: P4-T1 · AC: PRD § Elevated Risk Indicators; § Inputs · Status: Todo
+  - Depends on: P4-T1 · AC: PRD § Elevated Risk Indicators; § Inputs · Status: Complete (2026-09-24) —
+    `conflicting_company_identities` (registry: ≥2 distinct entities with exactly the submitted
+    name) and `free_email_domain` (tier-0 intake evidence) are scored; phantom docstring claims
+    corrected to "not implemented". Deviation: resolve-stage `conflict_signal` left unwired —
+    its only candidate is synthesized from the submission, so it can never fire.
 - P4-T3 — Live-source viability + runtime dependencies
   - Objective: add an `OPENCORPORATES_API_TOKEN` env var. Surface adapter
     failures (401, unavailable) in the report's `sources` instead of dropping

@@ -22,9 +22,11 @@ Signal catalog design rules
 5. The full PRD § Risk Signals catalog is covered here:
    Elevated: recently_registered_domain, no_mx_records, disposable/free email,
    registry_mismatch, domain_country_mismatch, billing_address_mismatch,
-   thin/generated website, no_employee_footprint, suspicious_dns_infrastructure,
-   inconsistent_contact_info, datacenter/anonymized IP, IP_country_mismatch,
-   ip_asn_reuse (cross-submission), sanctions_hit.
+   thin/generated website, no_employee_footprint, datacenter/anonymized IP,
+   IP_country_mismatch, ip_asn_reuse (cross-submission), sanctions_hit,
+   conflicting_company_identities.
+   NOT yet implemented (PRD): suspicious_dns_infrastructure,
+   inconsistent_contact_information, recently created social presence.
    Trust: long_lived_domain, registry_confirmed, consistent_addresses,
    valid_tax_id, active_employee_footprint, matching_contact_info,
    stable_web_presence, ssl_present, spf_configured, has_mx_records.
@@ -218,6 +220,23 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
                     "Tax ID / registration number validated via authoritative source."
                 ),
                 evidence_ids=[e.id for e in tax_id_evidence],
+            )
+        )
+
+    # Multiple distinct registered entities share the submitted name (P4-T2).
+    conflict_ev = [e for e in tier1_evidence if e.field == "registry_identity_conflict"]
+    if conflict_ev:
+        signals.append(
+            Signal(
+                name="conflicting_company_identities",
+                layer="entity",
+                direction="elevated",
+                weight=0.5,
+                description=(
+                    "Several distinct registered entities carry exactly this name — "
+                    "confirm which one the applicant is."
+                ),
+                evidence_ids=[e.id for e in conflict_ev],
             )
         )
 
@@ -445,7 +464,7 @@ def representation_confidence_signals(
       - registry_mismatch (name, country, address)
       - billing_address_mismatch
       - domain_country_mismatch (via ip_country_mismatch)
-      - inconsistent_contact_information (from web evidence)
+      - free_email_domain (tier-0 intake evidence)
     And PRD trust:
       - consistent_name, consistent_address, consistent_jurisdiction
       - ip_country_match
@@ -473,6 +492,7 @@ def representation_confidence_signals(
         # not field-comparison-derived.
         _append_ip_signals(signals, evidence_rows)
         _append_web_contact_signals(signals, evidence_rows)
+        _append_intake_signals(signals, evidence_rows)
         return signals
 
     # Core field weights (PRD § Core Verification Philosophy — representation layer)
@@ -520,6 +540,7 @@ def representation_confidence_signals(
 
     _append_ip_signals(signals, evidence_rows)
     _append_web_contact_signals(signals, evidence_rows)
+    _append_intake_signals(signals, evidence_rows)
 
     # Guard: if no signals produced (all fields unverified)
     if not signals:
@@ -588,6 +609,25 @@ def _append_ip_signals(signals: list[Signal], evidence_rows: list) -> None:
                     evidence_ids=[e.id for e in ip_country_match_ev[:1]],
                 )
             )
+
+
+def _append_intake_signals(signals: list[Signal], evidence_rows: list) -> None:
+    """Signals from facts about the submission itself (tier-0 evidence)."""
+    free_email = [e for e in evidence_rows if e.field == "free_email_domain"]
+    if free_email:
+        signals.append(
+            Signal(
+                name="free_email_domain",
+                layer="representation",
+                direction="elevated",
+                weight=0.3,
+                description=(
+                    "Registered with a free/disposable email address rather than "
+                    "one on the company's domain."
+                ),
+                evidence_ids=[e.id for e in free_email],
+            )
+        )
 
 
 def _append_web_contact_signals(signals: list[Signal], evidence_rows: list) -> None:

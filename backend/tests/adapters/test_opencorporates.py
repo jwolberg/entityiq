@@ -344,3 +344,49 @@ def test_api_token_read_from_environment(monkeypatch):
         AdapterContext(run_id="r", company_name="Acme")
     )
     assert seen.get("api_token") == "tok-123"
+
+
+# ---------------------------------------------------------------------------
+# P4-T2 — conflicting company identities
+# ---------------------------------------------------------------------------
+
+
+def _company(name: str, number: str, jur: str = "us_de") -> dict:
+    return {
+        "company": {
+            "name": name,
+            "company_number": number,
+            "current_status": "Active",
+            "jurisdiction_code": jur,
+        }
+    }
+
+
+def _fields_for(results: list[dict], company_name: str = "Acme Holdings") -> dict:
+    from app.adapters.opencorporates import OpenCorporatesAdapter
+
+    resp = _FakeResponse(200, {"results": {"companies": results}})
+    result = OpenCorporatesAdapter(http_client=_FakeHttpClient(resp)).fetch(
+        AdapterContext(run_id="r", company_name=company_name)
+    )
+    assert isinstance(result, AdapterSuccess)
+    return {e.field: e for e in result.evidence}
+
+
+def test_two_registered_entities_with_the_submitted_name_is_a_conflict():
+    fields = _fields_for(
+        [_company("ACME HOLDINGS LTD", "111"), _company("Acme Holdings, Inc.", "222")]
+    )
+    conflict = fields["registry_identity_conflict"]
+    assert conflict.normalized_value == "true"
+    assert {c["company_number"] for c in conflict.raw_payload["matches"]} == {
+        "111",
+        "222",
+    }
+
+
+def test_subsidiaries_with_different_names_are_not_a_conflict():
+    fields = _fields_for(
+        [_company("Acme Holdings Inc", "111"), _company("Acme Holdings Europe BV", "9")]
+    )
+    assert "registry_identity_conflict" not in fields

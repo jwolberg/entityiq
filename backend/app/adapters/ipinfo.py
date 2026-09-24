@@ -9,7 +9,8 @@ Evidence rows for:
     - ip_organization
     - ip_hosting / ip_vpn / ip_proxy (anonymized-network indicators)
     - ip_country_match  (compared against context["normalized"]["country_iso"])
-    - ip_distance_flag  (unusual geography relative to submitted company)
+    (Not implemented: a geo-distance flag. "Unusual geography" is currently
+     the country-level ip_country_mismatch only.)
     - ip_reuse_flag     (repeated submissions from same IP — NOTE: computed by
                          the scoring/consistency layer once per-run; this adapter
                          emits raw geo/ASN data only)
