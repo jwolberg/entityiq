@@ -440,6 +440,8 @@ describe("CompanyDetail", () => {
         ok: true,
         json: async () => COMPLETE_REPORT,
       })
+      // GET /audit/runs/run-abc (Activity panel mounts with the report)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ events: [] }) })
       // Second call: POST /reviews/run-abc
       .mockResolvedValueOnce({
         ok: true,
@@ -485,6 +487,8 @@ describe("CompanyDetail", () => {
         ok: true,
         json: async () => COMPLETE_REPORT,
       })
+      // GET /audit/runs/run-abc (Activity panel mounts with the report)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ events: [] }) })
       .mockResolvedValueOnce({
         ok: false,
         json: async () => ({ detail: "Conflict: already reviewed" }),

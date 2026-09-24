@@ -61,3 +61,39 @@ describe("Sign out", () => {
     ).toBe("Bearer tok-1");
   });
 });
+
+describe("Lead-only audit log navigation", () => {
+  async function signInAs(role: "lead" | "operator") {
+    const { fireEvent, waitFor } = await import("@testing-library/react");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/auth/sign-in") {
+          return {
+            ok: true,
+            json: async () => ({ session_token: "t", operator_id: "o", role }),
+          };
+        }
+        if (url.startsWith("/api/audit")) {
+          return { ok: true, json: async () => ({ events: [] }) };
+        }
+        return { ok: true, json: async () => ({ items: [], total: 0 }) };
+      })
+    );
+    render(<App />);
+    fireEvent.change(screen.getByTestId("email-input"), { target: { value: "a@b.c" } });
+    fireEvent.change(screen.getByTestId("password-input"), { target: { value: "pw" } });
+    fireEvent.click(screen.getByTestId("sign-in-button"));
+    await waitFor(() => expect(screen.getByText("Sign Out")).toBeDefined());
+  }
+
+  it("shows the Audit Log link to leads", async () => {
+    await signInAs("lead");
+    expect(screen.getByTestId("nav-audit-log")).toBeDefined();
+  });
+
+  it("hides the Audit Log link from operators", async () => {
+    await signInAs("operator");
+    expect(screen.queryByTestId("nav-audit-log")).toBeNull();
+  });
+});

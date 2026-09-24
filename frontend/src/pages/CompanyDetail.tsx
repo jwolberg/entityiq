@@ -23,6 +23,7 @@ import {
   RiskAssessmentPanel,
 } from "../components/DetailPanels";
 import { OperatorActions } from "../components/OperatorActions";
+import { ActivityPanel } from "../components/ActivityPanel";
 
 interface CompanyDetailProps {
   runId: string;
@@ -337,6 +338,12 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
                 }))
               }
             />
+          </section>
+
+          {/* Activity (audit timeline) */}
+          <section style={styles.section}>
+            <h3 style={styles.sectionTitle}>Activity</h3>
+            <ActivityPanel runId={runId} token={auth.token} />
           </section>
         </div>
       )}

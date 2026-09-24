@@ -342,7 +342,10 @@ _Track: Integration & reporting API_
   - Objective: `GET` audit-events API (per run and global), an Activity panel on
     the company detail page, and a lead-only audit view gated by the currently
     unused `require_lead`.
-  - Depends on: P1-T9 · AC: PRD § Auditability Requirements; USERS § 3 · Status: Todo
+  - Depends on: P1-T9 · AC: PRD § Auditability Requirements; USERS § 3 · Status: Complete (2026-09-24) —
+    `GET /audit/runs/{id}` (any operator; run + its submission, oldest first) and
+    `GET /audit/events` (lead-only via `require_lead`, newest first, filterable); Activity
+    timeline on the detail page; lead-only Audit Log page + nav link.
 - P3-T3 — PII retention & access policy
   - Depends on: P0-T4; **Open decision #7** · AC: ARCHITECTURE § 6 (PII handling) · Status: Todo
 - P3-T4 — Optional domain-ownership verification (email / DNS TXT / HTML meta)

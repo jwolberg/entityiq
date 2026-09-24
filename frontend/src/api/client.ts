@@ -139,6 +139,20 @@ export interface ReviewSummary {
   decided_at: string | null;
 }
 
+export interface AuditEvent {
+  id: string;
+  event_type: string;
+  actor: string;
+  description: string | null;
+  occurred_at: string;
+  run_id: string | null;
+  payload: Record<string, unknown> | null;
+}
+
+export interface AuditEventList {
+  events: AuditEvent[];
+}
+
 export interface ReportResponse {
   run_id: string;
   report_id: string;
@@ -277,6 +291,16 @@ export const apiClient = {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
     });
+  },
+
+  /** GET /audit/runs/{runId} — timeline for one run (any operator). */
+  getRunAudit(runId: string, token: string): Promise<AuditEventList> {
+    return request<AuditEventList>(`/audit/runs/${runId}`, {}, token);
+  },
+
+  /** GET /audit/events — global audit log (lead only; 403 otherwise). */
+  getAuditLog(token: string, limit = 200): Promise<AuditEventList> {
+    return request<AuditEventList>(`/audit/events?limit=${limit}`, {}, token);
   },
 
   /** GET /reports — dashboard list */

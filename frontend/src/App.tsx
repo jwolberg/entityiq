@@ -13,8 +13,12 @@ import { useState } from "react";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { Dashboard } from "./pages/Dashboard";
 import { CompanyDetail } from "./pages/CompanyDetail";
+import { AuditLog } from "./pages/AuditLog";
 
-type Route = { page: "dashboard" } | { page: "detail"; runId: string };
+type Route =
+  | { page: "dashboard" }
+  | { page: "detail"; runId: string }
+  | { page: "audit" };
 
 function AppShell() {
   const { auth, signOut } = useAuth();
@@ -36,6 +40,15 @@ function AppShell() {
           EntityIQ
         </button>
         <div style={styles.navRight}>
+          {auth.role === "lead" && (
+            <button
+              onClick={() => navigate({ page: "audit" })}
+              style={styles.signOutBtn}
+              data-testid="nav-audit-log"
+            >
+              Audit Log
+            </button>
+          )}
           <span style={styles.operatorInfo}>
             {auth.role === "lead" ? "Lead" : "Operator"}
           </span>
@@ -57,6 +70,12 @@ function AppShell() {
             key={route.runId}
             runId={route.runId}
             onBack={() => navigate({ page: "dashboard" })}
+            onOpenRun={(runId) => navigate({ page: "detail", runId })}
+          />
+        )}
+        {route.page === "audit" && (
+          <AuditLog
+            token={auth.token}
             onOpenRun={(runId) => navigate({ page: "detail", runId })}
           />
         )}

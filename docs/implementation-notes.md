@@ -1060,3 +1060,23 @@ locking down operator-only report reads.
   I mutated it (confidence + source logic); the tests failed on the mutation
   and passed on restore. Demo scenarios carry recorded coordinates, and a
   live Nominatim lookup was verified once.
+
+---
+
+## 2026-09-24 — P3-T2: audit trail readable + lead gating
+
+- `GET /audit/runs/{run_id}` is open to any signed-in operator: it's the
+  history of the case they're viewing. It includes events tied to the run's
+  submission (e.g. `submission_received`).
+- `GET /audit/events` is lead-only. This is the first real use of
+  `require_lead`, which existed but gated nothing. An operator gets 403, and
+  the UI hides the nav link for operators, but the API is the enforcement
+  point.
+- The actor is resolved to the operator email or integration name, else
+  "system".
+- Activity panel fetches its own data, so an audit-read failure never blocks
+  the report page. Two existing CompanyDetail tests that sequence fetch mocks
+  by call order needed an audit response inserted: the panel adds a request
+  on mount.
+- Not done: a pagination cursor (limit ≤ 500 for now) and filtering by actor
+  on the server (the UI filters client-side).
