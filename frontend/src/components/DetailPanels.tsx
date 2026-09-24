@@ -111,6 +111,7 @@ const CONFIDENCE_LABEL: Record<string, { text: string; tone: "ok" | "warn" }> = 
 
 const TILE = 256;
 const ZOOM = 15;
+const HALF_W = 3; // tiles either side of the centre column
 
 /** Web-Mercator tile coordinates (fractional) for a lat/lon at ZOOM. */
 function tileCoords(lat: number, lon: number): { x: number; y: number } {
@@ -123,7 +124,8 @@ function tileCoords(lat: number, lon: number): { x: number; y: number } {
 }
 
 /**
- * 3×3 grid of OSM tiles positioned so the point sits at the frame centre.
+ * 7×3 grid of OSM tiles (wide enough for a full-width panel) positioned so
+ * the point sits at the frame centre.
  * Plain <img> tiles (not an iframe embed) render everywhere, including
  * headless screenshots, and need no JS map library.
  */
@@ -131,11 +133,11 @@ function StaticMap({ lat, lon }: { lat: number; lon: number }) {
   const { x, y } = tileCoords(lat, lon);
   const tx = Math.floor(x);
   const ty = Math.floor(y);
-  const offsetX = TILE + (x - tx) * TILE; // point's px position inside the grid
+  const offsetX = HALF_W * TILE + (x - tx) * TILE; // point's px position in the grid
   const offsetY = TILE + (y - ty) * TILE;
   const tiles = [];
   for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
+    for (let dx = -HALF_W; dx <= HALF_W; dx++) {
       tiles.push(
         <img
           key={`${dx},${dy}`}
@@ -143,7 +145,7 @@ function StaticMap({ lat, lon }: { lat: number; lon: number }) {
           alt=""
           width={TILE}
           height={TILE}
-          style={{ position: "absolute", left: (dx + 1) * TILE, top: (dy + 1) * TILE }}
+          style={{ position: "absolute", left: (dx + HALF_W) * TILE, top: (dy + 1) * TILE }}
         />
       );
     }
@@ -155,7 +157,7 @@ function StaticMap({ lat, lon }: { lat: number; lon: number }) {
           position: "absolute",
           left: `calc(50% - ${offsetX}px)`,
           top: `calc(50% - ${offsetY}px)`,
-          width: TILE * 3,
+          width: TILE * (2 * HALF_W + 1),
           height: TILE * 3,
         }}
       >

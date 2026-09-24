@@ -241,7 +241,7 @@ describe("CompanyDetail", () => {
       (img) => img.getAttribute("src")
     );
     expect(tiles).toContain("https://tile.openstreetmap.org/15/5248/11443.png");
-    expect(tiles).toHaveLength(9);
+    expect(tiles).toHaveLength(21); // 7 × 3 grid
     expect(screen.getByTestId("hq-marker")).toBeDefined();
     expect(screen.getByTestId("hq-osm-link").getAttribute("href")).toContain(
       "mlat=47.6114&mlon=-122.3366"
