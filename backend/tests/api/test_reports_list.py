@@ -240,3 +240,21 @@ def test_list_no_score(list_client, list_engine):
     assert match is not None
     assert match["overall_score"] is None
     assert match["status"] == "pending"
+
+
+def test_list_exposes_triage_tier(list_client, list_engine):
+    """The queue must show the tier: a sanctions hit escalates even at a low
+    score, so the score alone would render it as low risk."""
+    SessionMaker = sessionmaker(bind=list_engine, autocommit=False, autoflush=False)
+    db = SessionMaker()
+    try:
+        run_id, report_id = _make_report(db, "Volga Ltd", "volga.example", 22.0)
+        report = db.get(Report, report_id)
+        report.summary = {"scores": {"overall_score": 22.0, "triage_tier": "escalate"}}
+        db.commit()
+    finally:
+        db.close()
+
+    items = list_client.get("/reports").json()["items"]
+    match = next(i for i in items if i["run_id"] == run_id)
+    assert match["triage_tier"] == "escalate"

@@ -1107,3 +1107,16 @@ locking down operator-only report reads.
   IC1-T3.
 - Side effect: "submission" appears as a source in the report's sources list
   when free-email evidence exists. Accepted, since it is attributed evidence.
+
+---
+
+## 2026-09-24 — Fix: dashboard showed a sanctions hit as low risk
+
+- Found while taking README screenshots: the queue colored rows by score band
+  only and didn't show the triage tier, so Volga Maritime (sanctions hit,
+  score 22, tier escalate) appeared as a green "22".
+- `GET /reports` items now carry `triage_tier` (new optional field). The
+  dashboard adds a Triage badge column, and the score color follows the tier
+  when present.
+- Not changed: the "risk level" filter still uses score bands, so "High (70+)"
+  won't include a sanctions escalation at 22. Follow-up: filter by tier.

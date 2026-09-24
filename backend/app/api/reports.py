@@ -207,6 +207,7 @@ def list_reports(
         summary = report.summary or {}
         scores_data = summary.get("scores") or {}
         overall_score = scores_data.get("overall_score")
+        triage_tier = scores_data.get("triage_tier")
 
         # Review status — None if no review row exists
         review = (
@@ -226,6 +227,7 @@ def list_reports(
                 domain=domain,
                 status=report.status,
                 overall_score=overall_score,
+                triage_tier=triage_tier,
                 review_status=review_status,
                 generated_at=generated_at,
             )

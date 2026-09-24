@@ -145,6 +145,9 @@ class ReportListItemSchema(BaseModel):
     domain: str
     status: str  # report status: "pending" | "partial" | "complete" | "failed"
     overall_score: float | None = None
+    # pre_clear | review | escalate — may disagree with the score band when a
+    # critical signal (e.g. sanctions hit) forces escalation.
+    triage_tier: str | None = None
     review_status: str | None = None  # None = not yet reviewed
     generated_at: str | None = None
 

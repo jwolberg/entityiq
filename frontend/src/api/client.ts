@@ -62,6 +62,8 @@ export interface ReportListItem {
   domain: string;
   status: string; // "pending" | "partial" | "complete" | "failed"
   overall_score: number | null;
+  /** pre_clear | review | escalate (critical signals can escalate a low score) */
+  triage_tier?: string | null;
   review_status: string | null; // null = not reviewed yet
   generated_at: string | null;
 }
