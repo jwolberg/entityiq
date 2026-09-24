@@ -35,6 +35,9 @@ celery_app.conf.update(
     # without needing a live broker.
     task_always_eager=os.environ.get("CELERY_TASK_ALWAYS_EAGER", "false").lower()
     == "true",
+    # Individual screening runs on its own queue with its own budgets (C8).
+    task_routes={"entityiq.run_screening": {"queue": "screening"}},
+    include=["app.screening.tasks"],
 )
 
 

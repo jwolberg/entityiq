@@ -29,6 +29,7 @@ import logging
 import threading
 import time
 import traceback
+from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -237,10 +238,19 @@ class Orchestrator:
         stages: list[PipelineStage],
         stage_timeout_seconds: float | None = None,
         run_timeout_seconds: float | None = None,
+        run_model: type = VerificationRun,
+        on_time_limit: Callable[[str, Session], None] | None = None,
     ) -> None:
         self.stages = stages
         self.stage_timeout_seconds = stage_timeout_seconds
         self.run_timeout_seconds = run_timeout_seconds
+        # Any model with status / started_at / finished_at / failure_reason /
+        # source_availability works: KYB's VerificationRun (default) or the
+        # screening offering's ScreeningRun (ticket 0035).
+        self.run_model = run_model
+        # Saves the partial result after a Celery soft time limit. Default:
+        # assemble the KYB report.
+        self.on_time_limit = on_time_limit or _assemble_kyb_report
 
     def _stage_budget(
         self, stage: PipelineStage, deadline: float | None
@@ -277,7 +287,7 @@ class Orchestrator:
         Per-stage status is written to VerificationRun.source_availability
         after each stage completes, making partial results readable mid-run.
         """
-        run = db.get(VerificationRun, run_id)
+        run = db.get(self.run_model, run_id)
         if run is None:
             logger.error("Orchestrator: run %s not found", run_id)
             return
@@ -354,13 +364,13 @@ class Orchestrator:
             # Keep what we have: mark unfinished stages unavailable, fail the
             # run with a clear reason, and still assemble the partial report.
             logger.error("Orchestrator: run %s hit the task time limit", run_id)
-            _finish_after_time_limit(run_id, db)
+            _finish_after_time_limit(run_id, db, self.run_model, self.on_time_limit)
         except Exception:
             # Unexpected error outside stage execution (e.g. DB failure).
             tb = traceback.format_exc()
             logger.error("Orchestrator: run %s failed unexpectedly:\n%s", run_id, tb)
             try:
-                run = db.get(VerificationRun, run_id)
+                run = db.get(self.run_model, run_id)
                 if run is not None:
                     run.status = "failed"
                     run.finished_at = datetime.now(tz=timezone.utc)
@@ -370,12 +380,21 @@ class Orchestrator:
                 pass
 
 
-def _finish_after_time_limit(run_id: str, db: Session) -> None:
+def _assemble_kyb_report(run_id: str, db: Session) -> None:
     from app.scoring.report import assemble_report  # noqa: PLC0415
 
+    assemble_report(run_id, db)
+
+
+def _finish_after_time_limit(
+    run_id: str,
+    db: Session,
+    run_model: type = VerificationRun,
+    finalize: Callable[[str, Session], None] = _assemble_kyb_report,
+) -> None:
     try:
         db.rollback()
-        run = db.get(VerificationRun, run_id)
+        run = db.get(run_model, run_id)
         if run is None:
             return
         run.source_availability = {
@@ -386,15 +405,13 @@ def _finish_after_time_limit(run_id: str, db: Session) -> None:
         run.finished_at = datetime.now(tz=timezone.utc)
         run.failure_reason = "Task time limit exceeded; partial report kept."
         db.commit()
-        assemble_report(run_id, db)
+        finalize(run_id, db)
         db.commit()
     except Exception:
         logger.exception("Orchestrator: run %s partial-report save failed", run_id)
 
 
-def _update_stage_status(
-    run: VerificationRun, db: Session, stage_name: str, status: str
-) -> None:
+def _update_stage_status(run, db: Session, stage_name: str, status: str) -> None:
     """Write per-stage status to source_availability and flush to DB.
 
     We use a copy-assign to ensure SQLAlchemy detects the mutation to the
