@@ -22,6 +22,7 @@ demo seed script uses.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.audit.recorder import record_event
@@ -87,7 +88,15 @@ def create_client(
             detail=f"An API client named {name!r} already exists.",
         )
 
-    client, full_key = create_api_client(name, db)
+    try:
+        client, full_key = create_api_client(name, db)
+    except IntegrityError as exc:
+        # A concurrent request created the same name after our pre-check.
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"An API client named {name!r} already exists.",
+        ) from exc
 
     record_event(
         db=db,

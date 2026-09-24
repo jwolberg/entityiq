@@ -449,3 +449,38 @@ def test_windows_are_env_configurable(db, monkeypatch):
 
     db.refresh(sub)
     assert sub.requester_full_name is None
+
+
+def test_association_on_a_new_run_after_anonymization_is_still_scrubbed(db):
+    """Review finding: re-analysis after PII was anonymized creates fresh
+    LinkedIn evidence; a later pass must scrub it too."""
+    entity = _entity(db, name="AssocReanalyzed")
+    sub = _submission(db, entity=entity, submitted_at=NOW - timedelta(days=181))
+    db.commit()
+    run_retention(db, now=NOW)  # anonymizes the submission's PII
+
+    later_run = _run(db, submission=sub)  # re-analysis after anonymization
+    presence_ev = _linkedin_evidence(db, run=later_run)
+    db.commit()
+
+    counts = run_retention(db, now=NOW + timedelta(days=1))
+
+    db.refresh(presence_ev)
+    assert "associated_people" not in (presence_ev.raw_payload or {})
+    assert counts["requester_association"] == 1
+    assert run_retention(db, now=NOW + timedelta(days=2))["requester_association"] == 0
+
+
+def test_unparsable_ip_is_dropped_and_the_row_settles(db):
+    """Review finding: a malformed IP was left raw and re-flagged forever."""
+    entity = _entity(db, name="BadIp")
+    sub = _submission(
+        db, entity=entity, submitted_at=NOW - timedelta(days=91), source_ip="not-an-ip"
+    )
+    db.commit()
+
+    first = run_retention(db, now=NOW)
+    db.refresh(sub)
+    assert sub.source_ip is None
+    assert first["network_metadata"] == 1
+    assert run_retention(db, now=NOW)["network_metadata"] == 0

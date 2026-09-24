@@ -273,3 +273,21 @@ def test_revoked_key_is_rejected_on_next_request(client, Maker):
             headers={"X-API-Key": full_key},
         )
     assert rejected.status_code == 401
+
+
+def test_duplicate_name_race_is_409_not_500(client, Maker, monkeypatch):
+    """Review finding: SELECT-then-INSERT raced. Another request inserts the
+    same name after our pre-check; the DB unique constraint must map to 409."""
+    import app.api.api_clients as mod
+    from app.auth.service import create_api_client as real_create
+
+    def racing_create(name, db, **kw):
+        other = Maker()
+        real_create(name, other)  # the concurrent request wins
+        other.close()
+        return real_create(name, db, **kw)
+
+    monkeypatch.setattr(mod, "create_api_client", racing_create)
+    _, token = _operator(Maker, "lead")
+    r = client.post("/api-clients", json={"name": "race"}, headers=_auth(token))
+    assert r.status_code == 409, r.text

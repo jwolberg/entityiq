@@ -160,9 +160,9 @@ def _anonymize_network_metadata(db: "Session", *, now: datetime) -> int:
         if _network_already_anonymized(sub):
             continue
         if sub.source_ip is not None:
-            truncated = _truncate_ip(sub.source_ip)
-            if truncated is not None:
-                sub.source_ip = truncated
+            # An unparsable value can't be truncated, so drop it entirely
+            # rather than keep the raw string (and re-flag it every pass).
+            sub.source_ip = _truncate_ip(sub.source_ip)
         sub.user_agent = None
         sub.forwarded_headers = None
         count += 1
@@ -199,8 +199,9 @@ def _anonymize_requester_association(
 ) -> int:
     """Strip ``associated_people`` from linked LinkedIn evidence (ticket 0020).
 
-    Only called for submissions whose PII was just anonymized in this same
-    pass — requester-association evidence follows the submitted-PII schedule.
+    Called for every submission whose PII is anonymized (this pass or earlier),
+    so evidence created by a later re-analysis is scrubbed too. Idempotent:
+    rows without the key are skipped.
     """
     if not submission_ids:
         return 0
@@ -273,8 +274,17 @@ def run_retention(db: "Session", *, now: datetime | None = None) -> dict[str, in
             unreviewed_count += 1
             anonymized_submission_ids.append(sub.id)
 
+    # Sweep every anonymized submission, not only this pass's: re-analysis
+    # after anonymization can create fresh LinkedIn evidence with names.
+    already_anonymized = [
+        row[0]
+        for row in db.query(Submission.id)
+        .filter(Submission.work_email == ANONYMIZED_EMAIL)
+        .all()
+    ]
     requester_association_count = _anonymize_requester_association(
-        db, submission_ids=anonymized_submission_ids
+        db,
+        submission_ids=sorted(set(anonymized_submission_ids) | set(already_anonymized)),
     )
 
     db.commit()
