@@ -104,6 +104,7 @@ function AppShell() {
             runId={route.runId}
             onBack={() => navigate({ page: "dashboard" })}
             onOpenRun={(runId) => navigate({ page: "detail", runId })}
+            onOpenScreening={(runId) => navigate({ page: "individual", runId })}
           />
         )}
         {route.page === "individuals" && (
