@@ -97,3 +97,39 @@ describe("Lead-only audit log navigation", () => {
     expect(screen.queryByTestId("nav-audit-log")).toBeNull();
   });
 });
+
+describe("Lead-only API keys navigation", () => {
+  async function signInAs(role: "lead" | "operator") {
+    const { fireEvent, waitFor } = await import("@testing-library/react");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/auth/sign-in") {
+          return {
+            ok: true,
+            json: async () => ({ session_token: "t", operator_id: "o", role }),
+          };
+        }
+        if (url.startsWith("/api/api-clients")) {
+          return { ok: true, json: async () => ({ items: [], total: 0 }) };
+        }
+        return { ok: true, json: async () => ({ items: [], total: 0 }) };
+      })
+    );
+    render(<App />);
+    fireEvent.change(screen.getByTestId("email-input"), { target: { value: "a@b.c" } });
+    fireEvent.change(screen.getByTestId("password-input"), { target: { value: "pw" } });
+    fireEvent.click(screen.getByTestId("sign-in-button"));
+    await waitFor(() => expect(screen.getByText("Sign Out")).toBeDefined());
+  }
+
+  it("shows the API Keys link to leads", async () => {
+    await signInAs("lead");
+    expect(screen.getByTestId("nav-api-keys")).toBeDefined();
+  });
+
+  it("hides the API Keys link from operators", async () => {
+    await signInAs("operator");
+    expect(screen.queryByTestId("nav-api-keys")).toBeNull();
+  });
+});

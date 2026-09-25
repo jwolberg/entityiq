@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.audit.recorder import record_event
+from app.auth.pii import filter_summary_for_viewer, report_contains_pii, resolve_viewer
 from app.auth.service import Principal, get_principal
 from app.db.session import SessionLocal
 from app.models.report import Report
@@ -95,13 +96,19 @@ def _serialize_report(
     report: Report,
     review: ReviewSummarySchema | None = None,
     run: VerificationRun | None = None,
+    *,
+    viewer: str,
 ) -> ReportResponse:
     """Convert a Report ORM row + its summary dict into a ReportResponse.
 
     The summary is pre-assembled by StoreReportStage and stored as JSON.
     We read it here rather than re-joining all tables on every API call.
+
+    `viewer` ("lead" | "operator" | "system", from app.auth.pii.resolve_viewer)
+    is required — every call site must pick a viewer explicitly rather than
+    fall back to an implicit "full access" default (ADR-0002 §2).
     """
-    summary = report.summary or {}
+    summary = filter_summary_for_viewer(report.summary or {}, viewer)
     ss = report.section_statuses or {}
 
     section_statuses = SectionStatuses(
@@ -315,8 +322,9 @@ def export_report(
         ),
     )
 
+    viewer = resolve_viewer(principal, db)
     return _serialize_report(
-        report, _review_summary(db, report.verification_run_id), run
+        report, _review_summary(db, report.verification_run_id), run, viewer=viewer
     )
 
 
@@ -328,7 +336,7 @@ def export_report(
 def get_report(
     run_id: str,
     db: Session = Depends(_get_db),
-    _principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_principal),
 ) -> ReportResponse:
     """Return the report for the given verification run ID.
 
@@ -336,6 +344,9 @@ def get_report(
     - In-progress run: returns partial report; section_statuses indicates which
       sections are pending vs. complete.
     - Unknown run_id: returns 404.
+
+    The response is redacted per the caller's role (ADR-0002 §2, via
+    app.auth.pii). Viewing a report that contains PII is audited.
     """
     # Verify the run exists first (for a clear 404 on unknown run vs. no-report-yet)
     run = db.get(VerificationRun, run_id)
@@ -356,6 +367,21 @@ def get_report(
             ),
         )
 
+    if report_contains_pii(report.summary or {}):
+        record_event(
+            db=db,
+            event_type="report.viewed",
+            operator_id=principal.operator_id,
+            api_client_id=principal.api_client_id,
+            verification_run_id=run_id,
+            payload={"by": principal.kind, "principal": principal.name},
+            description=(
+                f"Report for run {run_id!r} (contains PII) viewed by "
+                f"{principal.kind} {principal.name!r}."
+            ),
+        )
+
+    viewer = resolve_viewer(principal, db)
     return _serialize_report(
-        report, _review_summary(db, report.verification_run_id), run
+        report, _review_summary(db, report.verification_run_id), run, viewer=viewer
     )

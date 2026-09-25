@@ -222,14 +222,35 @@ class TestRBAC:
             from fastapi import HTTPException  # noqa: PLC0415
 
             with pytest.raises(HTTPException) as exc_info:
-                require_lead(operator=op)
+                require_lead(operator=op, db=db)
             assert exc_info.value.status_code == 403
 
     def test_lead_passes_require_lead(self, db: Session):
         """require_lead() passes for a lead-role account."""
         lead = _make_operator(db, email="lead_user@test.example", role="lead")
-        result = require_lead(operator=lead)
+        result = require_lead(operator=lead, db=db)
         assert result.id == lead.id
+
+    def test_denied_lead_only_action_is_audited(self, db: Session):
+        """require_lead() 403s are recorded as an audit event (ADR-0002 §2;
+        ticket 0002: "Unauthorized PII access is denied and the attempt is
+        audited.")."""
+        from fastapi import HTTPException
+
+        from app.models.audit_event import AuditEvent
+
+        op = _make_operator(db, email="audited_op@test.example", role="operator")
+
+        with pytest.raises(HTTPException):
+            require_lead(operator=op, db=db)
+
+        events = (
+            db.query(AuditEvent)
+            .filter(AuditEvent.event_type == "operator.access_denied")
+            .all()
+        )
+        assert len(events) == 1
+        assert events[0].operator_id == op.id
 
 
 # ============================================================================

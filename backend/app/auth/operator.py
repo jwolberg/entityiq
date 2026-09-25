@@ -272,13 +272,30 @@ def get_current_operator(
 
 def require_lead(
     operator: "Operator" = Depends(get_current_operator),
+    db: Session = Depends(_get_db),
 ) -> "Operator":
     """FastAPI dependency: require the 'lead' role.
 
     Raises:
-        HTTP 403 Forbidden — authenticated but not a lead.
+        HTTP 403 Forbidden — authenticated but not a lead. The denied attempt
+        is recorded as an audit event (ADR-0002 §2 access matrix; ticket 0002
+        acceptance: "Unauthorized PII access is denied and the attempt is
+        audited.") — every lead-only surface (the global audit log, PII-
+        adjacent actions like API-key provisioning) shares this gate, so the
+        denial audit is centralized here rather than duplicated per route.
     """
     if operator.role != "lead":
+        from app.audit.recorder import record_event  # noqa: PLC0415
+
+        record_event(
+            db=db,
+            event_type="operator.access_denied",
+            operator_id=operator.id,
+            description=(
+                f"Operator {operator.email!r} (role={operator.role!r}) was "
+                "denied a lead-only action."
+            ),
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(

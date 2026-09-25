@@ -252,6 +252,45 @@ export interface AddNotesResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Integration API-key provisioning (ticket 0026, lead only)
+// ---------------------------------------------------------------------------
+
+export interface CreateApiClientRequest {
+  name: string;
+}
+
+export interface CreateApiClientResponse {
+  id: string;
+  name: string;
+  key_prefix: string;
+  /** Plaintext — shown once. The caller must copy it now; it's never returned again. */
+  api_key: string;
+  active: boolean;
+  created_at: string;
+}
+
+export interface ApiClientListItem {
+  id: string;
+  name: string;
+  key_prefix: string;
+  active: boolean;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface ApiClientListResponse {
+  items: ApiClientListItem[];
+  total: number;
+}
+
+export interface RevokeApiClientResponse {
+  id: string;
+  name: string;
+  active: boolean;
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
 // Client implementation
 // ---------------------------------------------------------------------------
 
@@ -391,6 +430,32 @@ export const apiClient = {
       "/submissions",
       { method: "POST", body: JSON.stringify(body) },
       token,
+    );
+  },
+
+  /** POST /api-clients — create an integration API key (lead only; 403 for operators) */
+  createApiClient(
+    body: CreateApiClientRequest,
+    token: string
+  ): Promise<CreateApiClientResponse> {
+    return request<CreateApiClientResponse>(
+      "/api-clients",
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  },
+
+  /** GET /api-clients — list integration API keys (lead only) */
+  listApiClients(token: string): Promise<ApiClientListResponse> {
+    return request<ApiClientListResponse>("/api-clients", {}, token);
+  },
+
+  /** POST /api-clients/{id}/revoke — revoke an integration API key (lead only) */
+  revokeApiClient(id: string, token: string): Promise<RevokeApiClientResponse> {
+    return request<RevokeApiClientResponse>(
+      `/api-clients/${id}/revoke`,
+      { method: "POST" },
+      token
     );
   },
 };
