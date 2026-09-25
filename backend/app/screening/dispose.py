@@ -38,14 +38,38 @@ _FULL_NAME = (
 _CONFLICTS = ("dob_conflict", "dob_partial_conflict", "id_number_conflict")
 
 
-def _band(score: float, terms: list[dict], thresholds: dict) -> str:
+def band_with_reason(
+    score: float, terms: list[dict], thresholds: dict
+) -> tuple[str, str]:
+    """A candidate's band and the rule that put it there.
+
+    Shared by ``decide()`` and the decision explanation (ticket 0067), so the
+    explanation can't drift from the verdict. Needs only stored term names,
+    the score and the thresholds, never subject values.
+    """
     if score >= thresholds["match_at"]:
-        return "MATCH"
+        return "MATCH", "score_at_or_above_match"
+    if score >= thresholds["clear_below"]:
+        return "REVIEW", "between_thresholds"
     names = {t["name"] for t in terms}
-    has_name = bool(names & set(NAME_TERMS[:4]))
-    if score < thresholds["clear_below"] and not (has_name and names & set(_CONFLICTS)):
-        return "CLEAR"
-    return "REVIEW"
+    if names & set(NAME_TERMS[:4]) and names & set(_CONFLICTS):
+        return "REVIEW", "conflict_floor"
+    return "CLEAR", "score_below_clear"
+
+
+def run_reason(candidates: list[dict], source_status: dict) -> tuple[str, bool, str]:
+    """The run's disposition, whether it auto-closed, and why (C2, N4).
+
+    ``candidates`` need only a ``band``.
+    """
+    disposition = max(
+        (c["band"] for c in candidates), key=_SEVERITY.__getitem__, default="CLEAR"
+    )
+    if disposition != "CLEAR":
+        return disposition, False, "rollup_most_severe"
+    if any(status == "unavailable" for status in source_status.values()):
+        return "REVIEW", False, "auto_clear_blocked_by_coverage"
+    return "CLEAR", True, "auto_clear_allowed" if candidates else "no_candidates"
 
 
 def _public_terms(terms: list[dict]) -> list[dict]:
@@ -75,20 +99,14 @@ def decide(bundle: dict) -> dict:
                 "candidate_id": cand["candidate_id"],
                 "record_id": cand["record"]["id"],
                 "score": score,
-                "band": _band(score, terms, rule["thresholds"]),
+                "band": band_with_reason(score, terms, rule["thresholds"])[0],
                 "terms": _public_terms(terms),
             }
         )
 
-    disposition = max(
-        (r["band"] for r in results), key=_SEVERITY.__getitem__, default="CLEAR"
+    disposition, auto_closed, _reason = run_reason(
+        results, bundle.get("source_status", {})
     )
-    unavailable = any(
-        status == "unavailable" for status in bundle.get("source_status", {}).values()
-    )
-    auto_closed = disposition == "CLEAR" and not unavailable
-    if disposition == "CLEAR" and unavailable:
-        disposition = "REVIEW"
     return {
         "disposition": disposition,
         "auto_closed": auto_closed,

@@ -1,0 +1,2399 @@
+{
+ "sha256": "272cdfb2b4cd61cb0c0427953ba0d0e5f376a33aefa7ca9433dca8faa93c14e6",
+ "cases": {
+  "C001": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W001",
+     0.8,
+     "REVIEW"
+    ],
+    [
+     "W084",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C001-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W001",
+     0.8,
+     "REVIEW"
+    ],
+    [
+     "W084",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C002": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W002",
+     0.8,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C002-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W002",
+     0.8,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C003": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W003",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C003-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W003",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C004": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W004",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C004-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W004",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C005": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W005",
+     0.8,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C005-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W005",
+     0.8,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C006": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W006",
+     0.7,
+     "REVIEW"
+    ],
+    [
+     "W060",
+     -0.15,
+     "CLEAR"
+    ],
+    [
+     "W061",
+     -0.15,
+     "CLEAR"
+    ],
+    [
+     "W062",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C006-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W006",
+     0.7,
+     "REVIEW"
+    ],
+    [
+     "W060",
+     -0.15,
+     "CLEAR"
+    ],
+    [
+     "W061",
+     -0.15,
+     "CLEAR"
+    ],
+    [
+     "W062",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C007": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W007",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C007-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W007",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C008": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.5,
+   "candidates": [
+    [
+     "W008",
+     0.5,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C008-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.5,
+   "candidates": [
+    [
+     "W008",
+     0.5,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C009": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W009",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C009-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W009",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C010": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W010",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C010-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W010",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C011": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W011",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C011-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W011",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C012": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W012",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C012-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W012",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C013": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W013",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C013-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W013",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C014": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W014",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C014-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W014",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C015": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W015",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C015-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W015",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C016": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W016",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C016-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W016",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C017": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W017",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C017-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W017",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C018": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W018",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C018-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W018",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C019": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W019",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C019-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W019",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C020": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W020",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C020-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W020",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C021": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W021",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C021-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W021",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C022": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W022",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C022-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W022",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C023": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W023",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C023-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W023",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C024": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W024",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C024-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W024",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C025": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W025",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C025-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W025",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C026": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W026",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C026-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W026",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C027": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W027",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C027-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W027",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C028": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W028",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C028-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W028",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C029": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W029",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C029-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W029",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C030": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W030",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C030-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W030",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C031": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W031",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C031-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W031",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C032": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W032",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C032-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W032",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C033": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W033",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C033-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W033",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C034": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W034",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C034-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W034",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C035": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W035",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C035-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W035",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C036": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W036",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C036-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W036",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C037": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W037",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C037-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W037",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C038": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W038",
+     0.7,
+     "REVIEW"
+    ],
+    [
+     "W042",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C038-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W038",
+     0.7,
+     "REVIEW"
+    ],
+    [
+     "W042",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C039": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W039",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C039-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W039",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C040": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W040",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C040-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.7,
+   "candidates": [
+    [
+     "W040",
+     0.7,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C041": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W041",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C041-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W041",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C042": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W042",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C042-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W042",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C043": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W043",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C043-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W043",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C044": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W044",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C044-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W044",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C045": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W045",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C045-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W045",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C046": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W046",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C046-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W046",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C047": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W047",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C047-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W047",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C048": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W048",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C048-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W048",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C049": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W049",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C049-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W049",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C050": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W050",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C050-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W050",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C051": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W051",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W052",
+     0.8,
+     "REVIEW"
+    ],
+    [
+     "W053",
+     0.15,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C051-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W051",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W052",
+     0.8,
+     "REVIEW"
+    ],
+    [
+     "W053",
+     0.15,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C052": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.15,
+   "candidates": [
+    [
+     "W051",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W052",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W053",
+     0.15,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C052-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.15,
+   "candidates": [
+    [
+     "W051",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W052",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W053",
+     0.15,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C053": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W054",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W055",
+     0.8,
+     "REVIEW"
+    ],
+    [
+     "W056",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W042",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C053-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W054",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W055",
+     0.8,
+     "REVIEW"
+    ],
+    [
+     "W056",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W042",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C054": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.15,
+   "candidates": [
+    [
+     "W054",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W055",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W056",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W042",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C054-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.15,
+   "candidates": [
+    [
+     "W054",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W055",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W056",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W042",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C055": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W057",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W058",
+     0.8,
+     "REVIEW"
+    ],
+    [
+     "W059",
+     0.15,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C055-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W057",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W058",
+     0.8,
+     "REVIEW"
+    ],
+    [
+     "W059",
+     0.15,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C056": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.15,
+   "candidates": [
+    [
+     "W057",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W058",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W059",
+     0.15,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C056-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.15,
+   "candidates": [
+    [
+     "W057",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W058",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W059",
+     0.15,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C057": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W060",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W061",
+     0.8,
+     "REVIEW"
+    ],
+    [
+     "W062",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W006",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C057-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W060",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W061",
+     0.8,
+     "REVIEW"
+    ],
+    [
+     "W062",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W006",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C058": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.15,
+   "candidates": [
+    [
+     "W060",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W061",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W062",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W006",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C058-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.15,
+   "candidates": [
+    [
+     "W060",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W061",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W062",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W006",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C059": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W063",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W064",
+     0.8,
+     "REVIEW"
+    ],
+    [
+     "W065",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W041",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C059-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.8,
+   "candidates": [
+    [
+     "W063",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W064",
+     0.8,
+     "REVIEW"
+    ],
+    [
+     "W065",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W041",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C060": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.15,
+   "candidates": [
+    [
+     "W063",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W064",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W065",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W041",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C060-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.15,
+   "candidates": [
+    [
+     "W063",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W064",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W065",
+     0.15,
+     "REVIEW"
+    ],
+    [
+     "W041",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C061": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W066",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C061-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W066",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C062": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.35,
+   "candidates": [
+    [
+     "W067",
+     0.35,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C062-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.35,
+   "candidates": [
+    [
+     "W067",
+     0.35,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C063": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W068",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C063-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W068",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C064": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.35,
+   "candidates": [
+    [
+     "W069",
+     0.35,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C064-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.35,
+   "candidates": [
+    [
+     "W069",
+     0.35,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C065": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W070",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C065-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W070",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C066": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.35,
+   "candidates": [
+    [
+     "W071",
+     0.35,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C066-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.35,
+   "candidates": [
+    [
+     "W071",
+     0.35,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C067": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W072",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C067-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W072",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C068": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.35,
+   "candidates": [
+    [
+     "W073",
+     0.35,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C068-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.35,
+   "candidates": [
+    [
+     "W073",
+     0.35,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C069": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W074",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C069-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.65,
+   "candidates": [
+    [
+     "W074",
+     0.65,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C070": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W075",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C070-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.6,
+   "candidates": [
+    [
+     "W075",
+     0.6,
+     "REVIEW"
+    ]
+   ]
+  },
+  "C071": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W076",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C071-gap": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W076",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C072": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W077",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C072-gap": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W077",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C073": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W078",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C073-gap": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W078",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C074": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W079",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C074-gap": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W079",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C075": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W080",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C075-gap": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W080",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C076": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W081",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C076-gap": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W081",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C077": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W082",
+     1.4,
+     "MATCH"
+    ],
+    [
+     "W025",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C077-gap": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W082",
+     1.4,
+     "MATCH"
+    ],
+    [
+     "W025",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C078": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W083",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C078-gap": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W083",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C079": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W084",
+     1.4,
+     "MATCH"
+    ],
+    [
+     "W001",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C079-gap": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W084",
+     1.4,
+     "MATCH"
+    ],
+    [
+     "W001",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C080": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W085",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C080-gap": {
+   "disposition": "MATCH",
+   "auto_closed": false,
+   "top_score": 1.4,
+   "candidates": [
+    [
+     "W085",
+     1.4,
+     "MATCH"
+    ]
+   ]
+  },
+  "C081": {
+   "disposition": "CLEAR",
+   "auto_closed": true,
+   "top_score": null,
+   "candidates": []
+  },
+  "C081-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": null,
+   "candidates": []
+  },
+  "C082": {
+   "disposition": "CLEAR",
+   "auto_closed": true,
+   "top_score": 0.05,
+   "candidates": [
+    [
+     "W012",
+     0.05,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C082-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": 0.05,
+   "candidates": [
+    [
+     "W012",
+     0.05,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C083": {
+   "disposition": "CLEAR",
+   "auto_closed": true,
+   "top_score": null,
+   "candidates": []
+  },
+  "C083-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": null,
+   "candidates": []
+  },
+  "C084": {
+   "disposition": "CLEAR",
+   "auto_closed": true,
+   "top_score": -0.15,
+   "candidates": [
+    [
+     "W044",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C084-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": -0.15,
+   "candidates": [
+    [
+     "W044",
+     -0.15,
+     "CLEAR"
+    ]
+   ]
+  },
+  "C085": {
+   "disposition": "CLEAR",
+   "auto_closed": true,
+   "top_score": null,
+   "candidates": []
+  },
+  "C085-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": null,
+   "candidates": []
+  },
+  "C086": {
+   "disposition": "CLEAR",
+   "auto_closed": true,
+   "top_score": null,
+   "candidates": []
+  },
+  "C086-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": null,
+   "candidates": []
+  },
+  "C087": {
+   "disposition": "CLEAR",
+   "auto_closed": true,
+   "top_score": null,
+   "candidates": []
+  },
+  "C087-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": null,
+   "candidates": []
+  },
+  "C088": {
+   "disposition": "CLEAR",
+   "auto_closed": true,
+   "top_score": null,
+   "candidates": []
+  },
+  "C088-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": null,
+   "candidates": []
+  },
+  "C089": {
+   "disposition": "CLEAR",
+   "auto_closed": true,
+   "top_score": null,
+   "candidates": []
+  },
+  "C089-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": null,
+   "candidates": []
+  },
+  "C090": {
+   "disposition": "CLEAR",
+   "auto_closed": true,
+   "top_score": null,
+   "candidates": []
+  },
+  "C090-gap": {
+   "disposition": "REVIEW",
+   "auto_closed": false,
+   "top_score": null,
+   "candidates": []
+  }
+ }
+}
