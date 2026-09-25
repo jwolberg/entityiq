@@ -11,7 +11,12 @@ from app.scoring.report import _build_summary
 
 @pytest.mark.parametrize(
     ("stage", "source", "tier"),
-    [("verify_tax_id", "tax_id", 1), ("verify_linkedin", "linkedin", 3)],
+    [
+        ("verify_tax_id", "tax_id", 1),
+        ("verify_linkedin", "linkedin", 3),
+        # Officers/owners from registries (ticket 0080): a coverage gap.
+        ("collect_people", "registry_people", 1),
+    ],
 )
 def test_unavailable_identity_stage_is_listed_as_unavailable_source(
     stage, source, tier

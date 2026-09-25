@@ -86,6 +86,7 @@ _STAGE_SOURCES: dict[str, tuple[str, int]] = {
     "geocode_hq": ("geocode", 3),
     "verify_tax_id": ("tax_id", 1),
     "verify_linkedin": ("linkedin", 3),
+    "collect_people": ("registry_people", 1),
 }
 
 
