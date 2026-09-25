@@ -35,12 +35,19 @@ from app.audit.recorder import record_event
 from app.models.entity import Entity
 from app.models.submission import Submission
 from app.models.verification_run import VerificationRun
+from app.officer_screening.people import (
+    CollectPeopleStage,
+    StubRegistryPeopleProvider,
+    UnconfiguredRegistryPeopleProvider,
+)
+from app.officer_screening.screen import ScreenPeopleStage
 from app.pipeline.consistency import ConsistencyChecksStage
 from app.pipeline.normalize import NormalizeInputStage
 from app.pipeline.orchestrator import Orchestrator
 from app.pipeline.resolve import ResolveEntityCandidatesStage
 from app.scoring.engine import ScoringStage
 from app.scoring.report import StoreReportStage
+from app.screening.demo_data import ensure_watchlist
 
 # Fictional sanctions list (OFAC SDN CSV shape: ent_num, name, type, program, ...).
 _DEMO_SDN_CSV = (
@@ -74,6 +81,12 @@ class Scenario:
     tax_id_records: dict[str, dict] = field(default_factory=dict)
     linkedin_url: str | None = None
     linkedin_pages: list[dict] = field(default_factory=list)
+    # Officers/owners (tickets 0079-0085): declared on the submission, and
+    # the registry's own list (served by StubRegistryPeopleProvider). Every
+    # person is fictional; the demo watchlist's "Teodor Vasilescu" is the
+    # one listed name.
+    people: list[dict] = field(default_factory=list)
+    registry_people: list[dict] = field(default_factory=list)
 
 
 def _registry_company(name: str, number: str, status: str, jur: str, addr: str):
@@ -159,6 +172,20 @@ SCENARIOS: list[Scenario] = [
                 "associated_people": ["Maria Anders"],
             },
         ],
+        registry_people=[
+            {
+                "name": "Maria Anders",
+                "relationship": "officer",
+                "role": "director",
+                "locator": "demo-registry:northwind/officers/1",
+            },
+            {
+                "name": "Thomas Hardy",
+                "relationship": "officer",
+                "role": "secretary",
+                "locator": "demo-registry:northwind/officers/2",
+            },
+        ],
     ),
     Scenario(
         company_name="Fabrikam Robotics Corp",
@@ -196,6 +223,16 @@ SCENARIOS: list[Scenario] = [
             "<p>hello@fabrikamrobotics.com · careers@fabrikamrobotics.com ·"
             " +1 (512) 555-0147</p>",
         ),
+        people=[
+            {"name": "Dana Whitfield", "relationship": "officer", "role": "COO"},
+            {
+                "name": "Priya Raman",
+                "relationship": "owner",
+                "role": "founder",
+                "ownership_pct": 35,
+                "dob": "1979-06-12",
+            },
+        ],
     ),
     Scenario(
         company_name="Contoso Analytics GmbH",
@@ -256,6 +293,20 @@ SCENARIOS: list[Scenario] = [
         # Submitted FEIN doesn't resolve with the tax-ID source — an unknown
         # FEIN is itself a finding (identity corroboration, ticket 0053).
         tax_id="88-4471002",
+        # Shares a name with a list entry but nothing else to compare: REVIEW.
+        people=[
+            {
+                "name": "Sam Ortega",
+                "relationship": "owner",
+                "role": "founder",
+                "ownership_pct": 100,
+            },
+            {
+                "name": "Helena Lindqvistad",
+                "relationship": "officer",
+                "role": "company secretary",
+            },
+        ],
     ),
     Scenario(
         company_name="Quantum Ledger Holdings",
@@ -319,6 +370,62 @@ SCENARIOS: list[Scenario] = [
             "Volga Maritime",
             "<p>Dry bulk chartering.</p><p>chartering@volgamaritime.com</p>",
         ),
+    ),
+    Scenario(
+        company_name="Wingtip Freight Ltd",
+        domain="wingtipfreight.co.uk",
+        work_email="ops@wingtipfreight.co.uk",
+        country="GB",
+        billing_address="12 Dock Road, Felixstowe IP11 3HP",
+        requester_full_name="Eleanor Marsh",
+        hq=(51.9542, 1.3510),
+        source_ip="81.2.69.160",
+        expected_tier="escalate",
+        story="Clean-looking freight forwarder whose declared majority owner is"
+        " on the (fictional) sanctions list.",
+        domain_age_days=5100,
+        mx=["wingtipfreight-co-uk.mail.protection.outlook.com"],
+        txt=["v=spf1 include:spf.protection.outlook.com -all"],
+        registry=[
+            _registry_company(
+                "Wingtip Freight Ltd",
+                "04417732",
+                "Active",
+                "gb",
+                "12 Dock Road, Felixstowe IP11 3HP",
+            )
+        ],
+        ip={
+            "ip": "81.2.69.160",
+            "city": "Ipswich",
+            "region": "England",
+            "country": "GB",
+            "org": "AS2856 British Telecommunications PLC",
+        },
+        html=_site(
+            "Wingtip Freight",
+            "<p>Container freight forwarding out of Felixstowe since 2012.</p>"
+            "<p>12 Dock Road, Felixstowe IP11 3HP · ops@wingtipfreight.co.uk ·"
+            " +44 1394 555 014</p>",
+        ),
+        registry_people=[
+            {
+                "name": "Eleanor Marsh",
+                "relationship": "officer",
+                "role": "director",
+                "locator": "demo-registry:wingtip/officers/1",
+            },
+        ],
+        people=[
+            {
+                "name": "Teodor Vasilescu",
+                "relationship": "owner",
+                "role": "director",
+                "ownership_pct": 60,
+                "dob": "1962-08-30",
+                "nationality": "Romania",
+            },
+        ],
     ),
 ]
 
@@ -414,6 +521,14 @@ def _stages(s: Scenario) -> list:
         QueryRegistriesStage(OpenCorporatesAdapter(http_client=registry_http)),
         VerifyTaxIdStage(TaxIdAdapter(provider=StubTaxIdProvider(s.tax_id_records))),
         SanctionsScreeningStage(fetcher=_Sdn()),
+        CollectPeopleStage(
+            provider=(
+                UnconfiguredRegistryPeopleProvider()
+                if s.registry is None
+                else StubRegistryPeopleProvider({s.company_name: s.registry_people})
+            )
+        ),
+        ScreenPeopleStage(),
         AnalyzeDomainStage(
             whois_client=_Whois(s.domain_age_days),
             dns_client=_Dns(s.mx, s.txt),
@@ -433,6 +548,8 @@ def _stages(s: Scenario) -> list:
 
 def load_demo_data(db: Session) -> int:
     """Submit and verify every scenario not already present. Returns count added."""
+    # Officers are screened against the demo watchlist during these runs.
+    ensure_watchlist(db)
     added = 0
     for s in SCENARIOS:
         exists = (
@@ -453,6 +570,7 @@ def load_demo_data(db: Session) -> int:
             source_ip=s.source_ip,
             tax_id=s.tax_id,
             linkedin_url=s.linkedin_url,
+            declared_people=s.people or None,
             user_agent="Mozilla/5.0 (demo dataset)",
             endpoint="/submissions",
             submitted_at=datetime.now(tz=timezone.utc),

@@ -209,7 +209,7 @@ def list_screenings(
     disposition: Literal["CLEAR", "REVIEW", "MATCH"] | None = None,
     list_source: str | None = None,
     older_than_days: int | None = None,
-    trigger: Literal["intake", "monitoring"] | None = None,
+    trigger: Literal["intake", "monitoring", "kyb_officer"] | None = None,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: Session = Depends(_get_db),
@@ -254,12 +254,14 @@ def list_screenings(
         .all()
     )
 
-    pii = crypto.get_subjects_pii(
-        db,
+    subjects = (
         db.query(ScreeningSubject)
         .filter(ScreeningSubject.id.in_([run.subject_id for run, _ in page]))
-        .all(),
+        .all()
     )
+    pii = crypto.get_subjects_pii(db, subjects)
+    # Officer/owner screenings link back to their company (ADR-0006).
+    kyb_entity = {s.id: s.kyb_entity_id for s in subjects}
     latest = _latest_dispositions(db, [d.id for _, d in page if d])
     items = []
     for run, decision in page:
@@ -275,6 +277,7 @@ def list_screenings(
                 "top_score": decision.top_score if decision else None,
                 "human_disposition": human.disposition if human else None,
                 "created_at": _iso(run.created_at),
+                "kyb_entity_id": kyb_entity.get(run.subject_id),
             }
         )
     record_event(

@@ -9,6 +9,7 @@ Import all models here so that:
 import app.screening.models  # noqa: E402,F401
 from app.models.api_client import ApiClient
 from app.models.audit_event import AuditEvent
+from app.models.company_person import CompanyPerson
 from app.models.entity import Entity
 from app.models.evidence import Evidence
 from app.models.field_comparison import FieldComparison
@@ -25,6 +26,7 @@ from app.models.watchlist_record import WatchlistRecord
 __all__ = [
     "ApiClient",
     "AuditEvent",
+    "CompanyPerson",
     "Entity",
     "Evidence",
     "FieldComparison",

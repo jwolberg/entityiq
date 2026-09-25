@@ -45,6 +45,15 @@ class SubjectShredded(RuntimeError):
     """The subject's data key was destroyed; its data is unrecoverable."""
 
 
+def is_configured() -> bool:
+    """True when the master key is set and valid (subjects can be encrypted)."""
+    try:
+        _master()
+    except CryptoNotConfigured:
+        return False
+    return True
+
+
 def _master() -> AESGCM:
     raw = os.environ.get(MASTER_KEY_ENV)
     if not raw:

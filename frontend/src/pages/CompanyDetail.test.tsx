@@ -174,6 +174,10 @@ function routedFetch(...reports: unknown[]) {
   const queue = [...reports];
   const reportCalls: string[] = [];
   const mock = vi.fn(async (url: string) => {
+    if (url.endsWith("/people")) {
+      // The Officers & Owners panel's own fetch (ticket 0084), not a report.
+      return { ok: true, json: async () => ({ sources: {}, people: [] }) };
+    }
     if (url.startsWith("/api/reports/")) {
       reportCalls.push(url);
       const body = queue.length > 1 ? queue.shift() : queue[0];

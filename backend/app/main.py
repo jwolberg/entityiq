@@ -14,6 +14,7 @@ from app.api.submissions import router as submissions_router
 from app.api.workflow import router as workflow_router
 from app.auth.examiner_guard import forbid_examiner_writes
 from app.auth.operator import auth_router, configure_session_store
+from app.officer_screening.api import router as officer_screening_router
 from app.screening.api import router as screening_router
 from app.ui import mount_ui
 
@@ -46,6 +47,7 @@ app.include_router(audit_router)
 app.include_router(api_clients_router)
 app.include_router(ownership_router)
 app.include_router(screening_router)
+app.include_router(officer_screening_router)
 
 
 @app.get("/health")

@@ -2018,3 +2018,48 @@ From the post-merge review of PR #18.
 - **0077:** when a background screening finishes, the Individuals queue
   reloads with `limit = rows already loaded + new runs` (capped at the API's
   500) instead of page one, so "Load more" pages survive the refresh.
+
+## 2026-09-25 — Screening the officers and owners behind a company (backlog 0078–0086)
+
+Decision record: [ADR-0006](decisions/0006-officer-screening-bridge.md).
+User-chosen options: registries + declared people (no LLM extraction),
+MATCH escalates + REVIEW flags, officer screenings in the Individuals queue
+under their own trigger, dependency-free SVG graph.
+
+- **Package boundary kept, with a bridge.** The screening build plan says KYB
+  never imports `app.screening`, and a guard test enforces it. All coupling
+  lives in the new `app/officer_screening/` package; KYB reaches it only
+  through `default_stages`, and a new guard enforces that too. The bridge's
+  API router is registered in `app/main.py`, outside the guarded packages.
+- **Names only in screening.** `company_person` and the officer evidence
+  carry relationship, role, sources, disposition and ids; the name lives only
+  in the encrypted subject. Declared people on the submission are plaintext
+  submitted PII under ADR-0002 retention (nulled with the other fields).
+- **Registry people are stubbed** (prior: credential-gated integrations). The
+  production provider is unconfigured, so every live report shows a
+  `registry_people` coverage gap until ticket 0086.
+- **Dedupe without a blind index.** Re-runs find a person's existing subject
+  by decrypting the entity's few linked subjects and matching screening's
+  normalized name plus compatible DOB. No new crypto.
+- **Found while wiring:** officer evidence is tier 1, and the entity layer
+  treated *any* tier-1 row (except tax ID) as registry evidence, so officers
+  would have suppressed `no_registry_evidence` and raised the confidence
+  estimate. Both now ignore the `officer_screening` source; `report.py`
+  reuses the engine's confidence formula instead of a copy.
+- **Inline screening, all-or-nothing.** `screen_people` runs each screening
+  inline on the stage's session. Under a stage timeout that session is
+  isolated, so a timeout rolls back every person's screening in the run.
+- **Demo:** new Wingtip Freight Ltd scenario (clean infrastructure, declared
+  owner on the demo watchlist → escalate at an overall score of 10, i.e. the MATCH forces
+  it). Northwind has registry officers, Fabrikam declared people, Brightpath
+  a name-only REVIEW officer; every other tier unchanged. The company demo
+  now loads the demo watchlist itself, and the Individuals demo's
+  "already screened" check ignores officer subjects so its own MATCH example
+  still loads.
+- **Checked live** on a throwaway stack: submission with three declared
+  people → MATCH / CLEAR / REVIEW, company escalated at 68.25 with both
+  officer signals; graph layout, hover tooltip and click-through checked by
+  screenshot.
+- **Follow-ups:** live registry sources (0086); a later monitoring MATCH on
+  an officer doesn't re-score the company yet; the correct-and-re-run form
+  can't edit declared people.

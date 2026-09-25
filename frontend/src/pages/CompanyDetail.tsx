@@ -26,6 +26,7 @@ import {
 } from "../components/DetailPanels";
 import { OperatorActions } from "../components/OperatorActions";
 import { OwnershipPanel } from "../components/OwnershipPanel";
+import { PeopleGraphPanel } from "../components/PeopleGraphPanel";
 import { ActivityPanel } from "../components/ActivityPanel";
 
 interface CompanyDetailProps {
@@ -33,6 +34,8 @@ interface CompanyDetailProps {
   onBack: () => void;
   /** Open another run (e.g. a re-analysis run that supersedes this one). */
   onOpenRun?: (runId: string) => void;
+  /** Open an officer/owner's individual screening (ticket 0084). */
+  onOpenScreening?: (screeningRunId: string) => void;
 }
 
 /** Pull prefill values for the correction form from the report's mismatches. */
@@ -140,7 +143,12 @@ function RunProgress({ run }: { run: RunTiming }) {
   );
 }
 
-export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) {
+export function CompanyDetail({
+  runId,
+  onBack,
+  onOpenRun,
+  onOpenScreening,
+}: CompanyDetailProps) {
   const { auth } = useAuth();
   const [report, setReport] = useState<ReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -338,6 +346,19 @@ export function CompanyDetail({ runId, onBack, onOpenRun }: CompanyDetailProps) 
               status={report.section_statuses.evidence}
               sources={report.sources}
               mismatches={report.mismatches}
+            />
+          </section>
+
+          {/* Officers & owners, each screened individually (ticket 0084) */}
+          <section style={styles.section}>
+            <h3 style={styles.sectionTitle}>Officers &amp; Owners</h3>
+            <PeopleGraphPanel
+              runId={runId}
+              token={auth.token}
+              companyName={
+                submittedValuesFromReport(report).company_name ?? "This company"
+              }
+              onOpenScreening={onOpenScreening}
             />
           </section>
 

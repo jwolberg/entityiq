@@ -180,6 +180,11 @@ def submit(
         requester_full_name=body.requester_full_name,
         linkedin_url=str(body.linkedin_url) if body.linkedin_url else None,
         extra_metadata=body.extra_metadata,
+        declared_people=(
+            [p.model_dump(exclude_none=True) for p in body.people]
+            if body.people
+            else None
+        ),
         entity_id=entity.id,
         api_client_id=principal.api_client_id,
         source_ip=source_ip,

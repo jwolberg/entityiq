@@ -39,7 +39,8 @@ action is audited.
 Needs Python 3.11+ and Node 20+. No Docker, Postgres, or Redis. On first run
 the script sets everything up and loads the demo data:
 
-- six fictional companies that span every risk tier;
+- seven fictional companies that span every risk tier, with their officers and
+  owners (one of whom is on the demo sanctions list);
 - four fictional people that span every screening outcome (MATCH, REVIEW and
   auto-CLEAR).
 
@@ -67,6 +68,7 @@ fictional watchlist, so it's deterministic and works offline. Details are in
 | **Four-layer scoring** | Four layers are each scored 0–100 and combined into an overall score: entity legitimacy, infrastructure legitimacy, representation confidence, and fraud/staging risk. |
 | **Triage, not verdicts** | Every run lands in `pre_clear`, `review`, or `escalate`. Critical signals (such as a sanctions match) force `escalate` whatever the score. Nothing is ever auto-approved. |
 | **Explainable** | Every signal cites the evidence rows behind it, with source attribution. An unavailable source *lowers confidence*; it's never counted as "low risk". |
+| **Officers & owners screened** | The officers and owners behind a company (declared on the submission, or found in the registry) each go through individual screening. An officer or owner who comes back as a MATCH forces `escalate`, even when the company itself looks clean; a REVIEW adds an elevated signal. The workbench draws them as an ownership graph around the company, linked to each person's screening. |
 | **Identity corroboration** | Checks the tax ID (FEIN) and LinkedIn company page against the submission. Both run on stub providers until live vendors are chosen (see known gaps). |
 | **Domain-ownership proof** | An optional challenge (DNS TXT, email or meta tag) the registrant can complete to raise confidence that they control the domain. |
 | **Operator workbench** | Everything for reviewing one case: the submitted-vs-discovered diff, domain/DNS, registry, contacts, and an HQ map with address confidence. Operators can also flag risks, review with notes, correct and re-run, export JSON, and see a per-case activity timeline. |
@@ -101,8 +103,9 @@ fictional watchlist, so it's deterministic and works offline. Details are in
 POST /submissions ──► FastAPI ──► Submission + VerificationRun (pending)
                                           │  Celery (Redis, or inline in dev)
                                           ▼
-  normalize → resolve → registries → tax ID → sanctions → domain → IP → web
-            → LinkedIn → consistency → geocode HQ → scoring → report
+  normalize → resolve → registries → tax ID → sanctions → officers/owners
+            → screen each person → domain → IP → web → LinkedIn
+            → consistency → geocode HQ → scoring → report
                                           │
       Operator UI (React) ◄── GET /reports ┘      every stage isolated:
                                                    a failed source is marked
@@ -147,7 +150,7 @@ POST /screenings ──► FastAPI ──► encrypted subject + ScreeningRun
 
 ## Quality
 
-- **951 backend tests** and **89 frontend tests**, plus ruff, eslint and tsc,
+- **1007 backend tests** and **108 frontend tests**, plus ruff, eslint and tsc,
   all run in [GitHub Actions](.github/workflows/ci.yml).
 - **Screening release gates in CI**, measured over a versioned, fictional
   adversarial name corpus:
@@ -181,6 +184,12 @@ The business-verification core is complete. Individual screening v1
 - **Registry data needs a key and a license.** OpenCorporates requires an API
   token (`OPENCORPORATES_API_TOKEN`); without one, the registry source shows as
   *unavailable*. Production use also needs a data license.
+- **Registry officers and owners aren't wired to a live source yet.** Declared
+  officers and owners are screened today; pulling them from OpenCorporates or
+  UK Companies House (officers and persons with significant control) needs
+  credentials, so the registry part shows as *unavailable*. There's no public
+  US beneficial-ownership source. See
+  [ADR-0006](docs/decisions/0006-officer-screening-bridge.md).
 - **Tax ID and LinkedIn run on stub providers.** The live vendors are waiting
   on a provider decision and a legal sign-off. See
   [docs/PRD-identity-corroboration.md](docs/PRD-identity-corroboration.md).

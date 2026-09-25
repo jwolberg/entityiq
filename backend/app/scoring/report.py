@@ -86,6 +86,8 @@ _STAGE_SOURCES: dict[str, tuple[str, int]] = {
     "geocode_hq": ("geocode", 3),
     "verify_tax_id": ("tax_id", 1),
     "verify_linkedin": ("linkedin", 3),
+    "collect_people": ("registry_people", 1),
+    "screen_people": ("officer_screening", 1),
 }
 
 
@@ -241,7 +243,11 @@ def _build_explainability_from_assessment(
     Reconstructs Signal objects from the persisted JSON and delegates to
     explain.build_explainability().
     """
-    from app.scoring.engine import ScoringResult, Signal  # noqa: PLC0415
+    from app.scoring.engine import (  # noqa: PLC0415
+        ScoringResult,
+        Signal,
+        _compute_confidence,
+    )
     from app.scoring.explain import build_explainability  # noqa: PLC0415
 
     signals = [
@@ -256,9 +262,8 @@ def _build_explainability_from_assessment(
         for s in (assessment.contributing_signals or [])
     ]
 
-    # Estimate confidence from evidence tier coverage (same formula as engine)
-    tiers_present = {e.tier for e in evidence_rows if e.tier in (1, 2, 3)}
-    confidence = len(tiers_present) / 3.0 if tiers_present else 0.0
+    # Estimate confidence from evidence tier coverage (the engine's formula)
+    confidence = _compute_confidence(evidence_rows)
 
     pseudo_result = ScoringResult(
         entity_score=assessment.entity_score or 50.0,

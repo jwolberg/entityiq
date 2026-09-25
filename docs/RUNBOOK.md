@@ -44,8 +44,8 @@ docker-compose.yml   Full stack: Postgres + Redis + API + worker + UI
 
 This creates the backend venv and installs the frontend on the first run,
 migrates a local SQLite database (`backend/entityiq-demo.db`), seeds demo
-accounts and an integration API key, loads six fictional demo companies that
-span all three triage tiers (`python -m app.demo_data`: real pipeline, recorded
+accounts and an integration API key, loads seven fictional demo companies that
+span all three triage tiers, with their officers and owners (`python -m app.demo_data`: real pipeline, recorded
 source responses, no network), then serves:
 
 - UI: http://localhost:5173. Sign in as `operator@demo.entityiq.dev` or

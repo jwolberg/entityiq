@@ -185,6 +185,7 @@ export function IndividualsQueue({
           <option value="">All triggers</option>
           <option value="intake">Intake</option>
           <option value="monitoring">Monitoring alerts</option>
+          <option value="kyb_officer">Company officers</option>
         </select>
       </div>
 
@@ -301,6 +302,10 @@ export function IndividualsQueue({
                     <span data-testid="monitoring-label" style={styles.monitoring}>
                       Monitoring alert
                     </span>
+                  ) : i.trigger === "kyb_officer" ? (
+                    <span data-testid="officer-label" style={styles.officer}>
+                      Company officer
+                    </span>
                   ) : (
                     i.trigger
                   )}
@@ -360,6 +365,8 @@ const styles: Record<string, React.CSSProperties> = {
   row: { cursor: "pointer" },
   footer: { display: "flex", justifyContent: "space-between", alignItems: "center",
             marginTop: "0.75rem", fontSize: "0.875rem", color: "#6b7280" },
+  officer: { backgroundColor: "#e0f2fe", color: "#075985", padding: "0.125rem 0.5rem",
+             borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600 },
   monitoring: { backgroundColor: "#ede9fe", color: "#5b21b6", padding: "0.125rem 0.5rem",
                 borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600 },
 };

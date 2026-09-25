@@ -7,9 +7,51 @@ Network metadata (source IP, user agent, etc.) is captured server-side from the
 HTTP request — it is NOT accepted from the request body.
 """
 
-from typing import Any
+import re
+from typing import Any, Literal
 
-from pydantic import BaseModel, EmailStr, HttpUrl, model_validator
+from pydantic import (
+    BaseModel,
+    EmailStr,
+    Field,
+    HttpUrl,
+    field_validator,
+    model_validator,
+)
+
+# Same partial-date shape the screening intake accepts (app.screening.api).
+_DOB = re.compile(r"\d{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?)?")
+
+
+class DeclaredPerson(BaseModel):
+    """An officer or owner the submitter declares (ticket 0079).
+
+    Each one is screened through individual screening (ticket 0081).
+    """
+
+    name: str = Field(max_length=256)
+    relationship: Literal["officer", "owner"]
+    role: str | None = Field(default=None, max_length=128)
+    dob: str | None = None
+    nationality: str | None = Field(default=None, max_length=64)
+    ownership_pct: float | None = Field(default=None, ge=0, le=100)
+
+    @field_validator("name")
+    @classmethod
+    def _name_not_blank(cls, v: str) -> str:
+        v = " ".join(v.split())
+        if not v:
+            raise ValueError("name must not be blank")
+        return v
+
+    @field_validator("dob")
+    @classmethod
+    def _dob_shape(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        if not _DOB.fullmatch(v.strip()):
+            raise ValueError("dob must be YYYY, YYYY-MM or YYYY-MM-DD")
+        return v.strip()
 
 
 class SubmissionRequest(BaseModel):
@@ -27,6 +69,8 @@ class SubmissionRequest(BaseModel):
     requester_full_name: str | None = None
     linkedin_url: HttpUrl | None = None
     extra_metadata: dict[str, Any] | None = None
+    # Officers and owners, screened individually (tickets 0079, 0081).
+    people: list[DeclaredPerson] | None = Field(default=None, max_length=50)
 
     # --- Client-supplied idempotency key (ARCHITECTURE § 6) ---
     idempotency_key: str | None = None

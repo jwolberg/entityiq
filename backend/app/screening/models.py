@@ -36,7 +36,7 @@ from app.db.session import Base
 # C1: screening's own vocabulary, separate from KYB's triage tiers.
 SYSTEM_DISPOSITIONS = ("CLEAR", "REVIEW", "MATCH")
 HUMAN_DISPOSITIONS = ("CLEAR", "MATCH")
-RUN_TRIGGERS = ("intake", "monitoring")
+RUN_TRIGGERS = ("intake", "monitoring", "kyb_officer")
 
 
 def _uuid() -> str:

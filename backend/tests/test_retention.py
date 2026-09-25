@@ -484,3 +484,22 @@ def test_unparsable_ip_is_dropped_and_the_row_settles(db):
     assert sub.source_ip is None
     assert first["network_metadata"] == 1
     assert run_retention(db, now=NOW)["network_metadata"] == 0
+
+
+def test_declared_people_nulled_with_submitted_pii(db):
+    """Declared officers/owners are submitted PII (ticket 0078)."""
+    entity = _entity(db, name="DeclaredOld")
+    sub = _submission(db, entity=entity, submitted_at=NOW - timedelta(days=181))
+    sub.declared_people = [{"name": "Jane Smith", "relationship": "owner"}]
+    fresh = _submission(
+        db, entity=_entity(db, name="DeclaredNew"), submitted_at=NOW - timedelta(days=1)
+    )
+    fresh.declared_people = [{"name": "Ann Lee", "relationship": "officer"}]
+    db.commit()
+
+    run_retention(db, now=NOW)
+
+    db.refresh(sub)
+    db.refresh(fresh)
+    assert sub.declared_people is None
+    assert fresh.declared_people == [{"name": "Ann Lee", "relationship": "officer"}]

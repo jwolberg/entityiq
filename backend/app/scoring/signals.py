@@ -54,6 +54,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Officer/owner screening evidence (ADR-0006, written by app.officer_screening).
+# It's about a person, not the company: never registry evidence or coverage.
+OFFICER_SCREENING_SOURCE = "officer_screening"
+OFFICER_SCREENING_FIELD = "officer_screening_result"
+
 # ---------------------------------------------------------------------------
 # Layer 1 — Entity legitimacy
 # ---------------------------------------------------------------------------
@@ -79,7 +84,11 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
 
     # Tax-ID rows are Tier 1 too, but they aren't registry evidence; they get
     # their own signals (IC1-T3) and must not shift the registry checks below.
-    tier1_evidence = [e for e in evidence_rows if e.tier == 1 and e.source != "tax_id"]
+    tier1_evidence = [
+        e
+        for e in evidence_rows
+        if e.tier == 1 and e.source not in ("tax_id", OFFICER_SCREENING_SOURCE)
+    ]
     name_evidence = [e for e in tier1_evidence if e.field == "company_name"]
     reg_number_evidence = [
         e for e in tier1_evidence if e.field == "registration_number"
@@ -139,6 +148,7 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
         )
         signals.extend(_tax_id_signals(evidence_rows))
         signals.extend(_linkedin_entity_signals(evidence_rows))
+        signals.extend(_officer_screening_signals(evidence_rows))
         return signals
 
     # Registry name confirmed / mismatch
@@ -236,7 +246,67 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
 
     signals.extend(_tax_id_signals(evidence_rows))
     signals.extend(_linkedin_entity_signals(evidence_rows))
+    signals.extend(_officer_screening_signals(evidence_rows))
     return signals
+
+
+def _describe_people(rows: list) -> str:
+    """ "2 people (owner, director; officer)" — relationships and roles only."""
+    parts = []
+    for ev in rows:
+        payload = ev.raw_payload or {}
+        labels = [*payload.get("relationships", []), *payload.get("roles", [])]
+        parts.append(", ".join(labels) or "unspecified role")
+    noun = "person" if len(rows) == 1 else "people"
+    return f"{len(rows)} {noun} ({'; '.join(parts)})"
+
+
+def _officer_screening_signals(evidence_rows: list) -> list[Signal]:
+    """Entity-layer signals from officer/owner screening (ticket 0082, ADR-0006).
+
+    MATCH is critical (forces escalate). REVIEW is elevated but not critical.
+    CLEAR earns no trust: a clean director never helps a company pre-clear.
+    Unavailable screening adds nothing (the stage shows as a coverage gap).
+    """
+    rows = [
+        e
+        for e in evidence_rows
+        if e.source == OFFICER_SCREENING_SOURCE and e.field == OFFICER_SCREENING_FIELD
+    ]
+    match = [e for e in rows if e.normalized_value == "MATCH"]
+    review = [e for e in rows if e.normalized_value == "REVIEW"]
+    out: list[Signal] = []
+    if match:
+        out.append(
+            Signal(
+                name="officer_sanctions_match",
+                layer="entity",
+                direction="elevated",
+                weight=1.0,
+                description=(
+                    f"{_describe_people(match)} behind this company matched a "
+                    "sanctions list entry in individual screening. Critical — "
+                    "forces escalation."
+                ),
+                evidence_ids=[e.id for e in match],
+            )
+        )
+    if review:
+        out.append(
+            Signal(
+                name="officer_screening_review",
+                layer="entity",
+                direction="elevated",
+                weight=0.4,
+                description=(
+                    f"{_describe_people(review)} behind this company may match a "
+                    "sanctions list entry; individual screening needs a human "
+                    "decision."
+                ),
+                evidence_ids=[e.id for e in review],
+            )
+        )
+    return out
 
 
 def _tax_id_signals(evidence_rows: list) -> list[Signal]:

@@ -52,6 +52,17 @@ export interface SubmissionRequest {
   phone?: string;
   requester_full_name?: string;
   linkedin_url?: string;
+  /** Officers and owners, each screened individually (ticket 0079). */
+  people?: DeclaredPerson[];
+}
+
+export interface DeclaredPerson {
+  name: string;
+  relationship: "officer" | "owner";
+  role?: string;
+  dob?: string;
+  nationality?: string;
+  ownership_pct?: number;
 }
 
 export interface SubmissionResponse {
@@ -375,6 +386,41 @@ export interface ScreeningQueueItem {
   top_score: number | null;
   human_disposition: "CLEAR" | "MATCH" | null;
   created_at: string | null;
+  /** Set for officer/owner screenings: the company they belong to (0083). */
+  kyb_entity_id?: string | null;
+}
+
+/** One officer/owner screened in a KYB run (ticket 0083). */
+export interface RunPerson {
+  /** Decrypted from the screening subject; null once shredded. */
+  name: string | null;
+  shredded: boolean;
+  relationships: string[];
+  roles: string[];
+  sources: { source: string; provider?: string; locator?: string }[];
+  ownership_pct: number | null;
+  company_person_ids: string[];
+  screening_subject_id: string | null;
+  screening_run_id: string | null;
+  /** CLEAR | REVIEW | MATCH, or "unavailable" when screening didn't finish. */
+  disposition: string | null;
+  auto_closed: boolean | null;
+  top_score: number | null;
+  human_disposition: string | null;
+}
+
+export interface RunPeople {
+  run_id: string;
+  /** collect_people / screen_people stage statuses. */
+  sources: { registry: string | null; screening: string | null };
+  people: RunPerson[];
+}
+
+/** The company behind an officer/owner screening (ticket 0083). */
+export interface OfficerEntityLink {
+  entity_id: string;
+  company_name: string;
+  latest_run_id: string | null;
 }
 
 export interface ScreeningClaim {
@@ -623,6 +669,16 @@ export const apiClient = {
 
   getScreening(runId: string, token: string): Promise<ScreeningDetail> {
     return request(`/screenings/${runId}`, {}, token);
+  },
+
+  /** GET /reports/{run_id}/people: officers/owners screened in a KYB run. */
+  getRunPeople(runId: string, token: string): Promise<RunPeople> {
+    return request(`/reports/${runId}/people`, {}, token);
+  },
+
+  /** GET /officer-screening/entities/{id}: the company behind an officer screening. */
+  getOfficerEntity(entityId: string, token: string): Promise<OfficerEntityLink> {
+    return request(`/officer-screening/entities/${entityId}`, {}, token);
   },
 
   disposeScreening(

@@ -5,11 +5,15 @@
  * it POSTs to /submissions, which accepts the company and runs the verification
  * pipeline in the background.  On success the parent closes the modal and
  * tells the operator data collection is running (see Dashboard).
+ *
+ * Officers and owners can be declared too (ticket 0079); each is screened
+ * against the sanctions lists and a MATCH escalates the company.
  */
 
 import { FormEvent, useState } from "react";
 import {
   apiClient,
+  DeclaredPerson,
   SubmissionRequest,
   SubmissionResponse,
 } from "../api/client";
@@ -32,6 +36,37 @@ interface FieldState {
   linkedin_url: string;
 }
 
+interface PersonRow {
+  name: string;
+  relationship: "officer" | "owner";
+  role: string;
+  dob: string;
+  ownership_pct: string;
+}
+
+const EMPTY_PERSON: PersonRow = {
+  name: "",
+  relationship: "officer",
+  role: "",
+  dob: "",
+  ownership_pct: "",
+};
+
+/** Rows with a name become DeclaredPerson entries; empty fields are omitted. */
+function toDeclared(rows: PersonRow[]): DeclaredPerson[] {
+  return rows
+    .filter((r) => r.name.trim())
+    .map((r) => {
+      const p: DeclaredPerson = { name: r.name.trim(), relationship: r.relationship };
+      if (r.role.trim()) p.role = r.role.trim();
+      if (r.relationship === "owner" && r.ownership_pct.trim()) {
+        p.ownership_pct = Number(r.ownership_pct);
+      }
+      if (r.dob.trim()) p.dob = r.dob.trim();
+      return p;
+    });
+}
+
 const EMPTY: FieldState = {
   company_name: "",
   work_email: "",
@@ -50,11 +85,16 @@ export function NewCompanyForm({
   onSuccess,
 }: NewCompanyFormProps) {
   const [fields, setFields] = useState<FieldState>(EMPTY);
+  const [people, setPeople] = useState<PersonRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function update(key: keyof FieldState, value: string) {
     setFields((f) => ({ ...f, [key]: value }));
+  }
+
+  function updatePerson(i: number, key: keyof PersonRow, value: string) {
+    setPeople((rows) => rows.map((r, j) => (j === i ? { ...r, [key]: value } : r)));
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -70,7 +110,7 @@ export function NewCompanyForm({
       company_domain: fields.company_domain.trim(),
       country: fields.country.trim(),
     };
-    const optional: (keyof SubmissionRequest)[] = [
+    const optional: (keyof FieldState & keyof SubmissionRequest)[] = [
       "tax_id",
       "billing_address",
       "phone",
@@ -83,6 +123,9 @@ export function NewCompanyForm({
         body[key] = v;
       }
     }
+
+    const declared = toDeclared(people);
+    if (declared.length > 0) body.people = declared;
 
     setSubmitting(true);
     try {
@@ -193,6 +236,84 @@ export function NewCompanyForm({
             placeholder="https://www.linkedin.com/company/..."
             testid="field-linkedin_url"
           />
+
+          <div style={styles.sectionLabel}>Officers and owners (optional)</div>
+          <p style={styles.hint}>
+            Each person is screened against the sanctions lists. A date of
+            birth helps rule out namesakes.
+          </p>
+          {people.map((p, i) => (
+            <fieldset key={i} style={styles.personRow} data-testid={`person-${i}`}>
+              <legend style={styles.srOnly}>Person {i + 1}</legend>
+              <input
+                aria-label={`Person ${i + 1} full name`}
+                placeholder="Full name"
+                value={p.name}
+                onChange={(e) => updatePerson(i, "name", e.target.value)}
+                style={{ ...styles.input, gridColumn: "1 / -1" }}
+                data-testid={`person-${i}-name`}
+              />
+              <select
+                aria-label={`Person ${i + 1} relationship`}
+                value={p.relationship}
+                onChange={(e) => updatePerson(i, "relationship", e.target.value)}
+                style={styles.input}
+                data-testid={`person-${i}-relationship`}
+              >
+                <option value="officer">Officer</option>
+                <option value="owner">Owner</option>
+              </select>
+              <input
+                aria-label={`Person ${i + 1} role`}
+                placeholder="Role (e.g. Director)"
+                value={p.role}
+                onChange={(e) => updatePerson(i, "role", e.target.value)}
+                style={styles.input}
+                data-testid={`person-${i}-role`}
+              />
+              <input
+                aria-label={`Person ${i + 1} date of birth`}
+                placeholder="DOB (YYYY-MM-DD)"
+                value={p.dob}
+                onChange={(e) => updatePerson(i, "dob", e.target.value)}
+                style={styles.input}
+                data-testid={`person-${i}-dob`}
+              />
+              {p.relationship === "owner" ? (
+                <input
+                  aria-label={`Person ${i + 1} ownership percent`}
+                  placeholder="Ownership %"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={p.ownership_pct}
+                  onChange={(e) => updatePerson(i, "ownership_pct", e.target.value)}
+                  style={styles.input}
+                  data-testid={`person-${i}-ownership_pct`}
+                />
+              ) : (
+                <span />
+              )}
+              <button
+                type="button"
+                onClick={() => setPeople((rows) => rows.filter((_, j) => j !== i))}
+                style={styles.removeBtn}
+                aria-label={`Remove person ${i + 1}`}
+                data-testid={`remove-person-${i}`}
+              >
+                Remove
+              </button>
+            </fieldset>
+          ))}
+          <button
+            type="button"
+            onClick={() => setPeople((rows) => [...rows, { ...EMPTY_PERSON }])}
+            style={styles.addBtn}
+            disabled={people.length >= 50}
+            data-testid="add-person"
+          >
+            + Add person
+          </button>
 
           {error && (
             <div style={styles.error} role="alert" data-testid="new-company-error">
@@ -331,6 +452,46 @@ const styles: Record<string, React.CSSProperties> = {
   },
   req: {
     color: "#dc2626",
+  },
+  hint: {
+    margin: "0 0 0.5rem",
+    fontSize: "0.75rem",
+    color: "#6b7280",
+  },
+  personRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(8rem, 1fr))",
+    gap: "0.5rem",
+    border: "1px solid #e5e7eb",
+    borderRadius: "0.375rem",
+    padding: "0.625rem",
+    margin: "0 0 0.5rem",
+  },
+  srOnly: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    overflow: "hidden",
+    clip: "rect(0 0 0 0)",
+  },
+  addBtn: {
+    padding: "0.375rem 0.75rem",
+    border: "1px dashed #93c5fd",
+    borderRadius: "0.375rem",
+    backgroundColor: "#ffffff",
+    color: "#1d4ed8",
+    fontWeight: 600,
+    fontSize: "0.8125rem",
+    cursor: "pointer",
+  },
+  removeBtn: {
+    padding: "0.375rem 0.75rem",
+    border: "1px solid #d1d5db",
+    borderRadius: "0.375rem",
+    backgroundColor: "#ffffff",
+    color: "#374151",
+    fontSize: "0.8125rem",
+    cursor: "pointer",
   },
   input: {
     width: "100%",

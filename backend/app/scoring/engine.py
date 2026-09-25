@@ -67,6 +67,8 @@ CRITICAL_ESCALATION_SIGNALS: frozenset[str] = frozenset(
         "sanctions_hit",
         "sanctions_hit_fraud_flag",
         "ip_asn_reuse_high",
+        # An officer or owner is a screening MATCH (ticket 0082, ADR-0006).
+        "officer_sanctions_match",
     }
 )
 
@@ -278,7 +280,13 @@ def _compute_confidence(evidence_rows: list) -> float:
 
     Reduced confidence reflects missing sources, not increased risk.
     """
-    tiers_present = {e.tier for e in evidence_rows if e.tier in (1, 2, 3)}
+    from app.scoring.signals import OFFICER_SCREENING_SOURCE  # noqa: PLC0415
+
+    tiers_present = {
+        e.tier
+        for e in evidence_rows
+        if e.tier in (1, 2, 3) and e.source != OFFICER_SCREENING_SOURCE
+    }
     if not tiers_present:
         return 0.0
     return len(tiers_present) / 3.0

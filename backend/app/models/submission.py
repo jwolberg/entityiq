@@ -39,6 +39,10 @@ class Submission(Base):
     phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     requester_full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     linkedin_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Officers/owners the submitter declared (ticket 0079): a list of
+    # {name, relationship, role?, dob?, nationality?, ownership_pct?}.
+    # Submitted PII: nulled by the retention job (ADR-0002).
+    declared_people: Mapped[list | None] = mapped_column(JSON, nullable=True)
     # Catch-all for additional submitted metadata (JSON object).
     extra_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
