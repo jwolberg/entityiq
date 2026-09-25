@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.auth.operator import get_current_operator, require_lead
+from app.auth.operator import get_current_operator, require_lead_or_examiner
 from app.db.session import SessionLocal
 from app.models.api_client import ApiClient
 from app.models.audit_event import AuditEvent
@@ -109,13 +109,13 @@ def run_timeline(
 @router.get(
     "/events",
     response_model=AuditEventList,
-    summary="Global audit log (lead only)",
+    summary="Global audit log (lead or examiner)",
 )
 def global_log(
     limit: int = Query(default=100, ge=1, le=500),
     event_type: str | None = None,
     db: Session = Depends(_get_db),
-    _lead=Depends(require_lead),
+    _reader=Depends(require_lead_or_examiner),
 ) -> AuditEventList:
     query = db.query(AuditEvent)
     if event_type:

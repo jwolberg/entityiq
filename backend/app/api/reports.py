@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.audit.recorder import record_event
+from app.auth.pii import filter_summary_for_viewer, report_contains_pii, resolve_viewer
 from app.auth.service import Principal, get_principal
 from app.db.session import SessionLocal
 from app.models.report import Report
@@ -95,13 +96,19 @@ def _serialize_report(
     report: Report,
     review: ReviewSummarySchema | None = None,
     run: VerificationRun | None = None,
+    *,
+    viewer: str,
 ) -> ReportResponse:
     """Convert a Report ORM row + its summary dict into a ReportResponse.
 
     The summary is pre-assembled by StoreReportStage and stored as JSON.
     We read it here rather than re-joining all tables on every API call.
+
+    `viewer` ("lead" | "operator" | "system", from app.auth.pii.resolve_viewer)
+    is required — every call site must pick a viewer explicitly rather than
+    fall back to an implicit "full access" default (ADR-0002 §2).
     """
-    summary = report.summary or {}
+    summary = filter_summary_for_viewer(report.summary or {}, viewer)
     ss = report.section_statuses or {}
 
     section_statuses = SectionStatuses(
@@ -194,14 +201,20 @@ def _serialize_report(
     summary="List all reports (operator dashboard)",
 )
 def list_reports(
+    triage_tier: str | None = None,
     db: Session = Depends(_get_db),
     _principal: Principal = Depends(get_principal),
 ) -> ReportListResponse:
     """Return a summary list of all reports for the operator dashboard.
 
     Each item includes company name, domain, report status, overall risk
-    score, review status, and analysis date.  Results are ordered newest
-    first by generated_at (falling back to created_at).
+    score, triage tier, review status, and analysis date.  Results are
+    ordered newest first by generated_at (falling back to created_at).
+
+    ``triage_tier`` optionally filters to one tier (``pre_clear`` | ``review``
+    | ``escalate``). Filtering by tier — not the score band derived from
+    ``overall_score`` — matters because a critical signal (e.g. a sanctions
+    hit) can force ``escalate`` at a low score (ARCHITECTURE § triage).
 
     This is a thin list — it does NOT return evidence, mismatches, or
     full scores.  Use GET /reports/{run_id} for the full report.
@@ -210,6 +223,15 @@ def list_reports(
 
     items: list[ReportListItemSchema] = []
     for report in reports:
+        # Overall score / tier from summary JSON
+        summary = report.summary or {}
+        scores_data = summary.get("scores") or {}
+        overall_score = scores_data.get("overall_score")
+        report_triage_tier = scores_data.get("triage_tier")
+
+        if triage_tier is not None and report_triage_tier != triage_tier:
+            continue
+
         # Resolve company info from submission via verification_run
         run = db.get(VerificationRun, report.verification_run_id)
         company_name = ""
@@ -219,12 +241,6 @@ def list_reports(
             if sub is not None:
                 company_name = sub.company_name
                 domain = sub.domain
-
-        # Overall score from summary JSON
-        summary = report.summary or {}
-        scores_data = summary.get("scores") or {}
-        overall_score = scores_data.get("overall_score")
-        triage_tier = scores_data.get("triage_tier")
 
         # Review status — None if no review row exists
         review = (
@@ -244,7 +260,7 @@ def list_reports(
                 domain=domain,
                 status=report.status,
                 overall_score=overall_score,
-                triage_tier=triage_tier,
+                triage_tier=report_triage_tier,
                 review_status=review_status,
                 generated_at=generated_at,
             )
@@ -306,8 +322,9 @@ def export_report(
         ),
     )
 
+    viewer = resolve_viewer(principal, db)
     return _serialize_report(
-        report, _review_summary(db, report.verification_run_id), run
+        report, _review_summary(db, report.verification_run_id), run, viewer=viewer
     )
 
 
@@ -319,7 +336,7 @@ def export_report(
 def get_report(
     run_id: str,
     db: Session = Depends(_get_db),
-    _principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_principal),
 ) -> ReportResponse:
     """Return the report for the given verification run ID.
 
@@ -327,6 +344,9 @@ def get_report(
     - In-progress run: returns partial report; section_statuses indicates which
       sections are pending vs. complete.
     - Unknown run_id: returns 404.
+
+    The response is redacted per the caller's role (ADR-0002 §2, via
+    app.auth.pii). Viewing a report that contains PII is audited.
     """
     # Verify the run exists first (for a clear 404 on unknown run vs. no-report-yet)
     run = db.get(VerificationRun, run_id)
@@ -347,6 +367,21 @@ def get_report(
             ),
         )
 
+    if report_contains_pii(report.summary or {}):
+        record_event(
+            db=db,
+            event_type="report.viewed",
+            operator_id=principal.operator_id,
+            api_client_id=principal.api_client_id,
+            verification_run_id=run_id,
+            payload={"by": principal.kind, "principal": principal.name},
+            description=(
+                f"Report for run {run_id!r} (contains PII) viewed by "
+                f"{principal.kind} {principal.name!r}."
+            ),
+        )
+
+    viewer = resolve_viewer(principal, db)
     return _serialize_report(
-        report, _review_summary(db, report.verification_run_id), run
+        report, _review_summary(db, report.verification_run_id), run, viewer=viewer
     )

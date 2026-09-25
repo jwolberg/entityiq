@@ -1255,3 +1255,555 @@ A fresh-context reviewer found no high-severity issues. Fixed:
 Left open (design question, not a regression): any valid API key can read
 every company's report, not only its own submissions. That's fine for a
 single-tenant internal tool; multi-tenant would need per-client scoping.
+
+---
+
+## 2026-09-24 — Submit-to-review e2e test (backlog 0004)
+
+- **Coverage thresholds not added.** The ticket allows adding them only if
+  the coverage tooling is already a dev dependency. It isn't: `pytest-cov`
+  is absent from `backend/pyproject.toml` / the shared venv, and no vitest
+  coverage provider (`@vitest/coverage-v8` / `-istanbul`) is in
+  `frontend/package.json` or installed. Adding either is a new dependency,
+  which this workflow requires stopping and reporting on rather than adding
+  unilaterally. `docs/BUILD_PLAN.md` P3-T5 marked Partial; this remains open.
+- **e2e test location:** `backend/tests/e2e/test_submission_to_review.py`,
+  collected by the existing `pytest` run (`testpaths = ["tests"]` in
+  `backend/pyproject.toml`) — not the top-level `tests/` placeholder, which
+  has no runner wired up and isn't part of CI.
+- **Fixture data:** reuses `app.demo_data.SCENARIOS[0]` (Northwind Traders,
+  `pre_clear`) and its `_stages()` recorded-response builder, so the test
+  needs no network and stays consistent with the demo dataset.
+- **Pipeline execution:** the test calls `Orchestrator(...).run_sync()`
+  directly against the same SQLite engine the TestClient uses, per the
+  project's established Celery-testability pattern — `enqueue_run` is
+  stubbed like every other API test, and the real Celery path is untested
+  here (that's ticket 0025's job, against Postgres + a live worker).
+- **Scope vs. existing tests:** `tests/pipeline/test_pipeline_e2e.py` already
+  covers stage-by-stage signal correctness; this test only asserts the API →
+  pipeline → report → operator-review boundary (HTTP submit, HTTP report
+  read before/after the pipeline runs, operator sign-in, mark-reviewed,
+  unauthenticated-review rejection, and the resulting audit trail).
+
+---
+
+## 2026-09-24 — Redis-backed operator sessions (backlog 0024)
+
+- **Redis probed once, at FastAPI startup, not at import time.** Importing
+  `app.auth.operator` must never touch the network (tests import it freely).
+  `_store` defaults to `InMemorySessionStore` at import; `configure_session_store()`
+  is wired into a `lifespan` handler in `app/main.py` and tries Redis there.
+  Existing tests build `TestClient(app, ...)` without a `with` block, so
+  lifespan never runs for them and they keep getting the deterministic
+  in-memory store regardless of whether the dev machine happens to have a
+  live Redis — avoids the "tests behave differently depending on what's
+  running on localhost" trap.
+- **New env var `REDIS_URL`** (default `redis://localhost:6379/0`), separate
+  from `CELERY_BROKER_URL` even though they default to the same address —
+  sessions and the Celery broker are different concerns and an operator may
+  want them on different Redis DBs/instances. Session keys are namespaced
+  (`entityiq:session:*`) so the two never collide if they do share one Redis.
+- **TTL:** `RedisSessionStore` uses `SETEX`, so Redis's own key expiry
+  enforces `SESSION_TTL_HOURS` — no separate purge loop to keep in sync.
+- **`fakeredis` is not installed** (checked: not in the venv or
+  pyproject.toml). Per the "no new dependencies without approval" rule,
+  `backend/tests/auth/test_redis_sessions.py` hand-rolls a `_FakeRedis`
+  implementing the small slice of the redis-py interface the store uses
+  (`ping`/`setex`/`get`/`delete`/`scan_iter`), with an injectable clock so
+  TTL expiry is deterministic (no real sleeping).
+- **`clear_all()` on the Redis store only deletes its own `entityiq:session:*`
+  keys** (`SCAN` + `DELETE`), never `FLUSHDB` — the Redis instance may be
+  shared with the Celery broker.
+- **`_now()` late-binding:** `_store`'s in-memory fallback is constructed
+  with `now_func=lambda: _now()` rather than `now_func=_now`, so that
+  `tests/auth/test_sessions.py`'s `monkeypatch.setattr(op_auth, "_now", ...)`
+  (which reassigns the module attribute after the store already exists)
+  still takes effect. Passing the function object directly would have
+  captured the pre-monkeypatch reference and silently broken that test.
+- **Switched `app/main.py` from `@app.on_event("startup")` to a `lifespan`
+  context manager** — `on_event` is deprecated in FastAPI 0.111 and was
+  emitting a warning on every test run; `lifespan` is the direct replacement
+  and behaves identically for TestClient purposes (only runs inside a `with`
+  block).
+- Existing auth tests (`test_operator.py`, `test_sessions.py`) required no
+  changes — `_new_session_token` / `_get_operator_id_from_token` /
+  `invalidate_session` / `_clear_all_sessions` kept their exact signatures,
+  now delegating to whichever `SessionStore` is active.
+
+---
+
+## 2026-09-24 — docker-compose full stack, live-verified (backlog 0025)
+
+- **Docker daemon was down at task start** (`docker info` failed: no
+  `docker.sock`). Started Docker Desktop (`open -a Docker`) and polled
+  `docker info` until the daemon came up (~6s) — then ran the full live
+  verification below. If Docker had stayed unavailable this would be
+  reported as not-done per the ticket, but it came up, so the compose file,
+  images, migrations, worker, and a real submission were all verified live,
+  not just written.
+- **Files added:** `docker-compose.yml` (root), `backend/Dockerfile` +
+  `backend/.dockerignore`, `frontend/Dockerfile` + `frontend/.dockerignore`.
+  No existing Dockerfiles existed to reuse.
+- **`frontend/.dockerignore` excludes `node_modules`.** The worktree's
+  `frontend/node_modules` is a symlink into the primary checkout, outside
+  this build context — without excluding it, `COPY . .` would either fail
+  ("forbidden path outside the build context") or copy garbage. `npm ci`
+  installs a real `node_modules` inside the image instead.
+- **`ui` service is a Vite dev server** (`npm run dev -- --host 0.0.0.0`),
+  not a production build — matches this ticket's "verify the full stack for
+  dev" scope. `VITE_API_TARGET=http://api:8000` reuses the proxy env var
+  `vite.config.ts` already supports; no frontend code changed.
+- **`REDIS_URL` also wired into the `api` service** (ticket 0024's operator
+  sessions), separate from `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND`, even
+  though all three point at the same `redis` service by default in compose.
+- **Live verification performed (not just "should work"):**
+  1. `docker compose build` — all three images (`api`, `worker`, `ui`) built
+     clean.
+  2. `docker compose up -d` — `db`/`redis` reported healthy, `api` ran
+     `alembic upgrade head` against Postgres (all 3 revisions applied,
+     ending at `a1b2c3d4e5f6`) then started; `worker` connected to
+     `redis://redis:6379/0`; `ui` served on :5173.
+  3. `docker compose exec -T api python -m app.seed` — seeded demo
+     accounts + an integration API key against Postgres.
+  4. `POST /submissions` (real API key, `stripe.com`) → enqueued to the
+     **real, non-eager Celery worker**. Confirmed via `app/worker.py` that
+     `run_verification_task` always passes `stage_timeout_seconds`, which is
+     what puts the orchestrator on the isolated-stage-session path (ticket
+     0001) — so this run exercised that path on Postgres, not SQLite.
+     Completed in ~25s: `run.status == "complete"`, `triage_tier ==
+     "pre_clear"`. Real external calls succeeded (sanctions CSV, WHOIS/DNS/
+     SSL, web fetch, OSM geocode); OpenCorporates/tax-id/LinkedIn correctly
+     reported `unavailable` (no token/provider configured) without failing
+     the run (P4-T3 behavior, now also observed against Postgres/live
+     network instead of only recorded fixtures).
+  5. Verified `alembic_version` directly via `psql` inside the `db`
+     container: `a1b2c3d4e5f6` (head).
+  6. Signed in as the seeded operator, called `POST /reviews/{run_id}` ->
+     201 (ties ticket 0004's flow together live, on Postgres).
+  7. Restarted the `api` container (`docker compose restart api`) and reused
+     the pre-restart session token: `GET /reports/{run_id}` still returned
+     200 (Redis-backed session survived the restart — ticket 0024, now
+     proven live against a real Redis, not just the in-test fake). Signed
+     out with the same token -> 204, then the same token -> 401 (revocation
+     took effect immediately).
+  8. Cleaned up: `docker compose down -v` (containers, network, and the
+     Postgres volume all removed — no lingering state from this
+     verification run).
+- **Not covered by this pass:** a production frontend build inside Docker
+  (out of scope — see "ui service" note above), and TLS/ingress (MVP has
+  none anywhere yet).
+
+---
+
+## 2026-09-24 — Demo identity corroboration records (backlog 0053)
+
+- **Which scenarios got which state** (design note left this open): the four
+  required states landed on three scenarios, chosen so the added signals
+  reinforce rather than contest each scenario's existing story — no tier
+  changed, so no deliberate `expected_tier` edits were needed.
+  - Northwind Traders Inc (`pre_clear`): verified FEIN with a name match
+    (`tax_id_verified_active`) + an established LinkedIn page whose website
+    matches the domain (`linkedin_established_presence`,
+    `linkedin_presence_corroborates_entity`) — both trust signals on an
+    already-clean scenario.
+  - Brightpath Logistics LLC (`review`): FEIN not on file
+    (`tax_id_not_found`, elevated 0.5) — added to a scenario already
+    `review` for other reasons; the tier test confirms it doesn't push it
+    to `escalate`.
+  - Quantum Ledger Holdings (`escalate`): submitted LinkedIn URL doesn't
+    resolve (`linkedin_absent_or_thin`, elevated 0.15) — low weight, and
+    the scenario is already `escalate` on domain/registry signals alone.
+  - Tax-ID verification is US-only (`TaxIdAdapter.fetch`), so only the
+    three US scenarios (Northwind, Fabrikam, Brightpath) were even eligible
+    for a FEIN.
+  - Fabrikam Robotics Corp, Contoso Analytics GmbH, and Volga Maritime
+    Trading Ltd were left without tax-ID/LinkedIn records — the four
+    required states were already covered, and per the "smallest change"
+    rule, extra flavor records weren't added without a concrete need.
+- **New test:** `test_identity_corroboration_states_are_represented`
+  (`backend/tests/test_demo_data.py`) asserts the evidence table contains a
+  verified + name-matched FEIN, a not-found FEIN, a found LinkedIn page with
+  a matching website, and a not-found LinkedIn page — i.e. that the Identity
+  Corroboration panel actually has something to show for these scenarios,
+  not just that the tier test still passes.
+- **Production untouched:** `demo_data._stages` passes
+  `StubTaxIdProvider(s.tax_id_records)` / `StubLinkedInProvider(s.linkedin_pages)`
+  explicitly per scenario, rather than relying on the stub classes'
+  `DEFAULT_STUB_*` fallback tables (which are keyed to an unrelated "Acme
+  Corporation" fixture and would otherwise leak into scenarios that don't
+  intend a match). The real API/pipeline entrypoint still calls
+  `provider_from_env()`, which defaults to `Unconfigured*Provider` unless
+  `ENTITYIQ_TAX_ID_PROVIDER` / `ENTITYIQ_LINKEDIN_PROVIDER` is set to
+  `stub`.
+- **Not done:** README screenshots weren't refreshed (a design note, not an
+  acceptance criterion) — the Identity Corroboration panel's visible content
+  changed for 3 of 6 demo companies. Follow-up if the README screenshots are
+  revisited.
+
+---
+
+## 2026-09-24 — Filter dashboard by triage tier (backlog 0023)
+
+- **Backend:** `GET /reports` gains an optional `triage_tier` query param,
+  matched exactly against the tier stored in `report.summary.scores.triage_tier`
+  (same "read the pre-assembled JSON summary" pattern `_serialize_report`
+  already uses — no join, no new column). Unvalidated string equality, same
+  as the existing `event_type` filter on `GET /audit/events` — an unknown
+  value just returns an empty list rather than a 422; there's no enum type
+  for `triage_tier` anywhere else in the codebase to reuse.
+- **Frontend:** the dashboard's risk-band select (`RiskFilter` / `riskBand()`,
+  score buckets `<40` / `40–69` / `70+`) is replaced by a `TierFilter` select
+  keyed directly off `item.triage_tier`. Filtering stays client-side over the
+  already-fetched list, consistent with the existing search/review-status
+  filters (`docs/implementation-notes.md` 2026-05-31 P2-T10) — the new
+  `?triage_tier=` query param exists for API consumers, but the dashboard
+  itself doesn't need a network round-trip per filter change since the full
+  list (with `triage_tier` per item) is already in hand.
+- `data-testid="filter-risk"` renamed to `filter-tier`; `RiskFilter`/`riskBand`
+  removed (`scoreColor`'s tier-wins-over-band logic was untouched — it
+  already prioritized `triage_tier` over the score, per the 2026-09-24
+  "dashboard showed a sanctions hit as low risk" fix).
+- **Tests:** `test_list_filters_by_triage_tier` (backend) covers the
+  motivating case directly — a sanctions-style report at score 22 with
+  `triage_tier=escalate` is returned by `?triage_tier=escalate` and excluded
+  by `review`/`pre_clear`. `Dashboard.test.tsx`'s combined filter test was
+  rewritten (not appended) to drive the same scenario through the UI: a
+  high-score `review`-tier item and a low-score `escalate`-tier item,
+  asserting the escalate filter selects by tier, not score.
+- **Validation:** backend `ruff check`/`ruff format --check` clean, `pytest`
+  → 554 passed. Frontend `npm run lint` clean, `vitest run` → 41 passed (6
+  files), `npm run build` succeeds.
+
+---
+
+## 2026-09-24 — Verify audit + score-change history for identity signals (backlog 0019)
+
+- **No gap found — all three acceptance criteria were already met** by the
+  IC1 slice (backlog 0007–0013) and P2-T11/workflow. New tests in
+  `backend/tests/api/test_identity_audit_and_score_history.py` lock the
+  behavior in rather than fix anything:
+  1. `test_sources_used_audit_lists_tax_id_and_linkedin` — the report's
+     `sources` list (the "evidence sources used" surface per PRD §
+     Auditability Requirements / PRD-identity-corroboration § 11) already
+     includes `tax_id`/`linkedin` with `status="available"` once their
+     stages produce evidence — `_STAGE_SOURCES` in `scoring/report.py` was
+     wired for this in ticket 0012, and the "available" branch is generic
+     (groups by `Evidence.source`), so it needed no new code, just a
+     dedicated end-to-end assertion for this ticket.
+  2. `test_reanalysis_after_correction_records_score_change_from_new_signal`
+     — correcting a submission's `tax_id` (unknown FEIN → a matching one)
+     through `POST /workflow/runs/{id}/correct` and re-running produces a
+     new `RiskAssessment` whose `contributing_signals` swap
+     `tax_id_not_found` for `tax_id_verified_active` and whose
+     `overall_score` differs from the prior run's — already true because
+     each `VerificationRun` gets its own immutable `RiskAssessment` row and
+     `enqueue_reanalysis` never touches the prior run's persisted data.
+  3. `test_correction_and_reanalysis_never_mutates_prior_audit_rows` — every
+     `audit_event` row that existed before a correction is still present,
+     byte-identical, afterward; new events are appended, not merged in.
+     `AuditEvent` exposes no update/delete methods (by design, per its
+     docstring) and no code path in `workflow.py`/`reanalysis.py` does
+     anything but `record_event()` (insert-only), so this was already true.
+- **Non-tautology check:** before finalizing, each test's key assertion was
+  flipped (`==` ↔ `!=`, an absurd count) and re-run to confirm it actually
+  fails — all three did, for the expected reason — then reverted. Not left
+  in the test file; this was a one-off manual check, not a permanent
+  mutation-testing harness.
+- **Test infra:** `audit_client` fixture patches
+  `app.pipeline.orchestrator.enqueue_run` with a side effect that runs the
+  real `Orchestrator` synchronously against a stub-provider stage list
+  (`tests.pipeline.test_pipeline_e2e._stages`/`_submit`, reused rather than
+  duplicated) — the established "`enqueue_run` patched in API tests;
+  orchestrator uses `run_sync()` directly; no live Redis in CI" pattern
+  (P1-T2), extended so the patch actually *runs* the pipeline instead of
+  no-op'ing it, since these tests need real post-correction evidence/scores.
+- **Validation:** `ruff check`/`ruff format --check` clean; `pytest` → 557
+  passed (554 + 3 new).
+
+---
+
+## 2026-09-24 — Ticket 0002: PII retention + role-gated report access
+
+- **`work_email` deviates from "null the PII fields".** ADR-0002 §2 says to
+  null submitted PII fields on the reviewed/unreviewed schedule, and §3 says
+  no destructive migration is needed because the PII columns are already
+  nullable. `Submission.work_email` is `nullable=False`, so it can't
+  literally be nulled. Replaced it with a fixed placeholder
+  (`app.db.retention.ANONYMIZED_EMAIL`) instead — same effect (the real
+  address is gone), no migration. All other submitted-PII columns (tax_id,
+  billing_address, phone, requester_full_name, linkedin_url) are nulled as
+  written.
+- **Retention windows are computed in Python, not SQL.** SQLite drops tzinfo
+  on `DateTime(timezone=True)` reads even though Postgres preserves it
+  (verified directly against a throwaway SQLite engine). Rather than fight
+  per-dialect datetime comparisons, the job fetches not-yet-anonymized
+  candidate rows and compares cutoffs in Python after normalizing every
+  loaded datetime to aware-UTC (`app.db.retention._as_aware_utc`). Fine at
+  this MVP's scale; revisit with SQL-level filtering if the submission table
+  grows large enough for this to matter.
+- **"Reviewed" is decided per-submission, not per-run.** A submission can have
+  several verification runs (corrections trigger re-analysis). The retention
+  job uses the *latest* review decision across all of a submission's runs to
+  decide the reviewed-vs-unreviewed schedule and its cutoff.
+- **Idempotency has no dedicated flag column.** Re-running the job is a
+  structural no-op: network metadata is "done" once `user_agent`/
+  `forwarded_headers` are null and `source_ip` (if present) already carries a
+  CIDR suffix; PII is "done" once `work_email == ANONYMIZED_EMAIL`. Simpler
+  than a migration, and the job runs infrequently enough that the extra
+  per-row check is cheap.
+- **"Unauthorized PII access is denied and the attempt is audited"** is
+  implemented by auditing every `require_lead` 403 (`app/auth/operator.py`),
+  not a bespoke PII-specific check. Today the only lead-only surfaces are the
+  global audit log (`GET /audit/events`, which itself carries PII in event
+  payloads) and, from ticket 0026, API-key provisioning — both are covered by
+  the same gate, so centralizing the audit there avoided duplicating it per
+  route.
+- **Report redaction lives in `app/auth/pii.py`**, applied as one choke point
+  (`filter_summary_for_viewer`) both `GET /reports/{run_id}` and
+  `GET /reports/{run_id}/export` call. Raw network metadata is scoped
+  narrowly: the only place a literal IP address appears anywhere in the
+  report API today is `Evidence.attribution["source_url"]` on `ipinfo`
+  evidence (e.g. `https://ipinfo.io/73.162.40.18/json`) — Submission's own
+  `source_ip`/`user_agent`/`forwarded_headers` columns are never serialized
+  by any endpoint, so there was nothing else to gate there. Operators get the
+  derived `ipinfo` evidence fields (country, ASN, ...) with that one
+  IP-bearing attribution key stripped; integration API keys get no `ipinfo`
+  evidence/sources at all, plus the `billing_address` mismatch (contact PII)
+  removed from `mismatches`.
+- **A PII-view audit event is conditional, not unconditional**, via
+  `app.auth.pii.report_contains_pii()` — a report with no network metadata
+  and no contact-PII mismatches doesn't write a `report.viewed` event.
+  `report.exported` (pre-existing, ticket P2-T11) already audits every
+  export unconditionally, so export wasn't changed to add a second event.
+- **Test-suite fix, not a product change:** `tests/api/test_reports_pii.py`'s
+  `_client_as()` helper sets `app.dependency_overrides[get_principal]`
+  without its own teardown (it's a plain function, not a yielding fixture).
+  `app.dependency_overrides` is a dict on the process-wide FastAPI `app`
+  singleton, so a leftover override from one test module was leaking into
+  `tests/auth/test_service.py::test_submission_without_api_key_is_401`
+  further down the alphabetically-ordered test run, making it pass for the
+  wrong reason when run after `tests/api/*`. Fixed with an autouse
+  `_cleanup_dependency_overrides` fixture in that file; ran the two files
+  back-to-back afterward to confirm.
+
+---
+
+## 2026-09-24 — Ticket 0020: gate LinkedIn requester-association PII
+
+- **`associated_people` had no existing leak to redact.** The IC1-T4
+  LinkedIn adapter puts the requester-association name list in the
+  `linkedin_presence` Evidence row's `raw_payload` (ticket 0010), but
+  `app.scoring.report._build_summary()` never serializes `raw_payload` into
+  the report's `evidence` section — only `id/source/tier/field/raw_value/
+  normalized_value/confidence/attribution/fetched_at`. So there was nothing
+  to filter out of the *API* for this field; the real exposure is that it
+  sits in the DB indefinitely, including after the submission's own
+  `requester_full_name` is anonymized. Handled it as a retention concern
+  (scrub `raw_payload["associated_people"]` in `app.db.retention` on the same
+  submitted-PII schedule) rather than a report-filtering concern.
+  `linkedin_requester_match` (the true/false match evidence field, which
+  *is* serialized) is what actually needed the same lead/operator/system
+  gating as network metadata — added to `app/auth/pii.py`'s existing
+  `filter_summary_for_viewer()` machinery from ticket 0002 rather than a
+  parallel mechanism.
+  `linkedin_requester_match`'s own normalized_value ("true"/"false") is not
+  itself a name, so it's left untouched by retention — only the
+  `associated_people` list is stripped from the linked `linkedin_presence`
+  row.
+- **Requester-association evidence is visible to operators, not just leads**
+  — ADR-0002 §2 and the ticket both say "visible to operators and leads,"
+  unlike raw network metadata (leads only). Confirmed this doesn't
+  contradict anything: the match evidence is a boolean derived fact, not the
+  associated names themselves, so operator visibility doesn't leak the
+  requester's actual PII.
+
+---
+
+## 2026-09-24 — Ticket 0026: lead-only API-key provisioning
+
+- **`require_lead`'s denial-audit (ticket 0002) applies here for free.** These
+  three routes only needed `Depends(require_lead)`, same as the existing
+  global audit log — an operator's 403 is centrally audited by
+  `app/auth/operator.py`, not duplicated per route.
+- **No new `ApiClient` column for "created by".** The model already existed
+  (P2-T12); attribution for who created/revoked a key comes from the
+  `operator.api_client_created` / `operator.api_client_revoked` audit events
+  (`operator_id` + `payload.api_client_id`), not a new FK. Kept the model
+  change surface at zero.
+- **Duplicate-name check is a pre-query, not a caught `IntegrityError`.**
+  `ApiClient.name` is already unique at the DB level; the route pre-checks
+  and returns 409 with a clear message. A concurrent double-create could
+  still race past the pre-check into a DB-level `IntegrityError` — accepted
+  as a known, narrow gap rather than adding transaction-retry machinery for
+  a low-traffic admin action.
+- **Frontend mirrors the existing AuditLog pattern exactly**: lead-only nav
+  link hidden client-side (the API is the real gate), a dedicated page
+  component, hash-based routing in `App.tsx`. No new dependency, no
+  react-router.
+
+---
+
+## 2026-09-24 — Domain-ownership verification (backlog 0003, plan U24)
+
+- **Challenges are scoped to a run, not the submission/entity.** A challenge
+  is issued under a specific `run_id`; on verification its Evidence row is
+  attached to that same `verification_run_id` (Evidence.verification_run_id
+  is non-nullable). This keeps the feature self-contained and testable, but
+  means a re-analysis run does **not** automatically inherit a prior run's
+  verified ownership — the operator would need to re-issue/re-verify for the
+  new run, or a follow-up could carry ownership evidence forward across runs
+  for the same submission/entity. Not specified by the ticket; flagging as a
+  deliberate scope cut.
+- **Bounded trust signal, never authorization.** `domain_ownership_verified`
+  is a representation-layer trust signal with weight 0.25 (max 10-point swing
+  on the 0–100 layer score — see `_layer_score_from_signals`). The signal
+  description explicitly disclaims authorization, per PRD § Domain Ownership
+  Verification / USERS § 4. Tests assert the bound directly
+  (`tests/scoring/test_signals.py::TestOwnershipVerificationSignal`) rather
+  than relying on convention alone.
+- **DNS TXT / HTML meta-tag** are live checks against injectable clients
+  (`DnsTxtClient`, `HttpPageFetcher`) re-run on each `/verify` call — so a
+  challenge can be retried while DNS propagates or before the meta tag is
+  published, without re-issuing. **Email** has no independent network check
+  at verify time: the emailed token itself is the proof of mailbox control,
+  so verification is `submitted_token == challenge.token` (constant-time
+  compare). All three write the identical Evidence contract
+  (`source="ownership"`, `field="domain_ownership_verified"`), so
+  `app/scoring/signals.py` only needs one check to cover all three methods.
+- **Verify always returns 200**, with `verified: bool` — an absent/incorrect
+  token is a normal "not yet" outcome (e.g., DNS still propagating), not a
+  client error, so callers can safely poll/retry it.
+- **Email delivery is out of scope.** `EmailSender` defaults to an
+  "unconfigured" stub that raises (same pattern as
+  `UnconfiguredTaxIdProvider`); issuing an email challenge still succeeds
+  and returns the token so an operator can relay it manually. No new env var
+  or dependency was added for this — nothing to add to the runbook.
+- **Auth:** both operator (Bearer session) and integration API key
+  (`X-API-Key`) can issue/verify, via the existing shared `get_principal`
+  dependency (same pattern as `GET /reports`) — the ticket allows either,
+  and registrants never call EntityIQ's API directly (USERS § 4).
+- **Frontend:** added a minimal `OwnershipPanel` on the existing
+  `CompanyDetail` page (issue + list + check-verification), reusing
+  `OperatorActions`' inline-style conventions. It fetches on mount like
+  `ActivityPanel`, so two existing `CompanyDetail.test.tsx` tests that
+  hard-coded an exact `fetch` call order were switched to URL-routed mocks
+  (matches the file's own `routedFetch` pattern used elsewhere in the same
+  file) — a mechanical fix, not a behavior change.
+- **Migration:** `b3f7a2c9d4e1` (down_revision `a1b2c3d4e5f6`, current head
+  at the time this ticket was branched) adds `ownership_challenge`. Verified
+  upgrade/downgrade against a throwaway SQLite file.
+
+---
+
+## 2026-09-24 — Individual screening v1 (backlog 0027–0045, 0051, 0052)
+
+- **Decisions recorded:** all of PRD-IDV C1–C10. Libraries in ADR-0003
+  (cryptography 50.0.1, anyascii 0.3.3, jellyfish 1.2.1). Crypto-shred
+  retention in ADR-0004.
+- **Lists:** the parsers were checked against the live OFAC, UN, EU and UK
+  files. A smoke parse gave 7,534 / 736 / 4,465 / 3,834 individuals.
+  - Test fixtures are fictional entries in the real formats.
+  - UK OFSI ConList.csv showed "Last Updated 03/06/2026", so it may be being
+    replaced by the UK Sanctions List format. Watch it.
+- **Not in the plan: list ingestion.** The plan had parsers but nothing that
+  loads them in production. Added `python -m app.lists.ingest` (fetch, store a
+  snapshot only on a content-hash change, trigger monitoring) as part of 0051.
+  A live run ingested all four lists in about 30 s.
+- **Blocking cap (0037):** records matching every token of the subject's name
+  are never capped. The live lists have 440 full matches for "Mohammed Ali",
+  so a plain top-200 cap would silently drop true candidates. Only partial
+  matches are capped.
+- **Consonant skeleton bug:** found and fixed in 0038. It dropped the first
+  consonant after a leading vowel ("Iuliia" became key `sk:i`). The corpus
+  recall still passed before the fix, because of looser keys; there's now a
+  regression test.
+- **Country table:** new shared `app/lists/countries.py` (ISO 3166 plus
+  aliases), cross-checked against the EU file's code/name pairs. It maps
+  99.85% of live nationality strings. Screening doesn't import KYB's
+  40-country normalizer; the import-boundary test caught the attempt.
+- **Privacy:**
+  - Subject-side claims store only a locator into the encrypted subject blob.
+  - Decision `terms` are stored without subject values.
+  - Frozen inputs are encrypted with the subject key.
+- **Examiner role (0042):** implemented as one app-wide dependency that returns
+  403 on non-read requests for examiner tokens (allowlist: sign-in/out,
+  screening replay), so routes added later are covered too. Roles are
+  free-text strings, so no migration was needed (the ticket assumed one).
+- **Orchestrator:** now takes `run_model` and `on_time_limit` parameters, so
+  screening reuses stage timeouts, run budgets and isolated sessions. KYB
+  defaults are unchanged.
+- **Metrics finding (0045), a product decision to revisit:**
+  - Corpus results: blocking recall 1.0, FP rate at 100% recall 0.0,
+    reproducibility 1.0.
+  - Abstention is 1.0: every case lands in REVIEW. The default
+    `match_at = 0.9` is above name + full DOB (0.8), so nothing reaches MATCH
+    without a nationality or ID.
+  - Lowering `match_at` to 0.8 would be a new rule version, and a
+    risk-appetite call for the owner.
+- **Smoke run on the live lists:**
+  - A real, listed public figure (name + DOB + nationality) came back MATCH.
+  - A fictional person was auto-CLEARed.
+  - About 1.8 s per screening, against the PRD's 10 s target.
+- **Found on main:** commit 17c230f from the PR #1 branch (demo-seed guard +
+  HQ-confidence crash fix) never reached main. CLAUDE.md §12.1 describes a
+  guard that doesn't exist there. Restored on a separate fix branch.
+- **Follow-ups:**
+  - master-key rotation (re-wrap data keys);
+  - performance: decrypting all active subjects on each monitoring delta is
+    O(subjects);
+  - the UK list format watch;
+  - threshold tuning on labeled data.
+
+## 2026-09-24 — Screening code-review fixes (feat/individual-screening)
+
+Fixes for the fresh-context review of the screening branch, each test-first.
+
+- **Auto-CLEAR guard:** it now needs every required list present and fresh.
+  - Required lists come from `ENTITYIQ_SCREENING_REQUIRED_SOURCES`; freshness
+    from `ENTITYIQ_SCREENING_MAX_LIST_AGE_DAYS` (default 7).
+  - A missing or stale list marks the run's coverage `unavailable`, and
+    auto-CLEAR is blocked.
+- **Nickname blocking:** blocking also indexes a name's canonical nickname
+  form (normalizer `n2`).
+- **Corpus v2:** adds 10 ID+DOB-corroborated matches and 10 clean subjects.
+  - Results:
+    - MATCH 10/10 and CLEAR 10/10 in the new categories.
+    - Every other category lands in REVIEW, so abstention is 0.78 overall.
+    - Recall and reproducibility are 1.0.
+  - The match_at question above still stands: name + full DOB alone is
+    REVIEW.
+- **Queue pagination:**
+  - `GET /screenings` pages in SQL (`limit` default 50, max 500; `offset`)
+    and returns `total`.
+  - Query counts for the list and the detail no longer grow with rows; tests
+    pin this.
+  - The UI has a "Load more" button.
+- **Replay test:** the old one patched functions replay never calls. The new
+  test deletes every list row and blocks sockets. Mutation-checked.
+- **DOB conflicts:**
+  - `dob_conflict` (−0.35) now needs two full dates, as PRD §[13] already
+    said.
+  - Year- or month-level disagreement is the new `dob_partial_conflict`
+    (−0.15). Both floor a name match at REVIEW.
+  - Decision: stored rule configs that lack the new weight keep the old
+    behavior, so frozen decisions replay unchanged.
+- **List parsers:**
+  - Lowercase "dob" no longer crashes.
+  - One bad OFAC remark skips only that attribute (logged).
+  - Junk years drop only that DOB.
+  - Impossible dates such as 31 Feb keep the year and month.
+  - A file that won't parse is reported and keeps the last good snapshot.
+- **Integration-key reads (decision):**
+  - `GET /screenings/{run_id}` now accepts an integration key, as PRD §[16]
+    specifies. I briefly considered a separate `/result` endpoint and
+    dropped it because it diverged from the spec.
+  - A key sees only its own runs; any other run is a 404.
+  - Keys don't see analyst notes or operator ids.
+  - The queue stays operator-only.
+- **Smaller fixes:**
+  - A term with no cited claim is rejected at the model.
+  - Queue reads audit the run ids shown and the filters used.
+- **Retention guard:** a test runs KYB retention and crypto-shredding against
+  both SQLite and Postgres with the append-only triggers installed.
+- **Still open:** multi-tenant scoping for the operator side is a
+  pre-existing gap. Operators see all clients' data by design today.

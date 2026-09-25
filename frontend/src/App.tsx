@@ -14,11 +14,17 @@ import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { Dashboard } from "./pages/Dashboard";
 import { CompanyDetail } from "./pages/CompanyDetail";
 import { AuditLog } from "./pages/AuditLog";
+import { ApiKeys } from "./pages/ApiKeys";
+import { IndividualsQueue } from "./pages/screening/IndividualsQueue";
+import { IndividualDetail } from "./pages/screening/IndividualDetail";
 
 type Route =
   | { page: "dashboard" }
   | { page: "detail"; runId: string }
-  | { page: "audit" };
+  | { page: "audit" }
+  | { page: "api-keys" }
+  | { page: "individuals" }
+  | { page: "individual"; runId: string };
 
 function AppShell() {
   const { auth, signOut } = useAuth();
@@ -40,7 +46,21 @@ function AppShell() {
           EntityIQ
         </button>
         <div style={styles.navRight}>
-          {auth.role === "lead" && (
+          <button
+            onClick={() => navigate({ page: "dashboard" })}
+            style={styles.signOutBtn}
+            data-testid="nav-businesses"
+          >
+            Businesses
+          </button>
+          <button
+            onClick={() => navigate({ page: "individuals" })}
+            style={styles.signOutBtn}
+            data-testid="nav-individuals"
+          >
+            Individuals
+          </button>
+          {(auth.role === "lead" || auth.role === "examiner") && (
             <button
               onClick={() => navigate({ page: "audit" })}
               style={styles.signOutBtn}
@@ -49,8 +69,21 @@ function AppShell() {
               Audit Log
             </button>
           )}
+          {auth.role === "lead" && (
+            <button
+              onClick={() => navigate({ page: "api-keys" })}
+              style={styles.signOutBtn}
+              data-testid="nav-api-keys"
+            >
+              API Keys
+            </button>
+          )}
           <span style={styles.operatorInfo}>
-            {auth.role === "lead" ? "Lead" : "Operator"}
+            {auth.role === "lead"
+              ? "Lead"
+              : auth.role === "examiner"
+                ? "Examiner"
+                : "Operator"}
           </span>
           <button onClick={signOut} style={styles.signOutBtn}>
             Sign Out
@@ -73,12 +106,26 @@ function AppShell() {
             onOpenRun={(runId) => navigate({ page: "detail", runId })}
           />
         )}
+        {route.page === "individuals" && (
+          <IndividualsQueue
+            onSelect={(runId) => navigate({ page: "individual", runId })}
+          />
+        )}
+        {route.page === "individual" && (
+          <IndividualDetail
+            key={route.runId}
+            runId={route.runId}
+            onBack={() => navigate({ page: "individuals" })}
+            onOpenRun={(runId) => navigate({ page: "individual", runId })}
+          />
+        )}
         {route.page === "audit" && (
           <AuditLog
             token={auth.token}
             onOpenRun={(runId) => navigate({ page: "detail", runId })}
           />
         )}
+        {route.page === "api-keys" && <ApiKeys token={auth.token} />}
       </main>
     </div>
   );

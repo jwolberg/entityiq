@@ -252,6 +252,204 @@ export interface AddNotesResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Integration API-key provisioning (ticket 0026, lead only)
+// ---------------------------------------------------------------------------
+
+export interface CreateApiClientRequest {
+  name: string;
+}
+
+export interface CreateApiClientResponse {
+  id: string;
+  name: string;
+  key_prefix: string;
+  /** Plaintext — shown once. The caller must copy it now; it's never returned again. */
+  api_key: string;
+  active: boolean;
+  created_at: string;
+}
+
+export interface ApiClientListItem {
+  id: string;
+  name: string;
+  key_prefix: string;
+  active: boolean;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface ApiClientListResponse {
+  items: ApiClientListItem[];
+  total: number;
+}
+
+export interface RevokeApiClientResponse {
+  id: string;
+  name: string;
+  active: boolean;
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
+// Domain-ownership verification (ticket 0003)
+// ---------------------------------------------------------------------------
+
+export type OwnershipMethod = "dns_txt" | "email" | "html_meta";
+
+export interface IssueOwnershipChallengeRequest {
+  method: OwnershipMethod;
+  /** Required for method === "email"; ignored otherwise. */
+  target?: string;
+}
+
+export interface OwnershipChallengeInstructions {
+  method: OwnershipMethod;
+  dns_record_type?: string | null;
+  dns_record_name?: string | null;
+  dns_record_value?: string | null;
+  html_snippet?: string | null;
+  email_target?: string | null;
+}
+
+export interface OwnershipChallenge {
+  challenge_id: string;
+  run_id: string;
+  submission_id: string;
+  domain: string;
+  method: OwnershipMethod;
+  /** Null for email challenges: the token only goes to the emailed address. */
+  token: string | null;
+  /** "pending" | "verified" */
+  status: string;
+  issued_at: string;
+  verified_at: string | null;
+  instructions: OwnershipChallengeInstructions;
+  message: string;
+}
+
+export interface VerifyOwnershipChallengeRequest {
+  /** Required for method === "email"; ignored otherwise. */
+  submitted_token?: string;
+}
+
+export interface VerifyOwnershipChallengeResponse {
+  challenge_id: string;
+  method: OwnershipMethod;
+  verified: boolean;
+  status: string;
+  verified_at: string | null;
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
+// Individual screening (tickets 0036-0043)
+// ---------------------------------------------------------------------------
+
+export type SystemDisposition = "CLEAR" | "REVIEW" | "MATCH";
+
+export interface ScreeningQueuePage {
+  items: ScreeningQueueItem[];
+  total?: number;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ScreeningQueueItem {
+  run_id: string;
+  subject_name: string | null;
+  status: string;
+  trigger: string;
+  system_disposition: SystemDisposition | null;
+  auto_closed: boolean | null;
+  top_score: number | null;
+  human_disposition: "CLEAR" | "MATCH" | null;
+  created_at: string | null;
+}
+
+export interface ScreeningClaim {
+  about: "subject" | "record";
+  field: string;
+  value: unknown;
+  source: string;
+  locator: string;
+  retrieved_at: string | null;
+}
+
+export interface ScreeningTermView {
+  name: string;
+  weight: number;
+  subject_field: string;
+  record_field: string;
+  record_value: unknown;
+  claim_ids: string[];
+}
+
+export interface ScreeningCandidateView {
+  candidate_id: string;
+  score: number;
+  band: SystemDisposition;
+  blocking_keys: string[];
+  record: {
+    id: string;
+    source: string;
+    source_entry_id: string;
+    snapshot_id: string;
+    primary_name: string;
+    names: { name: string; kind: string }[];
+    dobs: Record<string, unknown>[];
+    pobs: string[];
+    nationalities: string[];
+    documents: { type: string; number: string; country: string | null }[];
+    program: string | null;
+  };
+  terms: ScreeningTermView[];
+  claims: Record<string, ScreeningClaim>;
+}
+
+export interface ScreeningDetail {
+  run_id: string;
+  subject: Record<string, unknown> | null;
+  subject_shredded: boolean;
+  kyb_entity_id: string | null;
+  run: RunTiming & { trigger: string };
+  decision: {
+    decision_id: string;
+    system_disposition: SystemDisposition;
+    auto_closed: boolean;
+    top_score: number | null;
+    rule_version: number | null;
+    thresholds: { clear_below: number; match_at: number };
+    snapshot_ids: string[];
+    normalizer_version: string;
+    created_at: string | null;
+  } | null;
+  candidates: ScreeningCandidateView[];
+  /** Present for monitoring runs (ticket 0052). */
+  monitoring?: {
+    snapshot_id: string;
+    source: string;
+    retrieved_at: string | null;
+    changed_entry_ids: string[];
+    prior_run_id: string | null;
+    prior_disposition: SystemDisposition | null;
+  } | null;
+  dispositions: {
+    disposition: "CLEAR" | "MATCH";
+    notes: string | null;
+    operator_id: string;
+    created_at: string | null;
+  }[];
+}
+
+export interface ReplayResult {
+  reproduced: boolean | null;
+  shredded: boolean;
+  original: { disposition: SystemDisposition } | null;
+  replayed: { disposition: SystemDisposition } | null;
+  differences: { field: string; original: unknown; replayed: unknown }[];
+}
+
+// ---------------------------------------------------------------------------
 // Client implementation
 // ---------------------------------------------------------------------------
 
@@ -286,6 +484,50 @@ async function request<T>(
 }
 
 export const apiClient = {
+  /** GET /screenings: individual screening queue. */
+  listScreenings(
+    token: string,
+    filters: { disposition?: string; trigger?: string; offset?: number } = {}
+  ): Promise<ScreeningQueuePage> {
+    const q = new URLSearchParams(
+      Object.entries(filters)
+        .filter(([, v]) => v)
+        .map(([k, v]) => [k, String(v)])
+    ).toString();
+    return request(`/screenings${q ? `?${q}` : ""}`, {}, token);
+  },
+
+  getScreening(runId: string, token: string): Promise<ScreeningDetail> {
+    return request(`/screenings/${runId}`, {}, token);
+  },
+
+  disposeScreening(
+    runId: string,
+    body: { disposition: "CLEAR" | "MATCH"; notes?: string },
+    token: string
+  ): Promise<{ disposition_id: string }> {
+    return request(
+      `/screenings/${runId}/disposition`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  },
+
+  replayScreening(runId: string, token: string): Promise<ReplayResult> {
+    return request(`/screenings/${runId}/replay`, { method: "POST" }, token);
+  },
+
+  submitScreening(
+    body: { name: string; dob?: string; nationality?: string },
+    token: string
+  ): Promise<{ run_id: string; disposition: SystemDisposition | null }> {
+    return request(
+      `/screenings`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  },
+
   /** POST /auth/sign-in — returns session token */
   signIn(body: SignInRequest): Promise<SignInResponse> {
     return request<SignInResponse>("/auth/sign-in", {
@@ -391,6 +633,70 @@ export const apiClient = {
       "/submissions",
       { method: "POST", body: JSON.stringify(body) },
       token,
+    );
+  },
+
+  /** POST /api-clients — create an integration API key (lead only; 403 for operators) */
+  createApiClient(
+    body: CreateApiClientRequest,
+    token: string
+  ): Promise<CreateApiClientResponse> {
+    return request<CreateApiClientResponse>(
+      "/api-clients",
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  },
+
+  /** GET /api-clients — list integration API keys (lead only) */
+  listApiClients(token: string): Promise<ApiClientListResponse> {
+    return request<ApiClientListResponse>("/api-clients", {}, token);
+  },
+
+  /** POST /api-clients/{id}/revoke — revoke an integration API key (lead only) */
+  revokeApiClient(id: string, token: string): Promise<RevokeApiClientResponse> {
+    return request<RevokeApiClientResponse>(
+      `/api-clients/${id}/revoke`,
+      { method: "POST" },
+      token
+    );
+  },
+
+  /** GET /ownership/runs/{run_id}/challenges — list challenges for a run */
+  listOwnershipChallenges(
+    runId: string,
+    token: string
+  ): Promise<OwnershipChallenge[]> {
+    return request<OwnershipChallenge[]>(
+      `/ownership/runs/${runId}/challenges`,
+      {},
+      token
+    );
+  },
+
+  /** POST /ownership/runs/{run_id}/challenges — issue a domain-ownership challenge */
+  issueOwnershipChallenge(
+    runId: string,
+    body: IssueOwnershipChallengeRequest,
+    token: string
+  ): Promise<OwnershipChallenge> {
+    return request<OwnershipChallenge>(
+      `/ownership/runs/${runId}/challenges`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  },
+
+  /** POST /ownership/challenges/{challenge_id}/verify — attempt verification */
+  verifyOwnershipChallenge(
+    challengeId: string,
+    body: VerifyOwnershipChallengeRequest,
+    token: string
+  ): Promise<VerifyOwnershipChallengeResponse> {
+    return request<VerifyOwnershipChallengeResponse>(
+      `/ownership/challenges/${challengeId}/verify`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
     );
   },
 };

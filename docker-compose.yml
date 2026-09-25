@@ -1,0 +1,100 @@
+# Full-stack local environment — Postgres, Redis, the API, the Celery worker
+# (non-eager), and the operator UI. See docs/RUNBOOK.md "Full stack" for the
+# exact commands and what this verifies (ticket 0025).
+#
+# For a lighter, Docker-free dev loop (SQLite, inline pipeline, no worker),
+# use ./scripts/demo.sh instead.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: entityiq
+      POSTGRES_PASSWORD: entityiq
+      POSTGRES_DB: entityiq
+    ports:
+      - "5432:5432"
+    volumes:
+      - entityiq-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U entityiq -d entityiq"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ./backend
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://entityiq:entityiq@db:5432/entityiq
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/0
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      ENTITYIQ_STAGE_TIMEOUT_SECONDS: ${ENTITYIQ_STAGE_TIMEOUT_SECONDS:-600}
+      ENTITYIQ_RUN_TIMEOUT_SECONDS: ${ENTITYIQ_RUN_TIMEOUT_SECONDS:-5400}
+      OPENCORPORATES_API_TOKEN: ${OPENCORPORATES_API_TOKEN:-}
+      IPINFO_TOKEN: ${IPINFO_TOKEN:-}
+      ENTITYIQ_TAX_ID_PROVIDER: ${ENTITYIQ_TAX_ID_PROVIDER:-}
+      ENTITYIQ_LINKEDIN_PROVIDER: ${ENTITYIQ_LINKEDIN_PROVIDER:-}
+      # Individual screening master key (ADR-0004). Unset = intake returns 503.
+      ENTITYIQ_SCREENING_MASTER_KEY: ${ENTITYIQ_SCREENING_MASTER_KEY:-}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+    # Default queue (business verification) + screening queue (ticket 0035).
+    command: celery -A app.worker.celery_app worker -Q celery,screening --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+psycopg://entityiq:entityiq@db:5432/entityiq
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ENTITYIQ_STAGE_TIMEOUT_SECONDS: ${ENTITYIQ_STAGE_TIMEOUT_SECONDS:-600}
+      ENTITYIQ_RUN_TIMEOUT_SECONDS: ${ENTITYIQ_RUN_TIMEOUT_SECONDS:-5400}
+      OPENCORPORATES_API_TOKEN: ${OPENCORPORATES_API_TOKEN:-}
+      IPINFO_TOKEN: ${IPINFO_TOKEN:-}
+      ENTITYIQ_TAX_ID_PROVIDER: ${ENTITYIQ_TAX_ID_PROVIDER:-}
+      ENTITYIQ_LINKEDIN_PROVIDER: ${ENTITYIQ_LINKEDIN_PROVIDER:-}
+      # Individual screening master key (ADR-0004). Unset = intake returns 503.
+      ENTITYIQ_SCREENING_MASTER_KEY: ${ENTITYIQ_SCREENING_MASTER_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  ui:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_TARGET: http://api:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
+volumes:
+  entityiq-pgdata:

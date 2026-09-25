@@ -33,7 +33,7 @@ def test_seed_creates_operator_and_lead_that_can_sign_in(db):
         op = db.query(Operator).filter(Operator.email == email).one()
         assert op.role == role
         assert verify_password(DEMO_PASSWORD, op.password_hash)
-    assert {r for _, _, r in DEMO_ACCOUNTS} == {"operator", "lead"}
+    assert {r for _, _, r in DEMO_ACCOUNTS} == {"operator", "lead", "examiner"}
 
 
 def test_seed_mints_api_key_once(db):

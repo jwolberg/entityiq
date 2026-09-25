@@ -131,7 +131,7 @@ describe("Dashboard", () => {
     expect(badgeTexts).toContain("Approved");
   });
 
-  it("filters by search, review status, and risk band", async () => {
+  it("filters by search, review status, and triage tier", async () => {
     const items = [
       {
         run_id: "run-1",
@@ -139,7 +139,8 @@ describe("Dashboard", () => {
         company_name: "Acme Corp",
         domain: "acme.example",
         status: "complete",
-        overall_score: 72, // high, pending
+        overall_score: 72,
+        triage_tier: "review", // high score, but tier is "review" not "escalate"
         review_status: null,
         generated_at: "2026-05-26T10:00:00Z",
       },
@@ -150,8 +151,20 @@ describe("Dashboard", () => {
         domain: "globex.example",
         status: "complete",
         overall_score: 25, // low, reviewed
+        triage_tier: "pre_clear",
         review_status: "approved",
         generated_at: "2026-05-25T09:00:00Z",
+      },
+      {
+        run_id: "run-3",
+        report_id: "rep-3",
+        company_name: "Volga Maritime",
+        domain: "volga.example",
+        status: "complete",
+        overall_score: 22, // low score, but a sanctions hit forces escalate
+        triage_tier: "escalate",
+        review_status: null,
+        generated_at: "2026-05-24T09:00:00Z",
       },
     ];
 
@@ -159,7 +172,7 @@ describe("Dashboard", () => {
       "fetch",
       vi.fn().mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ items, total: 2 }),
+        json: async () => ({ items, total: 3 }),
       })
     );
 
@@ -180,7 +193,7 @@ describe("Dashboard", () => {
     expect(screen.queryByText("Acme Corp")).toBeNull();
     expect(screen.getByText("Globex Ltd")).toBeDefined();
 
-    // Clear search; filter to pending review → only Acme
+    // Clear search; filter to pending review → Acme + Volga
     fireEvent.change(screen.getByTestId("dashboard-search"), {
       target: { value: "" },
     });
@@ -188,22 +201,21 @@ describe("Dashboard", () => {
       target: { value: "pending" },
     });
     expect(screen.getByText("Acme Corp")).toBeDefined();
+    expect(screen.getByText("Volga Maritime")).toBeDefined();
     expect(screen.queryByText("Globex Ltd")).toBeNull();
 
-    // Risk filter low + status all → only Globex
+    // Tier filter "escalate" + status all → only Volga, even at a low score
     fireEvent.change(screen.getByTestId("filter-review"), {
       target: { value: "all" },
     });
-    fireEvent.change(screen.getByTestId("filter-risk"), {
-      target: { value: "low" },
+    fireEvent.change(screen.getByTestId("filter-tier"), {
+      target: { value: "escalate" },
     });
-    expect(screen.getByText("Globex Ltd")).toBeDefined();
+    expect(screen.getByText("Volga Maritime")).toBeDefined();
     expect(screen.queryByText("Acme Corp")).toBeNull();
+    expect(screen.queryByText("Globex Ltd")).toBeNull();
 
     // Combination that matches nothing → no-matches notice
-    fireEvent.change(screen.getByTestId("filter-risk"), {
-      target: { value: "high" },
-    });
     fireEvent.change(screen.getByTestId("dashboard-search"), {
       target: { value: "globex" },
     });

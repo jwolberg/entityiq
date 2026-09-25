@@ -35,6 +35,9 @@ celery_app.conf.update(
     # without needing a live broker.
     task_always_eager=os.environ.get("CELERY_TASK_ALWAYS_EAGER", "false").lower()
     == "true",
+    # Individual screening runs on its own queue with its own budgets (C8).
+    task_routes={"entityiq.run_screening": {"queue": "screening"}},
+    include=["app.screening.tasks"],
 )
 
 
@@ -74,3 +77,24 @@ def run_verification_task(run_id: str) -> None:
     finally:
         db.close()
     logger.info("run_verification_task: finished run %s", run_id)
+
+
+@celery_app.task(name="entityiq.run_retention")
+def run_retention_task() -> dict:
+    """Celery task: run one PII retention pass (ADR-0002; ticket 0002).
+
+    Opens its own DB session, same pattern as run_verification_task. This
+    ticket wires the task only — scheduling it on a beat/cron (or an external
+    scheduler invoking `python -m app.db.retention`) is a deployment concern.
+    """
+    from app.db.retention import run_retention  # noqa: PLC0415
+    from app.db.session import SessionLocal  # noqa: PLC0415
+
+    logger.info("run_retention_task: starting")
+    db = SessionLocal()
+    try:
+        counts = run_retention(db)
+    finally:
+        db.close()
+    logger.info("run_retention_task: finished %s", counts)
+    return counts

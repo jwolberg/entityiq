@@ -142,7 +142,9 @@ pipeline from per-source quirks and the PRD's known "scraping brittleness" risk.
 ## 5. Authentication & authorization
 
 - **Operators / leads** — sign in via OIDC/SSO against the host organization's IdP; session-based.
-  **RBAC**: `operator` (review, correct, re-run) vs `lead` (oversight + audit).
+  **RBAC**: `operator` (review, correct, re-run) vs `lead` (oversight + audit) vs
+  `examiner` (read-only: all views, the global audit log, and screening replay;
+  an app-wide guard returns 403 on every other write).
   Every action is attributed and audited.
 - **Integrating systems** — authenticate at the API boundary with service
   credentials (API keys to start; mTLS as a later option). Submissions and report

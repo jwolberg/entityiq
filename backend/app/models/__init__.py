@@ -5,17 +5,22 @@ Import all models here so that:
   2. Application code has a single convenient import path.
 """
 
+# Individual screening tables (PRD-IDV §[15]) register with the same metadata.
+import app.screening.models  # noqa: E402,F401
 from app.models.api_client import ApiClient
 from app.models.audit_event import AuditEvent
 from app.models.entity import Entity
 from app.models.evidence import Evidence
 from app.models.field_comparison import FieldComparison
+from app.models.list_snapshot import ListSnapshot
 from app.models.operator import Operator
+from app.models.ownership_challenge import OwnershipChallenge
 from app.models.report import Report
 from app.models.review import Review
 from app.models.risk_assessment import RiskAssessment, risk_assessment_evidence
 from app.models.submission import Submission
 from app.models.verification_run import VerificationRun
+from app.models.watchlist_record import WatchlistRecord
 
 __all__ = [
     "ApiClient",
@@ -23,11 +28,14 @@ __all__ = [
     "Entity",
     "Evidence",
     "FieldComparison",
+    "ListSnapshot",
     "Operator",
+    "OwnershipChallenge",
     "Report",
     "Review",
     "RiskAssessment",
     "risk_assessment_evidence",
     "Submission",
     "VerificationRun",
+    "WatchlistRecord",
 ]

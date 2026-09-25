@@ -51,12 +51,10 @@ alt.csv integration is a follow-on.
 
 from __future__ import annotations
 
-import csv
-import io
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Any, Protocol
+from typing import Any
 
 from app.adapters.base import (
     AdapterContext,
@@ -65,11 +63,16 @@ from app.adapters.base import (
     AdapterSuccess,
 )
 from app.adapters.retry import RetryingAdapter
+
+# OFAC fetching and parsing live in the shared list module (IS1-T1); these
+# names stay importable from here for existing callers and tests.
+from app.lists.ofac import OFAC_SDN_URL as _OFAC_SDN_URL
+from app.lists.ofac import SdnListFetcher
+from app.lists.ofac import default_fetcher as _default_sdn_fetcher
+from app.lists.ofac import parse_sdn_csv as _parse_sdn_csv
 from app.models.evidence import Evidence
 
 logger = logging.getLogger(__name__)
-
-_OFAC_SDN_URL = "https://www.treasury.gov/ofac/downloads/sdn.csv"
 
 # Legal suffixes to strip before name comparison.  Applied to both query and
 # list entry.  Sorted longest-first so "private limited" is tried before
@@ -89,50 +92,6 @@ _LEGAL_SUFFIXES = re.compile(
 
 
 # ---------------------------------------------------------------------------
-# Injectable list-fetcher protocol
-# ---------------------------------------------------------------------------
-
-
-class SdnListFetcher(Protocol):
-    """Protocol for anything that can return the raw SDN list content."""
-
-    def fetch_csv(self) -> str:
-        """Return the raw CSV text of the SDN list.
-
-        Raises:
-            RuntimeError: if the list is unavailable or cannot be parsed.
-        """
-        ...
-
-
-# ---------------------------------------------------------------------------
-# Production fetcher (httpx-based, downloads from OFAC)
-# ---------------------------------------------------------------------------
-
-
-def _default_sdn_fetcher() -> "SdnListFetcher":
-    """Return the production OFAC SDN fetcher using httpx."""
-    try:
-        import httpx  # noqa: PLC0415
-    except ImportError as exc:
-        raise RuntimeError("httpx is required for the production SDN fetcher") from exc
-
-    class _OFACFetcher:
-        def fetch_csv(self) -> str:
-            try:
-                response = httpx.get(_OFAC_SDN_URL, timeout=30.0, follow_redirects=True)
-                if response.status_code != 200:
-                    raise RuntimeError(
-                        f"OFAC SDN fetch returned HTTP {response.status_code}"
-                    )
-                return response.text
-            except Exception as exc:
-                raise RuntimeError(f"Could not fetch OFAC SDN list: {exc}") from exc
-
-    return _OFACFetcher()
-
-
-# ---------------------------------------------------------------------------
 # SDN list parser
 # ---------------------------------------------------------------------------
 
@@ -145,26 +104,6 @@ def _strip_legal_suffix(name: str) -> str:
 def _normalize_name(name: str) -> str:
     """Lowercase and strip whitespace/punctuation for comparison."""
     return " ".join(_strip_legal_suffix(name).lower().split())
-
-
-def _parse_sdn_csv(csv_text: str) -> list[dict[str, str]]:
-    """Parse sdn.csv and return a list of dicts with 'id' and 'name' keys.
-
-    sdn.csv does not have a header row.  We read columns 1 (ent_num) and 2
-    (sdn_name) using 0-based indices 0 and 1 respectively.
-    """
-    entries: list[dict[str, str]] = []
-    reader = csv.reader(io.StringIO(csv_text))
-    for row in reader:
-        if len(row) < 2:
-            continue
-        ent_num = row[0].strip()
-        sdn_name = row[1].strip()
-        if not sdn_name or sdn_name.upper() == "SDN_NAME":
-            # Skip blank or header-like rows.
-            continue
-        entries.append({"id": ent_num, "name": sdn_name})
-    return entries
 
 
 # ---------------------------------------------------------------------------

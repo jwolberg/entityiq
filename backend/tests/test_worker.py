@@ -5,6 +5,8 @@ budget. If the soft limit fires anyway, the run is marked failed but the
 partial report is still assembled, so the run isn't lost.
 """
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import create_engine
@@ -12,11 +14,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 import app.models  # noqa: F401
 from app.db.session import Base
+from app.models.audit_event import AuditEvent
 from app.models.entity import Entity
 from app.models.report import Report
 from app.models.submission import Submission
 from app.models.verification_run import VerificationRun
-from app.worker import run_verification_task
+from app.worker import run_retention_task, run_verification_task
 
 
 @pytest.fixture
@@ -184,5 +187,49 @@ def test_soft_limit_signal_while_waiting_on_a_hung_stage(session_factory, monkey
             is not None
         )
         assert db.get(Entity, entity_id).canonical_domain is None
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Retention Celery task (ticket 0002)
+# ---------------------------------------------------------------------------
+
+
+def test_run_retention_task_anonymizes_and_returns_counts(session_factory):
+    db: Session = session_factory()
+    try:
+        entity = Entity(canonical_name="Retention Ltd")
+        db.add(entity)
+        db.flush()
+        sub = Submission(
+            company_name="Retention Ltd",
+            domain="retention.example",
+            work_email="ops@retention.example",
+            country="GB",
+            requester_full_name="Pat Requester",
+            entity_id=entity.id,
+            submitted_at=datetime.now(tz=timezone.utc) - timedelta(days=200),
+        )
+        db.add(sub)
+        db.commit()
+        submission_id = sub.id
+    finally:
+        db.close()
+
+    counts = run_retention_task()
+
+    assert counts["unreviewed_pii"] == 1
+
+    db = session_factory()
+    try:
+        sub = db.get(Submission, submission_id)
+        assert sub.requester_full_name is None
+        event = (
+            db.query(AuditEvent)
+            .filter(AuditEvent.event_type == "retention.anonymized")
+            .one()
+        )
+        assert event.payload["unreviewed_pii"] == 1
     finally:
         db.close()
