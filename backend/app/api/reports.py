@@ -194,14 +194,20 @@ def _serialize_report(
     summary="List all reports (operator dashboard)",
 )
 def list_reports(
+    triage_tier: str | None = None,
     db: Session = Depends(_get_db),
     _principal: Principal = Depends(get_principal),
 ) -> ReportListResponse:
     """Return a summary list of all reports for the operator dashboard.
 
     Each item includes company name, domain, report status, overall risk
-    score, review status, and analysis date.  Results are ordered newest
-    first by generated_at (falling back to created_at).
+    score, triage tier, review status, and analysis date.  Results are
+    ordered newest first by generated_at (falling back to created_at).
+
+    ``triage_tier`` optionally filters to one tier (``pre_clear`` | ``review``
+    | ``escalate``). Filtering by tier — not the score band derived from
+    ``overall_score`` — matters because a critical signal (e.g. a sanctions
+    hit) can force ``escalate`` at a low score (ARCHITECTURE § triage).
 
     This is a thin list — it does NOT return evidence, mismatches, or
     full scores.  Use GET /reports/{run_id} for the full report.
@@ -210,6 +216,15 @@ def list_reports(
 
     items: list[ReportListItemSchema] = []
     for report in reports:
+        # Overall score / tier from summary JSON
+        summary = report.summary or {}
+        scores_data = summary.get("scores") or {}
+        overall_score = scores_data.get("overall_score")
+        report_triage_tier = scores_data.get("triage_tier")
+
+        if triage_tier is not None and report_triage_tier != triage_tier:
+            continue
+
         # Resolve company info from submission via verification_run
         run = db.get(VerificationRun, report.verification_run_id)
         company_name = ""
@@ -219,12 +234,6 @@ def list_reports(
             if sub is not None:
                 company_name = sub.company_name
                 domain = sub.domain
-
-        # Overall score from summary JSON
-        summary = report.summary or {}
-        scores_data = summary.get("scores") or {}
-        overall_score = scores_data.get("overall_score")
-        triage_tier = scores_data.get("triage_tier")
 
         # Review status — None if no review row exists
         review = (
@@ -244,7 +253,7 @@ def list_reports(
                 domain=domain,
                 status=report.status,
                 overall_score=overall_score,
-                triage_tier=triage_tier,
+                triage_tier=report_triage_tier,
                 review_status=review_status,
                 generated_at=generated_at,
             )

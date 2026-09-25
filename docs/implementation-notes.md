@@ -1392,3 +1392,130 @@ single-tenant internal tool; multi-tenant would need per-client scoping.
 - **Not covered by this pass:** a production frontend build inside Docker
   (out of scope — see "ui service" note above), and TLS/ingress (MVP has
   none anywhere yet).
+
+---
+
+## 2026-09-24 — Demo identity corroboration records (backlog 0053)
+
+- **Which scenarios got which state** (design note left this open): the four
+  required states landed on three scenarios, chosen so the added signals
+  reinforce rather than contest each scenario's existing story — no tier
+  changed, so no deliberate `expected_tier` edits were needed.
+  - Northwind Traders Inc (`pre_clear`): verified FEIN with a name match
+    (`tax_id_verified_active`) + an established LinkedIn page whose website
+    matches the domain (`linkedin_established_presence`,
+    `linkedin_presence_corroborates_entity`) — both trust signals on an
+    already-clean scenario.
+  - Brightpath Logistics LLC (`review`): FEIN not on file
+    (`tax_id_not_found`, elevated 0.5) — added to a scenario already
+    `review` for other reasons; the tier test confirms it doesn't push it
+    to `escalate`.
+  - Quantum Ledger Holdings (`escalate`): submitted LinkedIn URL doesn't
+    resolve (`linkedin_absent_or_thin`, elevated 0.15) — low weight, and
+    the scenario is already `escalate` on domain/registry signals alone.
+  - Tax-ID verification is US-only (`TaxIdAdapter.fetch`), so only the
+    three US scenarios (Northwind, Fabrikam, Brightpath) were even eligible
+    for a FEIN.
+  - Fabrikam Robotics Corp, Contoso Analytics GmbH, and Volga Maritime
+    Trading Ltd were left without tax-ID/LinkedIn records — the four
+    required states were already covered, and per the "smallest change"
+    rule, extra flavor records weren't added without a concrete need.
+- **New test:** `test_identity_corroboration_states_are_represented`
+  (`backend/tests/test_demo_data.py`) asserts the evidence table contains a
+  verified + name-matched FEIN, a not-found FEIN, a found LinkedIn page with
+  a matching website, and a not-found LinkedIn page — i.e. that the Identity
+  Corroboration panel actually has something to show for these scenarios,
+  not just that the tier test still passes.
+- **Production untouched:** `demo_data._stages` passes
+  `StubTaxIdProvider(s.tax_id_records)` / `StubLinkedInProvider(s.linkedin_pages)`
+  explicitly per scenario, rather than relying on the stub classes'
+  `DEFAULT_STUB_*` fallback tables (which are keyed to an unrelated "Acme
+  Corporation" fixture and would otherwise leak into scenarios that don't
+  intend a match). The real API/pipeline entrypoint still calls
+  `provider_from_env()`, which defaults to `Unconfigured*Provider` unless
+  `ENTITYIQ_TAX_ID_PROVIDER` / `ENTITYIQ_LINKEDIN_PROVIDER` is set to
+  `stub`.
+- **Not done:** README screenshots weren't refreshed (a design note, not an
+  acceptance criterion) — the Identity Corroboration panel's visible content
+  changed for 3 of 6 demo companies. Follow-up if the README screenshots are
+  revisited.
+
+---
+
+## 2026-09-24 — Filter dashboard by triage tier (backlog 0023)
+
+- **Backend:** `GET /reports` gains an optional `triage_tier` query param,
+  matched exactly against the tier stored in `report.summary.scores.triage_tier`
+  (same "read the pre-assembled JSON summary" pattern `_serialize_report`
+  already uses — no join, no new column). Unvalidated string equality, same
+  as the existing `event_type` filter on `GET /audit/events` — an unknown
+  value just returns an empty list rather than a 422; there's no enum type
+  for `triage_tier` anywhere else in the codebase to reuse.
+- **Frontend:** the dashboard's risk-band select (`RiskFilter` / `riskBand()`,
+  score buckets `<40` / `40–69` / `70+`) is replaced by a `TierFilter` select
+  keyed directly off `item.triage_tier`. Filtering stays client-side over the
+  already-fetched list, consistent with the existing search/review-status
+  filters (`docs/implementation-notes.md` 2026-05-31 P2-T10) — the new
+  `?triage_tier=` query param exists for API consumers, but the dashboard
+  itself doesn't need a network round-trip per filter change since the full
+  list (with `triage_tier` per item) is already in hand.
+- `data-testid="filter-risk"` renamed to `filter-tier`; `RiskFilter`/`riskBand`
+  removed (`scoreColor`'s tier-wins-over-band logic was untouched — it
+  already prioritized `triage_tier` over the score, per the 2026-09-24
+  "dashboard showed a sanctions hit as low risk" fix).
+- **Tests:** `test_list_filters_by_triage_tier` (backend) covers the
+  motivating case directly — a sanctions-style report at score 22 with
+  `triage_tier=escalate` is returned by `?triage_tier=escalate` and excluded
+  by `review`/`pre_clear`. `Dashboard.test.tsx`'s combined filter test was
+  rewritten (not appended) to drive the same scenario through the UI: a
+  high-score `review`-tier item and a low-score `escalate`-tier item,
+  asserting the escalate filter selects by tier, not score.
+- **Validation:** backend `ruff check`/`ruff format --check` clean, `pytest`
+  → 554 passed. Frontend `npm run lint` clean, `vitest run` → 41 passed (6
+  files), `npm run build` succeeds.
+
+---
+
+## 2026-09-24 — Verify audit + score-change history for identity signals (backlog 0019)
+
+- **No gap found — all three acceptance criteria were already met** by the
+  IC1 slice (backlog 0007–0013) and P2-T11/workflow. New tests in
+  `backend/tests/api/test_identity_audit_and_score_history.py` lock the
+  behavior in rather than fix anything:
+  1. `test_sources_used_audit_lists_tax_id_and_linkedin` — the report's
+     `sources` list (the "evidence sources used" surface per PRD §
+     Auditability Requirements / PRD-identity-corroboration § 11) already
+     includes `tax_id`/`linkedin` with `status="available"` once their
+     stages produce evidence — `_STAGE_SOURCES` in `scoring/report.py` was
+     wired for this in ticket 0012, and the "available" branch is generic
+     (groups by `Evidence.source`), so it needed no new code, just a
+     dedicated end-to-end assertion for this ticket.
+  2. `test_reanalysis_after_correction_records_score_change_from_new_signal`
+     — correcting a submission's `tax_id` (unknown FEIN → a matching one)
+     through `POST /workflow/runs/{id}/correct` and re-running produces a
+     new `RiskAssessment` whose `contributing_signals` swap
+     `tax_id_not_found` for `tax_id_verified_active` and whose
+     `overall_score` differs from the prior run's — already true because
+     each `VerificationRun` gets its own immutable `RiskAssessment` row and
+     `enqueue_reanalysis` never touches the prior run's persisted data.
+  3. `test_correction_and_reanalysis_never_mutates_prior_audit_rows` — every
+     `audit_event` row that existed before a correction is still present,
+     byte-identical, afterward; new events are appended, not merged in.
+     `AuditEvent` exposes no update/delete methods (by design, per its
+     docstring) and no code path in `workflow.py`/`reanalysis.py` does
+     anything but `record_event()` (insert-only), so this was already true.
+- **Non-tautology check:** before finalizing, each test's key assertion was
+  flipped (`==` ↔ `!=`, an absurd count) and re-run to confirm it actually
+  fails — all three did, for the expected reason — then reverted. Not left
+  in the test file; this was a one-off manual check, not a permanent
+  mutation-testing harness.
+- **Test infra:** `audit_client` fixture patches
+  `app.pipeline.orchestrator.enqueue_run` with a side effect that runs the
+  real `Orchestrator` synchronously against a stub-provider stage list
+  (`tests.pipeline.test_pipeline_e2e._stages`/`_submit`, reused rather than
+  duplicated) — the established "`enqueue_run` patched in API tests;
+  orchestrator uses `run_sync()` directly; no live Redis in CI" pattern
+  (P1-T2), extended so the patch actually *runs* the pipeline instead of
+  no-op'ing it, since these tests need real post-correction evidence/scores.
+- **Validation:** `ruff check`/`ruff format --check` clean; `pytest` → 557
+  passed (554 + 3 new).

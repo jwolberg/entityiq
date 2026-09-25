@@ -258,3 +258,52 @@ def test_list_exposes_triage_tier(list_client, list_engine):
     items = list_client.get("/reports").json()["items"]
     match = next(i for i in items if i["run_id"] == run_id)
     assert match["triage_tier"] == "escalate"
+
+
+def test_list_filters_by_triage_tier(list_client, list_engine):
+    """0023: filtering by triage_tier, not score band, so a sanctions hit at
+    a low score is still found by `?triage_tier=escalate`."""
+    SessionMaker = sessionmaker(bind=list_engine, autocommit=False, autoflush=False)
+    db = SessionMaker()
+    try:
+        escalate_run_id, escalate_report_id = _make_report(
+            db, "Volga Escalate Ltd", "volga-escalate.example", 22.0
+        )
+        report = db.get(Report, escalate_report_id)
+        report.summary = {"scores": {"overall_score": 22.0, "triage_tier": "escalate"}}
+        db.commit()
+
+        review_run_id, review_report_id = _make_report(
+            db, "Steady Review Inc", "steady-review.example", 55.0
+        )
+        report = db.get(Report, review_report_id)
+        report.summary = {"scores": {"overall_score": 55.0, "triage_tier": "review"}}
+        db.commit()
+
+        clear_run_id, clear_report_id = _make_report(
+            db, "Clearview Co", "clearview.example", 12.0
+        )
+        report = db.get(Report, clear_report_id)
+        report.summary = {"scores": {"overall_score": 12.0, "triage_tier": "pre_clear"}}
+        db.commit()
+    finally:
+        db.close()
+
+    resp = list_client.get("/reports", params={"triage_tier": "escalate"})
+    assert resp.status_code == 200, resp.text
+    items = resp.json()["items"]
+    run_ids = {i["run_id"] for i in items}
+
+    # A low-score sanctions escalation is included — the point of this ticket.
+    assert escalate_run_id in run_ids
+    match = next(i for i in items if i["run_id"] == escalate_run_id)
+    assert match["overall_score"] == 22.0
+    assert match["triage_tier"] == "escalate"
+
+    # Other tiers are excluded.
+    assert review_run_id not in run_ids
+    assert clear_run_id not in run_ids
+
+    # No filter at all → both tiers still present (existing behavior).
+    unfiltered_ids = {i["run_id"] for i in list_client.get("/reports").json()["items"]}
+    assert {escalate_run_id, review_run_id, clear_run_id} <= unfiltered_ids
