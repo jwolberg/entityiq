@@ -7,12 +7,14 @@ Run from backend/ with DATABASE_URL set:
 Idempotent — safe to run on every start (scripts/demo.sh does). The API key's
 plaintext is printed only when it is first created; keys are stored hashed.
 
-These credentials are for local demos only. Never run this against a shared or
-production database.
+These credentials are for local demos only. The seed refuses any non-SQLite
+DATABASE_URL unless ENTITYIQ_ALLOW_DEMO_SEED=1 is set, because it creates
+accounts with a publicly documented password.
 """
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
@@ -28,6 +30,21 @@ DEMO_ACCOUNTS: list[tuple[str, str, str]] = [
     ("lead@demo.entityiq.dev", "Demo Lead", "lead"),
 ]
 DEMO_API_CLIENT = "demo-integration"
+
+
+class UnsafeSeedTarget(RuntimeError):
+    """Raised when the seed would write demo credentials to a non-local DB."""
+
+
+def check_seed_target(database_url: str) -> None:
+    if database_url.startswith("sqlite"):
+        return
+    if os.environ.get("ENTITYIQ_ALLOW_DEMO_SEED") == "1":
+        return
+    raise UnsafeSeedTarget(
+        "Refusing to seed demo accounts (public password) into a non-SQLite "
+        "database. Set ENTITYIQ_ALLOW_DEMO_SEED=1 if this really is a throwaway DB."
+    )
 
 
 @dataclass
@@ -59,8 +76,9 @@ def seed(db: Session) -> SeedResult:
 
 
 def main() -> None:
-    from app.db.session import SessionLocal  # noqa: PLC0415
+    from app.db.session import DATABASE_URL, SessionLocal  # noqa: PLC0415
 
+    check_seed_target(DATABASE_URL)
     db = SessionLocal()
     try:
         result = seed(db)
