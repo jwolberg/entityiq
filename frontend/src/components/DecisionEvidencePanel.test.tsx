@@ -65,7 +65,10 @@ describe("DecisionEvidencePanel", () => {
       "why-step-disposition", "why-step-human",
     ]);
     expect(screen.getByTestId("why-step-sources").textContent).toMatch(/UK OFSI Consolidated List.*unavailable/s);
-    expect(screen.getByTestId("why-step-blocking").textContent).toMatch(/2 candidates/);
+    expect(screen.getByTestId("why-step-blocking").textContent).toMatch(
+      /2 list records matched at least part of the subject's name/
+    );
+    expect(screen.getByTestId("why-step-blocking").textContent).not.toMatch(/name key|capped/);
     expect(screen.getByTestId("why-step-disposition").textContent).toMatch(/list:uk_ofsi/);
     expect(screen.getByTestId("why-step-human").textContent).toMatch(/confirmed on passport/);
     expect(screen.getByTestId("why-step-human").textContent).toMatch(/Reproduced/);
@@ -106,9 +109,18 @@ describe("DecisionEvidencePanel", () => {
     const dialog = await screen.findByRole("dialog");
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
 
-    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.keyDown(dialog, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it("ignores Esc pressed outside the panel (it's non-modal)", async () => {
+    mockFetch(ok(EXPLANATION));
+    render(<><textarea data-testid="notes" /><Harness /></>);
+    fireEvent.click(screen.getByText("Why this decision?"));
+    await screen.findByRole("dialog");
+    fireEvent.keyDown(screen.getByTestId("notes"), { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeNull();
   });
 
   it("closes from its close button", async () => {
@@ -119,22 +131,56 @@ describe("DecisionEvidencePanel", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("marks the focused candidate", async () => {
+  it("marks and moves focus to the targeted candidate", async () => {
     mockFetch(ok(EXPLANATION));
     render(<Harness focus="c2" />);
     fireEvent.click(screen.getByText("Why this decision?"));
     const c2 = await screen.findByTestId("why-cand-c2");
     expect(c2.dataset.focused).toBe("true");
     expect(screen.getByTestId("why-cand-c1").dataset.focused).toBe("false");
+    await waitFor(() => expect(document.activeElement).toBe(c2));
   });
 
-  it("fails soft when the explanation can't load", async () => {
-    mockFetch(() => new Response(JSON.stringify({ detail: "boom" }), { status: 500 }));
+  it("shows list values as plain text, not JSON", async () => {
+    mockFetch(ok(EXPLANATION));
+    render(<Harness />);
+    fireEvent.click(screen.getByText("Why this decision?"));
+    const term = await screen.findByTestId("why-term-c1-dob_conflict");
+    expect(term.textContent).toContain("List value: 1962-08-31");
+    expect(term.textContent).not.toMatch(/[{}"[\]]/);
+  });
+
+  it("confirms when the snapshot hash is copied", async () => {
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    mockFetch(ok(EXPLANATION));
+    render(<Harness />);
+    fireEvent.click(screen.getByText("Why this decision?"));
+    fireEvent.click((await screen.findAllByTestId("citation-rec-dobs"))[0]);
+    const copy = screen.getByRole("button", { name: /copy/i });
+    await act(async () => {
+      fireEvent.click(copy);
+    });
+    expect(writeText).toHaveBeenCalledWith("abcdef0123456789abcdef");
+    expect(copy.textContent).toBe("Copied");
+  });
+
+  it("fails soft when the explanation can't load, and can retry", async () => {
+    let fail = true;
+    const mock = mockFetch(() =>
+      fail
+        ? new Response(JSON.stringify({ detail: "boom" }), { status: 500 })
+        : new Response(JSON.stringify(EXPLANATION), { status: 200 })
+    );
     render(<Harness />);
     fireEvent.click(screen.getByText("Why this decision?"));
     expect((await screen.findByTestId("why-error")).textContent).toMatch(
       /Decision explanation is unavailable right now\./
     );
+    fail = false;
+    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+    await screen.findByTestId("why-step-disposition");
+    expect(mock).toHaveBeenCalledTimes(2);
   });
 
   it("says the decision isn't made yet while the run is in flight, without fetching", async () => {
@@ -159,7 +205,7 @@ describe("DecisionEvidencePanel", () => {
         : s.kind === "scoring" || s.kind === "banding" ? { ...s, candidates: [] }
         : s.kind === "disposition"
           ? { ...s, system_disposition: "CLEAR" as const, auto_closed: true, reason_code: "no_candidates",
-              reason_text: "No list record shared a name key with the subject, and every required list was available and fresh, so the run closed as CLEAR without a human.",
+              reason_text: "No list record matched any part of the subject's name, and every required list was available and fresh, so the run closed as CLEAR without a human.",
               coverage_gaps: [] }
           : s
     );
@@ -167,7 +213,7 @@ describe("DecisionEvidencePanel", () => {
     render(<Harness />);
     fireEvent.click(screen.getByText("Why this decision?"));
     expect((await screen.findByTestId("why-step-blocking")).textContent).toMatch(
-      /No list record shared a name key with the subject/
+      /No list record matched any part of the subject's name/
     );
     expect((screen.getByTestId("why-step-disposition")).textContent).toMatch(/without a human/);
   });
@@ -179,7 +225,9 @@ describe("DecisionEvidencePanel", () => {
     mockFetch(ok({ ...EXPLANATION, steps }));
     render(<Harness />);
     fireEvent.click(screen.getByText("Why this decision?"));
-    expect((await screen.findByTestId("why-drift")).textContent).toMatch(/normalizer n2/);
+    const drift = (await screen.findByTestId("why-drift")).textContent;
+    expect(drift).toMatch(/This decision was made under rule v1, normalizer n2/);
+    expect(drift).toMatch(/today's rules/);
   });
 
   it("refetches when the page's refresh tick changes", async () => {

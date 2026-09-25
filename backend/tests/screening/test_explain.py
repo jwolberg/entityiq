@@ -146,7 +146,11 @@ def test_banding_step_explains_the_threshold_in_words(api_env):
     assert steps["banding"]["thresholds"] == {"clear_below": 0.35, "match_at": 0.9}
     [c] = steps["banding"]["candidates"]
     assert c["band"] == "REVIEW" and c["reason_code"] == "between_thresholds"
-    assert "0.35" in c["reason_text"] and "0.9" in c["reason_text"]
+    # Reads correctly even when the score sits exactly on the clear threshold.
+    assert c["reason_text"] == (
+        f"Score {c['score']:g} is at or above the clear threshold (0.35) and "
+        "below the match threshold (0.9) → REVIEW."
+    )
     assert steps["disposition"]["reason_code"] == "rollup_most_severe"
 
 
@@ -225,6 +229,9 @@ def test_clean_subject_explains_the_auto_clear(api_env):
     steps = _steps(_explain(api_env, run_id).json())
     assert steps["blocking"]["candidate_count"] == 0
     assert steps["disposition"]["reason_code"] == "no_candidates"
+    assert steps["disposition"]["reason_text"].startswith(
+        "No list record matched any part of the subject's name"
+    )
     assert steps["disposition"]["auto_closed"] is True
     assert steps["disposition"]["coverage_gaps"] == []
 

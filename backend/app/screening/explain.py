@@ -47,8 +47,8 @@ TERM_LABELS = {
 BAND_REASONS = {
     "score_at_or_above_match": "Score {score} is at or above the match threshold "
     "({match_at}) → MATCH.",
-    "between_thresholds": "Score {score} is between the clear ({clear_below}) and "
-    "match ({match_at}) thresholds → REVIEW.",
+    "between_thresholds": "Score {score} is at or above the clear threshold "
+    "({clear_below}) and below the match threshold ({match_at}) → REVIEW.",
     "conflict_floor": "Score {score} is below the clear threshold ({clear_below}), "
     "but a name match with a conflicting date of birth or ID can't clear on its "
     "own (lists carry errors) → REVIEW.",
@@ -62,9 +62,9 @@ RUN_REASONS = {
     "auto_clear_allowed": "Every candidate is below the clear threshold and every "
     "required list was available and fresh, so the run closed as CLEAR without "
     "a human.",
-    "no_candidates": "No list record shared a name key with the subject, and every "
-    "required list was available and fresh, so the run closed as CLEAR without "
-    "a human.",
+    "no_candidates": "No list record matched any part of the subject's name, and "
+    "every required list was available and fresh, so the run closed as CLEAR "
+    "without a human.",
     "auto_clear_blocked_by_coverage": "The candidates alone would clear, but "
     "{gaps} was missing or stale, so the run can't auto-clear → REVIEW.",
 }

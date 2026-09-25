@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { AuthContext } from "../../auth/AuthContext";
 import { IndividualsQueue } from "./IndividualsQueue";
 import { IndividualDetail, SCREENING_POLL_MS } from "./IndividualDetail";
+import { EXPLANATION } from "../../components/explanationFixture";
 
 function withRole(role: string) {
   const value = { auth: { token: "t", operatorId: "op", role }, signOut: vi.fn() };
@@ -138,7 +139,8 @@ describe("IndividualDetail", () => {
     expect(within(cand).getByTestId("term-name_exact_normalized").textContent).toContain("+0.5");
     expect(within(cand).getByTestId("term-dob_conflict").textContent).toContain("-0.35");
     expect(within(cand).getByTestId("term-dob_conflict").getAttribute("data-tone")).toBe("conflict");
-    expect(within(cand).getByText("ofac_sdn:9001@snap-ofac-1#names")).toBeDefined();
+    // Raw locators moved to the evidence panel (ticket 0070).
+    expect(cand.textContent).not.toContain("ofac_sdn:9001@snap-ofac-1#names");
     expect(screen.getByTestId("decision-meta").textContent).toContain("rule v3");
     expect(screen.getByTestId("decision-meta").textContent).toContain("snap-ofac-1");
   });
@@ -199,5 +201,74 @@ describe("IndividualDetail", () => {
     await waitFor(() => expect(screen.getByTestId("candidate-c1")).toBeDefined());
     await vi.advanceTimersByTimeAsync(SCREENING_POLL_MS * 3);
     expect(calls.filter((c) => c === "GET /api/screenings/r-match")).toHaveLength(2);
+  });
+});
+
+describe("IndividualDetail evidence panel (ticket 0070)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    window.history.replaceState({}, "", "/");
+  });
+
+  // Explanation first: routed() matches by prefix.
+  const routes = () => ({
+    "/screenings/r-match/explanation": EXPLANATION,
+    "/screenings/r-match": detail(),
+  });
+
+  it("opens from the header button and records the deep link", async () => {
+    const calls = routed(routes());
+    const Wrapper = withRole("examiner");
+    render(<Wrapper><IndividualDetail runId="r-match" onBack={vi.fn()} /></Wrapper>);
+    fireEvent.click(await screen.findByTestId("why-open"));
+    expect(await screen.findByRole("dialog")).toBeDefined();
+    await screen.findByTestId("why-step-disposition");
+    expect(calls).toContain("GET /api/screenings/r-match/explanation");
+    expect(window.location.search).toBe("?why=1");
+
+    fireEvent.click(screen.getByRole("button", { name: /close/i }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(window.location.search).toBe("");
+  });
+
+  it("opens from a candidate's Why? link, focused on that candidate", async () => {
+    routed(routes());
+    const Wrapper = withRole("operator");
+    render(<Wrapper><IndividualDetail runId="r-match" onBack={vi.fn()} /></Wrapper>);
+    fireEvent.click(await screen.findByTestId("why-cand-link-c1"));
+    const target = await screen.findByTestId("why-cand-c1");
+    expect(target.dataset.focused).toBe("true");
+    expect(window.location.search).toBe("?why=1&candidate=c1");
+  });
+
+  it("opens on load from a ?why=1&candidate= link", async () => {
+    window.history.replaceState({}, "", "/?why=1&candidate=c2");
+    routed(routes());
+    const Wrapper = withRole("examiner");
+    render(<Wrapper><IndividualDetail runId="r-match" onBack={vi.fn()} /></Wrapper>);
+    const target = await screen.findByTestId("why-cand-c2");
+    expect(target.dataset.focused).toBe("true");
+  });
+
+  it("clears the deep link when leaving the page with the panel open", async () => {
+    routed(routes());
+    const Wrapper = withRole("operator");
+    const { unmount } = render(<Wrapper><IndividualDetail runId="r-match" onBack={vi.fn()} /></Wrapper>);
+    fireEvent.click(await screen.findByTestId("why-open"));
+    await screen.findByRole("dialog");
+    expect(window.location.search).toBe("?why=1");
+    unmount();
+    // Otherwise the next run opened would pop the panel open on its own.
+    expect(window.location.search).toBe("");
+  });
+
+  it("keeps the disposition form usable with the panel open", async () => {
+    routed(routes());
+    const Wrapper = withRole("operator");
+    render(<Wrapper><IndividualDetail runId="r-match" onBack={vi.fn()} /></Wrapper>);
+    fireEvent.click(await screen.findByTestId("why-open"));
+    await screen.findByRole("dialog");
+    expect(screen.getByTestId("disposition-form")).toBeDefined();
+    expect((screen.getByTestId("dispose-CLEAR") as HTMLButtonElement).disabled).toBe(false);
   });
 });

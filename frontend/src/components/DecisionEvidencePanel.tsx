@@ -17,6 +17,7 @@ import {
   ScreeningExplanation,
 } from "../api/client";
 import { DispositionBadge } from "./DispositionBadge";
+import { formatListValue } from "./formatValue";
 
 type Step<K extends ExplanationStep["kind"]> = Extract<ExplanationStep, { kind: K }>;
 
@@ -26,12 +27,6 @@ function step<K extends ExplanationStep["kind"]>(e: ScreeningExplanation, kind: 
 
 function day(iso: string | null | undefined): string {
   return iso ? iso.slice(0, 10) : "unknown date";
-}
-
-function fmt(value: unknown): string {
-  if (value === null || value === undefined) return "—";
-  if (typeof value === "string") return value;
-  return JSON.stringify(value);
 }
 
 function citationText(c: ScreeningCitation): string {
@@ -44,6 +39,30 @@ function citationLabel(c: ScreeningCitation): string {
   return (
     `Evidence: ${c.display_name}, entry ${c.entry_id ?? "unknown"}, field ${c.field}, ` +
     `list as of ${day(c.snapshot_retrieved_at)}. Show details`
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(t);
+  }, [copied]);
+  return (
+    <button
+      type="button"
+      style={styles.linkBtn}
+      aria-label={copied ? "Copied" : "Copy the full SHA-256"}
+      onClick={() =>
+        void navigator.clipboard?.writeText(text).then(
+          () => setCopied(true),
+          () => undefined
+        )
+      }
+    >
+      {copied ? "Copied" : "copy"}
+    </button>
   );
 }
 
@@ -75,13 +94,7 @@ function CitationChip({ id, citation }: { id: string; citation: ScreeningCitatio
             {citation.content_sha256 && (
               <>
                 {" "}· SHA-256 <code title={citation.content_sha256}>{citation.content_sha256.slice(0, 12)}</code>{" "}
-                <button
-                  type="button"
-                  style={styles.linkBtn}
-                  onClick={() => void navigator.clipboard?.writeText(citation.content_sha256!)}
-                >
-                  copy
-                </button>
+                <CopyButton text={citation.content_sha256} />
               </>
             )}
           </span>
@@ -110,8 +123,12 @@ function Explanation({ data, focus }: { data: ScreeningExplanation; focus: strin
   const drift =
     (banding?.candidates ?? []).some((c) => !c.consistent) || disposition?.consistent === false;
 
+  // A candidate deep link lands keyboard and screen-reader users on it too.
   useEffect(() => {
-    if (focus) document.getElementById(`why-cand-${focus}`)?.scrollIntoView?.({ block: "start" });
+    if (!focus) return;
+    const el = document.getElementById(`why-cand-${focus}`);
+    el?.scrollIntoView?.({ block: "start" });
+    el?.focus();
   }, [focus, data]);
 
   return (
@@ -124,8 +141,9 @@ function Explanation({ data, focus }: { data: ScreeningExplanation; focus: strin
       )}
       {drift && (
         <div data-testid="why-drift" style={styles.warn}>
-          Explained with today's rules, which disagree with how this decision was made (rule v
-          {data.rule_version}, normalizer {data.normalizer_version}). Replay the decision to check it.
+          This decision was made under rule v{data.rule_version ?? "?"}, normalizer{" "}
+          {data.normalizer_version}; today's rules would band it differently. The explanation below
+          uses today's rules. Replay the decision to check it.
         </div>
       )}
 
@@ -155,12 +173,13 @@ function Explanation({ data, focus }: { data: ScreeningExplanation; focus: strin
           <li data-testid="why-step-blocking" style={styles.step}>
             <h3 style={styles.stepTitle}>Candidates found</h3>
             {blocking.candidate_count === 0 ? (
-              <p style={styles.p}>No list record shared a name key with the subject.</p>
+              <p style={styles.p}>No list record matched any part of the subject's name.</p>
             ) : (
               <p style={styles.p}>
-                {blocking.candidate_count} candidate{blocking.candidate_count === 1 ? "" : "s"} shared at
-                least one name key with the subject. Records that match every part of the name are
-                never capped; partial matches are capped at {blocking.cap}.
+                {blocking.candidate_count} list record{blocking.candidate_count === 1 ? "" : "s"} matched at
+                least part of the subject's name, allowing for spelling and transliteration variants.
+                Every record that matches the whole name is kept; beyond that, only the{" "}
+                {blocking.cap} closest partial matches are considered.
               </p>
             )}
           </li>
@@ -180,6 +199,7 @@ function Explanation({ data, focus }: { data: ScreeningExplanation; focus: strin
               return (
                 <section
                   key={c.candidate_id}
+                  tabIndex={-1}
                   id={`why-cand-${c.candidate_id}`}
                   data-testid={`why-cand-${c.candidate_id}`}
                   data-focused={focus === c.candidate_id ? "true" : "false"}
@@ -206,7 +226,7 @@ function Explanation({ data, focus }: { data: ScreeningExplanation; focus: strin
                           {t.label}{" "}
                           <span style={styles.weight}>{t.weight > 0 ? `+${t.weight}` : t.weight}</span>
                         </div>
-                        <div style={styles.muted}>List value: {fmt(t.record_value)}</div>
+                        <div style={styles.muted}>List value: {formatListValue(t.record_value)}</div>
                         <div style={styles.chips}>
                           {t.citations
                             .filter((id) => data.citations[id])
@@ -293,6 +313,7 @@ export function DecisionEvidencePanel({
   const closeRef = useRef<HTMLButtonElement>(null);
   const [data, setData] = useState<ScreeningExplanation | null>(null);
   const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   // Focus moves into the panel and returns to whatever opened it.
   useEffect(() => {
@@ -300,14 +321,6 @@ export function DecisionEvidencePanel({
     closeRef.current?.focus();
     return () => opener?.focus?.();
   }, []);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   useEffect(() => {
     if (!decided) return;
@@ -324,10 +337,25 @@ export function DecisionEvidencePanel({
     return () => {
       cancelled = true;
     };
-  }, [runId, token, decided, refreshKey]);
+  }, [runId, token, decided, refreshKey, attempt]);
 
   return (
-    <aside role="dialog" aria-modal="false" aria-labelledby={titleId} style={styles.drawer}>
+    <aside
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby={titleId}
+      className="why-drawer"
+      style={styles.drawer}
+      // Non-modal: Esc closes it only while focus is inside the panel, so it
+      // never swallows Esc from the disposition form beside it.
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+    >
+      <style>{DRAWER_CSS}</style>
       <header style={styles.header}>
         <h2 id={titleId} style={styles.title}>Why this decision?</h2>
         <button ref={closeRef} type="button" onClick={onClose} style={styles.close} aria-label="Close">
@@ -341,7 +369,10 @@ export function DecisionEvidencePanel({
           </p>
         ) : error ? (
           <p data-testid="why-error" style={styles.muted}>
-            Decision explanation is unavailable right now.
+            Decision explanation is unavailable right now.{" "}
+            <button type="button" style={styles.linkBtn} onClick={() => setAttempt((n) => n + 1)}>
+              Try again
+            </button>
           </p>
         ) : data === null ? (
           <p style={styles.muted}>Loading explanation…</p>
@@ -353,9 +384,13 @@ export function DecisionEvidencePanel({
   );
 }
 
+// Full width on narrow screens (plan §[3.3]); inline styles can't hold a
+// media query, and the drawer's inline width must yield to it.
+const DRAWER_CSS = "@media (max-width: 720px) { .why-drawer { width: 100vw !important; } }";
+
 const styles: Record<string, React.CSSProperties> = {
   drawer: {
-    position: "fixed", top: 0, right: 0, bottom: 0, width: "min(440px, 100vw)", zIndex: 20,
+    position: "fixed", top: 0, right: 0, bottom: 0, width: "440px", zIndex: 20,
     background: "#fff", boxShadow: "-4px 0 16px rgba(0,0,0,0.12)", display: "flex",
     flexDirection: "column",
   },
