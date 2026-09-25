@@ -72,6 +72,51 @@ describe("OperatorActions", () => {
     expect(onOpenRun).toHaveBeenCalledWith("run-new");
   });
 
+  it("stops polling and shows an error when the status check fails (not a 404)", async () => {
+    let reportCalls = 0;
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes("/reanalysis/run-1")) {
+        return { ok: true, json: async () => ({ new_run_id: "run-new", supersedes_run_id: "run-1",
+          entity_id: "ent-1", status: "pending", triggered_at: "2026-05-31T10:00:00Z", message: "ok" }) };
+      }
+      reportCalls += 1;
+      return { ok: false, status: 500, json: async () => ({ detail: "Internal Server Error" }) };
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    render(<OperatorActions runId="run-1" token="t" submittedValues={{}} onOpenRun={vi.fn()} pollMs={10} />);
+    fireEvent.click(screen.getByTestId("rerun-btn"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("new-run-banner").textContent).toContain("Couldn't check")
+    );
+    expect(screen.queryByTestId("open-new-run-btn")).toBeNull();
+    const calls = reportCalls;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(reportCalls).toBe(calls); // stopped
+  });
+
+  it("says the new run failed when its report shows a failed run", async () => {
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes("/reanalysis/run-1")) {
+        return { ok: true, json: async () => ({ new_run_id: "run-new", supersedes_run_id: "run-1",
+          entity_id: "ent-1", status: "pending", triggered_at: "2026-05-31T10:00:00Z", message: "ok" }) };
+      }
+      return { ok: true, json: async () => ({ run_id: "run-new", run: { status: "failed", started_at: null,
+        finished_at: null, duration_seconds: null, stages: {} } }) };
+    });
+    vi.stubGlobal("fetch", mockFetch);
+    const onOpenRun = vi.fn();
+
+    render(<OperatorActions runId="run-1" token="t" submittedValues={{}} onOpenRun={onOpenRun} pollMs={10} />);
+    fireEvent.click(screen.getByTestId("rerun-btn"));
+
+    const openBtn = await screen.findByTestId("open-new-run-btn");
+    expect(screen.getByTestId("new-run-banner").textContent).toContain("failed");
+    fireEvent.click(openBtn);
+    expect(onOpenRun).toHaveBeenCalledWith("run-new");
+  });
+
   it("correct-and-re-run sends only changed fields", async () => {
     const mockFetch = vi.fn().mockResolvedValueOnce({
       ok: true,

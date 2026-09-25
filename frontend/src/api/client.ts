@@ -15,6 +15,17 @@ export interface ApiError {
   detail: string;
 }
 
+/** Thrown for a non-2xx response; `status` lets callers tell 404 from 500. */
+export class HttpError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number
+  ) {
+    super(message);
+    this.name = "HttpError";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
@@ -590,7 +601,7 @@ async function request<T>(
     } catch {
       // ignore parse error
     }
-    throw new Error(detail);
+    throw new HttpError(detail, resp.status);
   }
 
   return resp.json() as Promise<T>;
@@ -600,7 +611,7 @@ export const apiClient = {
   /** GET /screenings: individual screening queue. */
   listScreenings(
     token: string,
-    filters: { disposition?: string; trigger?: string; offset?: number } = {}
+    filters: { disposition?: string; trigger?: string; offset?: number; limit?: number } = {}
   ): Promise<ScreeningQueuePage> {
     const q = new URLSearchParams(
       Object.entries(filters)

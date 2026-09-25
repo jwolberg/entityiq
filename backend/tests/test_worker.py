@@ -115,6 +115,62 @@ def test_soft_time_limit_marks_run_failed_but_keeps_partial_report(
         db.close()
 
 
+def test_unexpected_failure_marks_run_failed_and_keeps_partial_report(
+    session_factory, monkeypatch
+):
+    """An error outside stage handling still leaves a report (ticket 0076).
+
+    Operators wait for a run's report to know it finished; a failed run with no
+    report would look "still running" forever.
+    """
+    import app.pipeline.orchestrator as orchestrator
+
+    run_id = _make_run(session_factory)
+
+    class Done:
+        name = "normalize_input"
+
+        def run(self, run_id, db, context):
+            return {**context, "normalize_input": "done"}
+
+    class AlsoDone:
+        name = "query_registries"
+
+        def run(self, run_id, db, context):
+            return context
+
+    real_update = orchestrator._update_stage_status
+
+    def update_then_break(run, db, stage_name, status):
+        if stage_name == "query_registries":
+            raise RuntimeError("simulated DB failure")
+        real_update(run, db, stage_name, status)
+
+    monkeypatch.setattr(
+        "app.pipeline.orchestrator.default_stages", lambda: [Done(), AlsoDone()]
+    )
+    monkeypatch.setattr(orchestrator, "_update_stage_status", update_then_break)
+
+    run_verification_task(run_id)
+
+    db = session_factory()
+    try:
+        run = db.get(VerificationRun, run_id)
+        assert run.status == "failed"
+        assert "simulated DB failure" in (run.failure_reason or "")
+        assert run.finished_at is not None
+        assert run.source_availability == {
+            "normalize_input": "complete",
+            "query_registries": "unavailable",
+        }
+        assert (
+            db.query(Report).filter(Report.verification_run_id == run_id).one_or_none()
+            is not None
+        ), "a failed run must still get a (partial) report"
+    finally:
+        db.close()
+
+
 def test_soft_limit_signal_while_waiting_on_a_hung_stage(session_factory, monkeypatch):
     """Celery delivers the soft limit as a signal on the main thread.
 
