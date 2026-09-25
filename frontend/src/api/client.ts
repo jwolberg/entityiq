@@ -449,6 +449,119 @@ export interface ReplayResult {
   differences: { field: string; original: unknown; replayed: unknown }[];
 }
 
+/** GET /screenings/{run_id}/explanation (ticket 0067). No subject values. */
+export interface ScreeningRecordRef {
+  source: string;
+  display_name: string;
+  entry_id: string;
+  snapshot_id: string;
+  primary_name: string;
+  program: string | null;
+}
+
+export type ScreeningCitation =
+  | { about: "subject"; source: string; field: string | null; submitted_at: string | null }
+  | {
+      about: "record";
+      source: string;
+      display_name: string;
+      entry_id: string | null;
+      field: string;
+      snapshot_id: string | null;
+      snapshot_retrieved_at: string | null;
+      content_sha256: string | null;
+      source_url: string | null;
+      locator: string;
+    };
+
+export type ExplanationStep =
+  | {
+      kind: "sources";
+      max_age_days: number;
+      lists: {
+        source: string;
+        display_name: string;
+        required: boolean;
+        status: string;
+        snapshot_id: string | null;
+        retrieved_at: string | null;
+        content_sha256: string | null;
+        record_count: number | null;
+        source_url: string | null;
+      }[];
+    }
+  | {
+      kind: "blocking";
+      candidate_count: number;
+      cap: number;
+      candidates: { candidate_id: string; record_ref: ScreeningRecordRef; matched_keys: string[] }[];
+    }
+  | {
+      kind: "scoring";
+      candidates: {
+        candidate_id: string;
+        record_ref: ScreeningRecordRef;
+        score: number;
+        terms: {
+          name: string;
+          label: string;
+          weight: number;
+          direction: "+" | "-" | "0";
+          record_field: string | null;
+          record_value: unknown;
+          citations: string[];
+        }[];
+      }[];
+    }
+  | {
+      kind: "banding";
+      thresholds: { clear_below: number; match_at: number };
+      candidates: {
+        candidate_id: string;
+        score: number;
+        band: SystemDisposition;
+        reason_code: string;
+        reason_text: string;
+        consistent: boolean;
+      }[];
+    }
+  | {
+      kind: "disposition";
+      system_disposition: SystemDisposition;
+      auto_closed: boolean;
+      reason_code: string;
+      reason_text: string;
+      coverage_gaps: string[];
+      common_name: { frequency: number; threshold: number; applied: boolean } | null;
+      consistent: boolean;
+    }
+  | {
+      kind: "human";
+      dispositions: {
+        disposition: "CLEAR" | "MATCH";
+        created_at: string | null;
+        notes?: string | null;
+        operator_id?: string;
+      }[];
+      replays: {
+        reproduced: boolean | null;
+        shredded: boolean | null;
+        occurred_at: string | null;
+        operator_id?: string;
+      }[];
+    };
+
+export interface ScreeningExplanation {
+  run_id: string;
+  decision_id: string;
+  decided_at: string | null;
+  rule_version: number | null;
+  normalizer_version: string;
+  subject_shredded: boolean;
+  steps: ExplanationStep[];
+  citations: Record<string, ScreeningCitation>;
+}
+
 // ---------------------------------------------------------------------------
 // Client implementation
 // ---------------------------------------------------------------------------
@@ -511,6 +624,10 @@ export const apiClient = {
       { method: "POST", body: JSON.stringify(body) },
       token
     );
+  },
+
+  getScreeningExplanation(runId: string, token: string): Promise<ScreeningExplanation> {
+    return request(`/screenings/${runId}/explanation`, {}, token);
   },
 
   replayScreening(runId: string, token: string): Promise<ReplayResult> {
