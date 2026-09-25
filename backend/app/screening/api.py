@@ -11,7 +11,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import case
 from sqlalchemy.orm import Session
@@ -46,11 +46,21 @@ def _get_db():
         db.close()
 
 
-def enqueue_screening(run_id: str) -> None:
-    """Queue the run on the screening queue (patched to run inline in tests)."""
-    from app.screening.tasks import run_screening_task  # noqa: PLC0415
+def enqueue_screening(run_id: str, background: BackgroundTasks | None = None) -> None:
+    """Queue the run on the screening queue (patched to run inline in tests).
 
-    run_screening_task.delay(run_id)
+    With task_always_eager (the local demo) ``.delay`` runs the whole screening
+    in-process; given the endpoint's ``background`` tasks, that run is deferred
+    until after the response is sent (ticket 0075, as enqueue_run in 0074).
+    With a real broker dispatch stays inline so broker errors still fail.
+    """
+    from app.screening.tasks import run_screening_task  # noqa: PLC0415
+    from app.worker import celery_app  # noqa: PLC0415
+
+    if background is not None and celery_app.conf.task_always_eager:
+        background.add_task(run_screening_task.delay, run_id)
+    else:
+        run_screening_task.delay(run_id)
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +123,7 @@ class ScreeningCreated(BaseModel):
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=ScreeningCreated)
 def create_screening(
     body: ScreeningIn,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(_get_db),
     principal: Principal = Depends(get_principal),
 ) -> ScreeningCreated:
@@ -144,7 +155,7 @@ def create_screening(
     db.commit()
     run_id = run.id
 
-    enqueue_screening(run_id)
+    enqueue_screening(run_id, background_tasks)
 
     db.expire_all()
     run = db.get(ScreeningRun, run_id)

@@ -14,6 +14,7 @@ from __future__ import annotations
 import unittest.mock as mock
 
 import pytest
+from fastapi import BackgroundTasks
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -176,6 +177,29 @@ class TestReanalysis:
         assert data["new_run_id"] != run_id
         assert data["status"] == "pending"
         assert "triggered_at" in data
+
+    def test_passes_background_tasks_to_enqueue(self, client, reanalysis_engine):
+        """The endpoint hands enqueue a BackgroundTasks so eager runs defer."""
+        TestingSessionLocal = sessionmaker(
+            bind=reanalysis_engine, autocommit=False, autoflush=False
+        )
+        setup_db = TestingSessionLocal()
+        try:
+            run_id, _ = _make_run(setup_db)
+        finally:
+            setup_db.close()
+
+        token = _sign_in(client, reanalysis_engine, "reanalyze_bg@test.example")
+
+        with mock.patch("app.pipeline.orchestrator.enqueue_run") as mock_enq:
+            resp = client.post(
+                f"/reanalysis/{run_id}",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        assert resp.status_code == 202, resp.text
+        new_run_id, background = mock_enq.call_args.args
+        assert new_run_id == resp.json()["new_run_id"]
+        assert isinstance(background, BackgroundTasks)
 
     def test_new_run_supersedes_prior(self, client, reanalysis_engine):
         """New run created has supersedes_id pointing to the prior run."""

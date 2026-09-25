@@ -2,18 +2,22 @@
  * NewCompanyForm — modal form for submitting a new company to verify.
  *
  * Opened from the Verification Queue ("Check New Company" button).  On submit
- * it POSTs to /submissions, which runs the verification pipeline (inline in
- * eager mode) and produces a report.  On success the parent closes the modal
- * and refreshes the queue so the new row appears.
+ * it POSTs to /submissions, which accepts the company and runs the verification
+ * pipeline in the background.  On success the parent closes the modal and
+ * tells the operator data collection is running (see Dashboard).
  */
 
 import { FormEvent, useState } from "react";
-import { apiClient, SubmissionRequest } from "../api/client";
+import {
+  apiClient,
+  SubmissionRequest,
+  SubmissionResponse,
+} from "../api/client";
 
 interface NewCompanyFormProps {
   token: string;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (resp: SubmissionResponse, companyName: string) => void;
 }
 
 interface FieldState {
@@ -82,8 +86,8 @@ export function NewCompanyForm({
 
     setSubmitting(true);
     try {
-      await apiClient.submitCompany(body, token);
-      onSuccess();
+      const resp = await apiClient.submitCompany(body, token);
+      onSuccess(resp, body.company_name);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Submission failed. Try again.",

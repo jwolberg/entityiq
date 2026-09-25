@@ -50,7 +50,7 @@ def api_env(tmp_path, monkeypatch):
         app.dependency_overrides[dep] = get_db
 
     # Run the pipeline inline (no broker), using the same test database.
-    def run_inline(run_id: str) -> None:
+    def run_inline(run_id: str, background=None) -> None:
         from app.screening.pipeline import run_screening
 
         db = factory()

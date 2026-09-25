@@ -2,7 +2,7 @@
  * Dashboard tests — mock fetch, verify list renders with score + status.
  */
 
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { Dashboard } from "./Dashboard";
 import { AuthContext } from "../auth/AuthContext";
 import type { ReactNode } from "react";
@@ -57,6 +57,73 @@ describe("Dashboard", () => {
     await waitFor(() => expect(screen.getByTestId("triage-badge")).toBeDefined());
     expect(screen.getByTestId("triage-badge").textContent).toBe("Escalate");
     expect(screen.getByText("22").getAttribute("style")).toContain("rgb(220, 38, 38)");
+  });
+
+  it("closes the form on submit and shows a background notice until the report lands", async () => {
+    const newItem = {
+      run_id: "run-new",
+      report_id: "rep-new",
+      company_name: "Acme Corp",
+      domain: "acme.example",
+      status: "complete",
+      overall_score: 10,
+      triage_tier: "approve_eligible",
+      review_status: null,
+      generated_at: "2026-09-25T10:00:00Z",
+    };
+    let listCalls = 0;
+    const mockFetch = vi.fn(async (url: string, opts?: RequestInit) => {
+      if (url.endsWith("/submissions") && opts?.method === "POST") {
+        return {
+          ok: true,
+          json: async () => ({
+            submission_id: "sub-new",
+            run_id: "run-new",
+            status: "pending",
+            is_free_email_domain: false,
+            message: "ok",
+          }),
+        };
+      }
+      listCalls += 1;
+      // Initial load and the first poll: not there yet; then it lands.
+      const items = listCalls >= 3 ? [newItem] : [];
+      return { ok: true, json: async () => ({ items, total: items.length }) };
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    render(
+      <Wrapper>
+        <Dashboard onSelect={vi.fn()} pollMs={10} />
+      </Wrapper>
+    );
+    await waitFor(() => expect(screen.getByTestId("open-new-company-form")).toBeDefined());
+    fireEvent.click(screen.getByTestId("open-new-company-form"));
+    for (const [id, v] of [
+      ["field-company_name", "Acme Corp"],
+      ["field-work_email", "cto@acme.example"],
+      ["field-company_domain", "acme.example"],
+      ["field-country", "US"],
+    ]) {
+      fireEvent.change(screen.getByTestId(id), { target: { value: v } });
+    }
+    fireEvent.click(screen.getByTestId("submit-new-company"));
+
+    const notice = await screen.findByTestId("background-run-notice");
+    expect(screen.queryByTestId("new-company-form")).toBeNull();
+    expect(notice.textContent).toContain("Acme Corp");
+    expect(notice.textContent).toContain("running in the background");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("background-run-notice").textContent).toContain("ready")
+    );
+    expect(within(screen.getByRole("table")).getByText("Acme Corp")).toBeDefined();
+    const pollsWhenReady = listCalls;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(listCalls).toBe(pollsWhenReady); // polling stops once it lands
+
+    fireEvent.click(screen.getByTestId("dismiss-background-notice"));
+    expect(screen.queryByTestId("background-run-notice")).toBeNull();
   });
 
   it("renders loading state initially", () => {

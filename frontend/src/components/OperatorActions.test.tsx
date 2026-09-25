@@ -1,6 +1,6 @@
 /**
  * OperatorActions tests:
- *   - re-run analysis posts and surfaces the new run id
+ *   - re-run analysis posts, says it runs in the background, offers the new run when ready
  *   - correct-and-re-run sends only changed fields and offers the new run
  *   - add-notes posts and confirms
  *   - export button fetches the export endpoint
@@ -18,17 +18,28 @@ function lastFetchCall(mock: ReturnType<typeof vi.fn>) {
 }
 
 describe("OperatorActions", () => {
-  it("re-runs analysis and shows the new run id", async () => {
-    const mockFetch = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        new_run_id: "run-new",
-        supersedes_run_id: "run-1",
-        entity_id: "ent-1",
-        status: "pending",
-        triggered_at: "2026-05-31T10:00:00Z",
-        message: "ok",
-      }),
+  it("re-runs in the background and offers the new run once it is ready", async () => {
+    let reportCalls = 0;
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes("/reanalysis/run-1")) {
+        return {
+          ok: true,
+          json: async () => ({
+            new_run_id: "run-new",
+            supersedes_run_id: "run-1",
+            entity_id: "ent-1",
+            status: "pending",
+            triggered_at: "2026-05-31T10:00:00Z",
+            message: "ok",
+          }),
+        };
+      }
+      // GET /reports/run-new: 404 until the pipeline finishes.
+      reportCalls += 1;
+      if (reportCalls < 2) {
+        return { ok: false, status: 404, json: async () => ({ detail: "Not ready" }) };
+      }
+      return { ok: true, json: async () => ({ run_id: "run-new" }) };
     });
     vi.stubGlobal("fetch", mockFetch);
     const onOpenRun = vi.fn();
@@ -39,19 +50,25 @@ describe("OperatorActions", () => {
         token="t"
         submittedValues={{}}
         onOpenRun={onOpenRun}
+        pollMs={10}
       />
     );
 
     fireEvent.click(screen.getByTestId("rerun-btn"));
 
-    await waitFor(() => {
-      expect(screen.getByTestId("new-run-banner")).toBeDefined();
-    });
-    // POSTed to the reanalysis endpoint
-    expect(lastFetchCall(mockFetch)[0]).toContain("/reanalysis/run-1");
+    const banner = await screen.findByTestId("new-run-banner");
+    expect(banner.textContent).toContain("running in the background");
+    expect(screen.queryByTestId("open-new-run-btn")).toBeNull();
+    expect(mockFetch.mock.calls[0][0]).toContain("/reanalysis/run-1");
 
-    // Opening the new run delegates to onOpenRun
-    fireEvent.click(screen.getByTestId("open-new-run-btn"));
+    // Once the new report exists, the banner says so and offers it.
+    const openBtn = await screen.findByTestId("open-new-run-btn");
+    expect(screen.getByTestId("new-run-banner").textContent).toContain("ready");
+    const callsWhenReady = mockFetch.mock.calls.length;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockFetch.mock.calls.length).toBe(callsWhenReady); // polling stopped
+
+    fireEvent.click(openBtn);
     expect(onOpenRun).toHaveBeenCalledWith("run-new");
   });
 

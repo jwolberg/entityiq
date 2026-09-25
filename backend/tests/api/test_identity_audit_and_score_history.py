@@ -84,7 +84,7 @@ def audit_client(audit_engine):
     app.dependency_overrides[auth_get_db] = override_get_db
     app.dependency_overrides[service_get_db] = override_get_db
 
-    def _run_synchronously(run_id: str) -> None:
+    def _run_synchronously(run_id: str, background=None) -> None:
         sess = session_factory()
         try:
             Orchestrator(_pipeline_stages()).run_sync(run_id, sess)

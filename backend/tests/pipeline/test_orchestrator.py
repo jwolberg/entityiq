@@ -228,7 +228,7 @@ def test_reanalysis_creates_new_run_with_supersedes_id(orch_session: Session):
 
     with mock.patch("app.pipeline.orchestrator.enqueue_run") as mock_enqueue:
         new_run_id = enqueue_reanalysis(run.entity_id, run.id, orch_session)
-        mock_enqueue.assert_called_once_with(new_run_id)
+        mock_enqueue.assert_called_once_with(new_run_id, None)
 
     new_run = orch_session.get(VerificationRun, new_run_id)
     assert new_run is not None

@@ -13,7 +13,7 @@ TRUSTED-IP INVARIANT (ARCHITECTURE § 5):
 import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from app.audit.recorder import record_event
@@ -111,6 +111,7 @@ def _get_db():
 def submit(
     body: SubmissionRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(_get_db),
     principal: Principal = Depends(get_principal),
 ) -> SubmissionResponse:
@@ -225,7 +226,7 @@ def submit(
     # P1-T2 and is a no-op stub until then.
     from app.pipeline.orchestrator import enqueue_run  # noqa: PLC0415
 
-    enqueue_run(run.id)
+    enqueue_run(run.id, background_tasks)
 
     return SubmissionResponse(
         submission_id=submission.id,

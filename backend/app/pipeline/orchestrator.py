@@ -41,7 +41,7 @@ from app.models.verification_run import VerificationRun
 from app.pipeline.base import PipelineStage
 
 if TYPE_CHECKING:
-    pass
+    from fastapi import BackgroundTasks
 
 logger = logging.getLogger(__name__)
 
@@ -428,16 +428,22 @@ def _update_stage_status(run, db: Session, stage_name: str, status: str) -> None
 # ------------------------------------------------------------------
 
 
-def enqueue_run(run_id: str) -> None:
+def enqueue_run(run_id: str, background: BackgroundTasks | None = None) -> None:
     """Enqueue a verification run for async processing via Celery.
 
     In production this dispatches to the Celery worker.
-    In tests with task_always_eager=True the task runs synchronously
-    in-process (no broker needed).
+    With task_always_eager=True (tests, the local demo) ``.delay`` runs the
+    whole pipeline in-process. When the calling endpoint passes its
+    ``background`` tasks, that eager run is deferred until after the response
+    is sent, so the operator isn't left waiting on it (ticket 0074). With a
+    real broker dispatch stays inline so a broker error still fails the request.
     """
-    from app.worker import run_verification_task  # noqa: PLC0415
+    from app.worker import celery_app, run_verification_task  # noqa: PLC0415
 
-    run_verification_task.delay(run_id)
+    if background is not None and celery_app.conf.task_always_eager:
+        background.add_task(run_verification_task.delay, run_id)
+    else:
+        run_verification_task.delay(run_id)
 
 
 # ------------------------------------------------------------------
@@ -445,13 +451,19 @@ def enqueue_run(run_id: str) -> None:
 # ------------------------------------------------------------------
 
 
-def enqueue_reanalysis(entity_id: str, supersedes_run_id: str, db: Session) -> str:
+def enqueue_reanalysis(
+    entity_id: str,
+    supersedes_run_id: str,
+    db: Session,
+    background: BackgroundTasks | None = None,
+) -> str:
     """Create a new VerificationRun superseding the given run and enqueue it.
 
     Args:
         entity_id:         The entity to re-analyse.
         supersedes_run_id: The run_id of the run being superseded.
         db:                Open session to persist the new run.
+        background:        The endpoint's BackgroundTasks (see enqueue_run).
 
     Returns:
         The new run_id.
@@ -470,5 +482,5 @@ def enqueue_reanalysis(entity_id: str, supersedes_run_id: str, db: Session) -> s
     db.add(new_run)
     db.commit()
 
-    enqueue_run(new_run.id)
+    enqueue_run(new_run.id, background)
     return new_run.id

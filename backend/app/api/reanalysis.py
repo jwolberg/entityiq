@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -69,6 +69,7 @@ class ReanalysisResponse(BaseModel):
 )
 def trigger_reanalysis(
     run_id: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(_get_db),
     operator=Depends(get_current_operator),
 ) -> ReanalysisResponse:
@@ -94,6 +95,7 @@ def trigger_reanalysis(
         entity_id=prior_run.entity_id,
         supersedes_run_id=run_id,
         db=db,
+        background=background_tasks,
     )
 
     now = datetime.now(tz=timezone.utc)

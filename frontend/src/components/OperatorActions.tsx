@@ -8,11 +8,13 @@
  *   - Export report (JSON)   → GET  /reports/{run_id}/export
  *
  * Correct-and-re-run and re-run both produce a NEW run that supersedes the
- * current one; on success we offer to open it via `onOpenRun`.  All four
+ * current one. The new run collects data in the background, so we say so and
+ * poll for its report; once it exists we offer to open it via `onOpenRun`.
+ * All four
  * actions are operator-audited server-side.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AddNotesResponse,
   apiClient,
@@ -29,6 +31,8 @@ interface OperatorActionsProps {
   onOpenRun?: (runId: string) => void;
   /** Called after notes are saved (saving notes also records a review). */
   onNotesSaved?: (resp: AddNotesResponse) => void;
+  /** How often to check whether the new run's report exists (ms). */
+  pollMs?: number;
 }
 
 // Correctable fields in display order (must be a subset of CorrectableField).
@@ -50,10 +54,12 @@ export function OperatorActions({
   submittedValues,
   onOpenRun,
   onNotesSaved,
+  pollMs = 3000,
 }: OperatorActionsProps) {
   // --- Re-run analysis ---
   const [rerunning, setRerunning] = useState(false);
   const [newRunId, setNewRunId] = useState<string | null>(null);
+  const [newRunReady, setNewRunReady] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   // --- Correct + re-run form ---
@@ -75,6 +81,28 @@ export function OperatorActions({
 
   // --- Export ---
   const [exporting, setExporting] = useState(false);
+
+  // The new run collects data in the background; its report exists only once
+  // the pipeline finishes, so poll for it until it does.
+  useEffect(() => {
+    if (!newRunId) return;
+    setNewRunReady(false);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const check = async () => {
+      try {
+        await apiClient.getReport(newRunId, token);
+        if (!cancelled) setNewRunReady(true);
+      } catch {
+        if (!cancelled) timer = setTimeout(check, pollMs);
+      }
+    };
+    timer = setTimeout(check, pollMs);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [newRunId, token, pollMs]);
 
   const base = initialValues();
   const changedCorrections = (): CorrectAndRerunRequest["corrections"] => {
@@ -202,15 +230,25 @@ export function OperatorActions({
 
       {newRunId && (
         <div style={styles.successBanner} data-testid="new-run-banner">
-          New run <code>{newRunId}</code> enqueued — it supersedes this run.{" "}
-          {onOpenRun && (
-            <button
-              onClick={() => onOpenRun(newRunId)}
-              style={styles.linkBtn}
-              data-testid="open-new-run-btn"
-            >
-              View new run →
-            </button>
+          {newRunReady ? (
+            <>
+              New run is ready — it supersedes this run.{" "}
+              {onOpenRun && (
+                <button
+                  onClick={() => onOpenRun(newRunId)}
+                  style={styles.linkBtn}
+                  data-testid="open-new-run-btn"
+                >
+                  View new run →
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              Re-analysis started. Data collection is running in the
+              background; you can keep working here. We'll let you know when
+              the new run is ready.
+            </>
           )}
         </div>
       )}

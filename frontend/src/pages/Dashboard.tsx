@@ -4,6 +4,9 @@
  * Displays: company name, analysis date, risk score, review status.
  * Loading and empty states are handled.  Clicking a row navigates to
  * the company detail view (hash-based routing via `onSelect`).
+ *
+ * A submitted company is verified in the background; the queue shows a notice
+ * and re-polls until its report lands, then says it's ready.
  */
 
 import { useEffect, useState } from "react";
@@ -13,6 +16,14 @@ import { NewCompanyForm } from "../components/NewCompanyForm";
 
 interface DashboardProps {
   onSelect: (runId: string) => void;
+  /** How often to re-poll the queue while a submission is running (ms). */
+  pollMs?: number;
+}
+
+interface BackgroundRun {
+  runId: string;
+  companyName: string;
+  ready: boolean;
 }
 
 const TIER_COLOR: Record<string, string> = {
@@ -72,7 +83,7 @@ function formatDate(iso: string | null): string {
 type ReviewFilter = "all" | "pending" | "reviewed";
 type TierFilter = "all" | "escalate" | "review" | "pre_clear";
 
-export function Dashboard({ onSelect }: DashboardProps) {
+export function Dashboard({ onSelect, pollMs = 5000 }: DashboardProps) {
   const { auth } = useAuth();
   const [items, setItems] = useState<ReportListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,10 +97,12 @@ export function Dashboard({ onSelect }: DashboardProps) {
   // New-company form modal + queue refresh trigger
   const [showForm, setShowForm] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [backgroundRuns, setBackgroundRuns] = useState<BackgroundRun[]>([]);
 
+  // Refreshes (after a submit, or while polling) update the list in place
+  // rather than flashing the loading state; only the first load shows it.
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     setError(null);
     apiClient
       .listReports(auth.token)
@@ -109,6 +122,23 @@ export function Dashboard({ onSelect }: DashboardProps) {
       cancelled = true;
     };
   }, [auth.token, refreshKey]);
+
+  // A run's report appears in the list only once its pipeline finishes.
+  useEffect(() => {
+    const landed = new Set(items.map((i) => i.run_id));
+    setBackgroundRuns((runs) =>
+      runs.some((r) => !r.ready && landed.has(r.runId))
+        ? runs.map((r) => (landed.has(r.runId) ? { ...r, ready: true } : r))
+        : runs
+    );
+  }, [items]);
+
+  const stillRunning = backgroundRuns.some((r) => !r.ready);
+  useEffect(() => {
+    if (!stillRunning) return;
+    const timer = setInterval(() => setRefreshKey((k) => k + 1), pollMs);
+    return () => clearInterval(timer);
+  }, [stillRunning, pollMs]);
 
   const query = search.trim().toLowerCase();
   const filtered = items.filter((item) => {
@@ -152,12 +182,51 @@ export function Dashboard({ onSelect }: DashboardProps) {
         <NewCompanyForm
           token={auth.token}
           onClose={() => setShowForm(false)}
-          onSuccess={() => {
+          onSuccess={(resp, companyName) => {
             setShowForm(false);
+            setBackgroundRuns((runs) => [
+              ...runs,
+              { runId: resp.run_id, companyName, ready: false },
+            ]);
             setRefreshKey((k) => k + 1);
           }}
         />
       )}
+
+      {backgroundRuns.map((r) => (
+        <div
+          key={r.runId}
+          style={r.ready ? styles.noticeReady : styles.notice}
+          role="status"
+          data-testid="background-run-notice"
+        >
+          <span>
+            {r.ready ? (
+              <>
+                <strong>{r.companyName}</strong> is ready — its report is now
+                in the queue.
+              </>
+            ) : (
+              <>
+                Data collection for <strong>{r.companyName}</strong> is
+                running in the background. It will appear in the queue when
+                it finishes; you can keep working.
+              </>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              setBackgroundRuns((runs) => runs.filter((x) => x.runId !== r.runId))
+            }
+            style={styles.noticeDismiss}
+            aria-label="Dismiss"
+            data-testid="dismiss-background-notice"
+          >
+            ×
+          </button>
+        </div>
+      ))}
 
       {!loading && !error && items.length > 0 && (
         <div style={styles.filterBar} data-testid="dashboard-filters">
@@ -349,6 +418,39 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#ffffff",
     fontWeight: 600,
     fontSize: "0.875rem",
+    cursor: "pointer",
+  },
+  notice: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+    marginBottom: "0.75rem",
+    padding: "0.75rem 1rem",
+    backgroundColor: "#eff6ff",
+    border: "1px solid #93c5fd",
+    borderRadius: "0.375rem",
+    color: "#1e3a8a",
+    fontSize: "0.85rem",
+  },
+  noticeReady: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+    marginBottom: "0.75rem",
+    padding: "0.75rem 1rem",
+    backgroundColor: "#f0fdf4",
+    border: "1px solid #86efac",
+    borderRadius: "0.375rem",
+    color: "#166534",
+    fontSize: "0.85rem",
+  },
+  noticeDismiss: {
+    marginLeft: "auto",
+    background: "none",
+    border: "none",
+    color: "inherit",
+    fontSize: "1.1rem",
+    lineHeight: 1,
     cursor: "pointer",
   },
   filterBar: {
