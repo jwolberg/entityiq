@@ -1807,3 +1807,21 @@ Fixes for the fresh-context review of the screening branch, each test-first.
   both SQLite and Postgres with the append-only triggers installed.
 - **Still open:** multi-tenant scoping for the operator side is a
   pre-existing gap. Operators see all clients' data by design today.
+
+## 2026-09-24 — RUNBOOK dev-testing pass
+
+- **Regression found while verifying the RUNBOOK by hand:** the new list
+  freshness gate made the demo's fixed-date watchlist stale after 7 days, so
+  `demo.sh` stopped showing an auto-CLEAR. The demo test hadn't caught it
+  because the global test defaults relax the list-age limit.
+  - Fix: `demo.sh` sets the max list age to 36500 days.
+  - The demo test now reads its env from `demo.sh`.
+- **RUNBOOK additions:**
+  - manual screening test on dev (every command was run on a scratch
+    database);
+  - Postgres-only tests via `TEST_POSTGRES_URL` (they migrate the target
+    database down to `base`, so throwaway databases only);
+  - the metrics gate and corpus regeneration;
+  - the screening endpoints.
+- **Unverified:** the Docker variant of the Postgres test setup (Docker isn't
+  installed on this machine). It mirrors the CI service definition.
