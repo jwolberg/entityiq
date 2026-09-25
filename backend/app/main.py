@@ -1,4 +1,6 @@
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI
 
@@ -13,6 +15,7 @@ from app.api.workflow import router as workflow_router
 from app.auth.examiner_guard import forbid_examiner_writes
 from app.auth.operator import auth_router, configure_session_store
 from app.screening.api import router as screening_router
+from app.ui import mount_ui
 
 
 @asynccontextmanager
@@ -48,3 +51,9 @@ app.include_router(screening_router)
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "service": "entityiq-backend", "version": "0.1.0"}
+
+
+# Hosted deploys serve the built UI from this process (ticket 0054). Mounted
+# last so every API route above takes precedence over static files.
+if _ui_dist := os.environ.get("ENTITYIQ_UI_DIST"):
+    mount_ui(app, Path(_ui_dist))
