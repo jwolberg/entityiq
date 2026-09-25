@@ -4,6 +4,9 @@ Each scenario declares the tier it is meant to illustrate; this test holds the
 dataset to that, so a scoring change that silently re-tiers the demo is caught.
 """
 
+import base64
+import os
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -19,7 +22,17 @@ from app.models.verification_run import VerificationRun
 
 
 @pytest.fixture
-def db():
+def db(monkeypatch):
+    # Officers are screened like ./scripts/demo.sh does: its screening env and
+    # a master key (tickets 0081, 0085).
+    from tests.screening.test_demo_and_e2e import _demo_script_screening_env
+
+    monkeypatch.delenv("ENTITYIQ_SCREENING_MAX_LIST_AGE_DAYS", raising=False)
+    for name, value in _demo_script_screening_env().items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv(
+        "ENTITYIQ_SCREENING_MASTER_KEY", base64.b64encode(os.urandom(32)).decode()
+    )
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -124,3 +137,58 @@ def test_identity_corroboration_states_are_represented(db):
     assert any(
         e.raw_value for e in linkedin_website
     ), "expected the established LinkedIn page to list a matching website"
+
+
+# ---------------------------------------------------------------------------
+# Ticket 0085: officers and owners in the demo
+# ---------------------------------------------------------------------------
+
+
+def _officer_outcomes(db: Session) -> dict[str, set[str]]:
+    from app.models.evidence import Evidence
+
+    rows = (
+        db.query(Submission.company_name, Evidence.normalized_value)
+        .join(VerificationRun, VerificationRun.submission_id == Submission.id)
+        .join(Evidence, Evidence.verification_run_id == VerificationRun.id)
+        .filter(Evidence.source == "officer_screening")
+        .all()
+    )
+    out: dict[str, set[str]] = {}
+    for company, disposition in rows:
+        out.setdefault(company, set()).add(disposition)
+    return out
+
+
+def test_sanctioned_owner_escalates_an_otherwise_clean_company(db):
+    load_demo_data(db)
+    ra = (
+        db.query(RiskAssessment)
+        .join(VerificationRun)
+        .join(Submission)
+        .filter(Submission.company_name == "Wingtip Freight Ltd")
+        .one()
+    )
+    names = {s["name"] for s in ra.contributing_signals}
+    assert ra.triage_tier == "escalate"
+    assert "officer_sanctions_match" in names
+    # The company itself looks clean: the owner is what escalates it.
+    assert ra.overall_score < 70
+    assert "sanctions_hit" not in names
+
+
+def test_demo_shows_every_officer_outcome(db):
+    load_demo_data(db)
+    outcomes = _officer_outcomes(db)
+    assert outcomes["Wingtip Freight Ltd"] >= {"MATCH", "CLEAR"}
+    assert outcomes["Northwind Traders Inc"] == {"CLEAR"}  # registry officers
+    assert outcomes["Fabrikam Robotics Corp"] == {"CLEAR"}  # declared people
+    assert "REVIEW" in outcomes["Brightpath Logistics LLC"]
+
+
+def test_individuals_demo_still_loads_after_the_company_demo(db):
+    """Officer subjects don't count as the Individuals demo's own intakes."""
+    from app.screening import demo_data as screening_demo
+
+    load_demo_data(db)
+    assert screening_demo.load_screening_demo(db) == len(screening_demo.DEMO_SUBJECTS)

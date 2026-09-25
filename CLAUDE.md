@@ -206,7 +206,7 @@ Short tickets don't need it.
 2. Migrations: `cd backend && alembic upgrade head` (dev uses
    `DATABASE_URL=sqlite:///./entityiq-dev.db`, `CELERY_TASK_ALWAYS_EAGER=true`).
    Demo logins: `operator@demo.entityiq.dev` / `lead@demo.entityiq.dev`,
-   password `entityiq-demo`; 6 fictional companies across all triage tiers.
+   password `entityiq-demo`; 7 fictional companies across all triage tiers (with officers/owners).
 3. Gate (mirrors CI): `cd backend && .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/pytest -q`;
    `cd frontend && npm run lint && npm run test && npm run build`.
    If the venv breaks (e.g. after a folder rename), recreate it per the runbook.

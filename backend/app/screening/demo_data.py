@@ -74,7 +74,7 @@ def check_demo_target(database_url: str) -> None:
     )
 
 
-def _ensure_watchlist(db: "Session") -> None:
+def ensure_watchlist(db: "Session") -> None:
     if db.query(ListSnapshot).filter_by(source=DEMO_SOURCE).count():
         return
     content = json.dumps(DEMO_WATCHLIST, sort_keys=True)
@@ -101,7 +101,11 @@ def _ensure_watchlist(db: "Session") -> None:
 
 
 def _already_screened(db: "Session", name: str) -> bool:
-    for subject in db.query(ScreeningSubject).all():
+    # Walk-in subjects only: a company's officers (kyb_entity_id) are the
+    # business demo's, even when they share a name (ticket 0085).
+    for subject in db.query(ScreeningSubject).filter(
+        ScreeningSubject.kyb_entity_id.is_(None)
+    ):
         try:
             if crypto.get_subject_pii(db, subject).get("name") == name:
                 return True
@@ -112,7 +116,7 @@ def _already_screened(db: "Session", name: str) -> bool:
 
 def load_screening_demo(db: "Session") -> int:
     check_demo_target(str(db.get_bind().url))
-    _ensure_watchlist(db)
+    ensure_watchlist(db)
     added = 0
     for pii in DEMO_SUBJECTS:
         if _already_screened(db, pii["name"]):
