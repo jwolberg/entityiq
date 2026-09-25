@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -126,6 +126,7 @@ _CORRECTABLE_FIELDS: frozenset[str] = frozenset(
 def correct_and_rerun(
     run_id: str,
     body: CorrectAndRerunRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(_get_db),
     operator=Depends(get_current_operator),
 ) -> CorrectAndRerunResponse:
@@ -215,6 +216,7 @@ def correct_and_rerun(
         entity_id=prior_run.entity_id,
         supersedes_run_id=run_id,
         db=db,
+        background=background_tasks,
     )
 
     # Record audit event with full before/after diff

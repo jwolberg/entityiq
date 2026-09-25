@@ -6,6 +6,7 @@ All tests run against SQLite in-memory — no live Postgres or Redis required.
 import unittest.mock as mock
 
 import pytest
+from fastapi import BackgroundTasks
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
@@ -24,6 +25,16 @@ _VALID_PAYLOAD = {
     "company_domain": "acme.example",
     "country": "US",
 }
+
+
+def test_submission_passes_background_tasks_to_enqueue(api_client: TestClient):
+    """The endpoint hands enqueue a BackgroundTasks so eager runs defer (0074)."""
+    with mock.patch("app.pipeline.orchestrator.enqueue_run") as enq:
+        resp = api_client.post("/submissions", json=_VALID_PAYLOAD)
+    assert resp.status_code == 202, resp.text
+    run_id, background = enq.call_args.args
+    assert run_id == resp.json()["run_id"]
+    assert isinstance(background, BackgroundTasks)
 
 
 # ---------------------------------------------------------------------------

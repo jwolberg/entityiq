@@ -28,6 +28,7 @@ from __future__ import annotations
 import unittest.mock as mock
 
 import pytest
+from fastapi import BackgroundTasks
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -198,6 +199,30 @@ class TestCorrectAndRerun:
         assert data["supersedes_run_id"] == run_id
         assert data["new_run_id"] != run_id
         assert data["corrections_applied"]["company_name"] == "Correct Co A LLC"
+
+    def test_correct_passes_background_tasks_to_enqueue(self, client, wf_engine):
+        """Correct-and-re-run hands enqueue a BackgroundTasks (eager defers)."""
+        TestingSessionLocal = sessionmaker(
+            bind=wf_engine, autocommit=False, autoflush=False
+        )
+        setup_db = TestingSessionLocal()
+        try:
+            run_id, _ = _make_run(setup_db, "Correct Co BG")
+        finally:
+            setup_db.close()
+
+        token = _sign_in(client, wf_engine, "correct_op_bg@test.example")
+
+        with mock.patch("app.pipeline.orchestrator.enqueue_run") as mock_enq:
+            resp = client.post(
+                f"/workflow/runs/{run_id}/correct",
+                json={"corrections": {"company_name": "Correct Co BG LLC"}},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        assert resp.status_code == 202, resp.text
+        new_run_id, background = mock_enq.call_args.args
+        assert new_run_id == resp.json()["new_run_id"]
+        assert isinstance(background, BackgroundTasks)
 
     def test_corrections_new_run_supersedes_prior(self, client, wf_engine):
         """New run from correction has supersedes_id pointing to prior run."""

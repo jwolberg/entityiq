@@ -1939,3 +1939,28 @@ Plan: `docs/plans/2026-09-25-002-decision-evidence-panel-plan.md` (PR #15).
   - A th/t spelling of a listed first name can therefore auto-clear. This is
     a recall risk for the normalizer and the corpus: ticket 0073 (related to
     gap G12 and ticket 0058).
+
+---
+
+## 2026-09-25 — Background verification with an operator notice (backlog 0074)
+
+- **Why:** in the local demo (`CELERY_TASK_ALWAYS_EAGER=true`) `.delay` ran the
+  whole pipeline inside the HTTP request, so "Check New Company" and "Re-run
+  Analysis" sat on a spinner for ~27 s (measured on the demo stack).
+- **Decision:** `enqueue_run(run_id, background)` defers the eager dispatch to
+  the endpoint's FastAPI `BackgroundTasks` (runs after the 202 is sent). With a
+  real broker dispatch stays inline, so a broker outage still fails the request
+  instead of returning a 202 for a run that was never queued. Measured after:
+  re-run returns in 0.1 s; the report lands ~30 s later.
+- **Tests stay synchronous:** Starlette's TestClient runs background tasks
+  before returning, so existing eager-mode e2e tests are unaffected.
+- **Side effect (intended):** in eager mode the endpoint's audit event
+  (`submission_received`, `trigger_reanalysis`, `correct_and_rerun`) is now
+  written before the pipeline's own events, matching production ordering.
+- **UI:** the queue shows a "running in the background" notice per submission
+  and re-polls every 5 s until the run's report appears (a report row only
+  exists once the pipeline finishes), then says it's ready. Re-run shows the
+  same notice and polls `GET /reports/{new_run_id}` every 3 s before offering
+  "View new run". Polling only runs while something is pending.
+- **Not changed:** individual screening (`screening/api.py`) still dispatches
+  inline in eager mode; out of scope for this ticket.
