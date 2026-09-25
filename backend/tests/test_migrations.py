@@ -46,3 +46,26 @@ def test_single_migration_head(monkeypatch, tmp_path):
         _config(f"sqlite:///{tmp_path / 'h.db'}", monkeypatch)
     ).get_heads()
     assert len(heads) == 1, heads
+
+
+def test_head_adds_company_person_and_declared_people(tmp_path, monkeypatch):
+    """Officer screening (ticket 0078): link table + declared people column."""
+    url = f"sqlite:///{tmp_path / 'p.db'}"
+    command.upgrade(_config(url, monkeypatch), "head")
+    insp = inspect(create_engine(url))
+
+    assert "declared_people" in {c["name"] for c in insp.get_columns("submission")}
+    cols = {c["name"]: c for c in insp.get_columns("company_person")}
+    assert {
+        "id",
+        "entity_id",
+        "first_run_id",
+        "screening_subject_id",
+        "relationship",
+        "role",
+        "sources",
+        "ownership_pct",
+        "created_at",
+    } <= set(cols)
+    # No plaintext name: it lives only in the encrypted screening subject.
+    assert not {"name", "full_name"} & set(cols)

@@ -23,9 +23,10 @@ Anonymization rules (ADR-0002 §2):
   - Network metadata: truncate source_ip to /24 (IPv4) or /48 (IPv6); null
     user_agent and forwarded_headers.
   - Submitted PII (tax_id, billing_address, phone, requester_full_name,
-    linkedin_url): nulled. work_email is NOT NULL in the schema, so it is
-    replaced with ANONYMIZED_EMAIL instead of nulled — the one deliberate
-    deviation from "null the PII fields" (see docs/implementation-notes.md).
+    linkedin_url, declared_people): nulled. work_email is NOT NULL in the
+    schema, so it is replaced with ANONYMIZED_EMAIL instead of nulled — the
+    one deliberate deviation from "null the PII fields" (see
+    docs/implementation-notes.md).
   - company_name, domain, country and all scores/evidence/triage data are
     left untouched.
   - Requester-association evidence (ticket 0020): the LinkedIn adapter's
@@ -85,6 +86,7 @@ _SUBMITTED_PII_FIELDS = (
     "phone",
     "requester_full_name",
     "linkedin_url",
+    "declared_people",
 )
 
 # The LinkedIn evidence field whose raw_payload carries a list of real names
