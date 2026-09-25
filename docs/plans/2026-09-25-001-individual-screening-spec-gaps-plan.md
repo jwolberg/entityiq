@@ -176,104 +176,122 @@ fall into four groups:
 
 ---
 
-## [5] Plan (tickets; `IS6-*` so they don't collide with IS0–IS5)
+## [5] Implementation Units
 
 Ordered by risk reduction. Each ticket is test-first per CLAUDE.md §[2], with one
 commit per ticket and a human merge.
 
-### Phase 6a — Close correctness gaps (no owner decision needed)
+**Phase 6a — Close correctness gaps (no owner decision needed)**
 
-- **IS6-T1: Claim timestamps come from the snapshot (G1).**
-  - Record claims take `retrieved_at` from their `ListSnapshot`. Subject claims
-    keep the submission time.
-  - RED test: a snapshot retrieved yesterday plus a run today; the claim must
-    equal the snapshot time.
-  - No migration. Old rows are left as they are (append-only), and the evidence
-    panel (PLAN-IS-EVIDENCE) derives the snapshot time live.
-- **IS6-T2: Replay guards against code drift (G9).**
-  - Replay compares the decision's `normalizer_version` (and a new
-    `SCORING_VERSION` constant) with the current ones. On mismatch it returns
-    `reproduced: null, reason: "code_version_changed"` and never reports a
-    silent pass or fail.
-  - Add **golden decisions**: 30 frozen bundles plus expected verdicts, checked
-    in (fictional).
-  - A CI test replays all of them. Changing a verdict needs a deliberate fixture
-    update and a version bump.
-  - Replace the JSON round-trip "reproducibility" metric with golden-replay
-    reproducibility.
-- **IS6-T3: `source_unavailable` term (G5).**
-  - When a required list is missing or stale, each candidate (and a synthetic
-    "coverage" row when there are no candidates) gets a named term that cites the
-    snapshot or its absence.
-  - Weight 0 on score, effect = floor at REVIEW. This keeps today's behavior,
-    now named.
-  - Rules that predate the term replay unchanged (the same pattern as
-    `dob_partial_conflict`).
-- **IS6-T4: Conflict flag (G6).**
-  - `decide` returns `has_conflict` per candidate and per run.
-  - The queue gets a "Conflicting evidence" filter/badge.
-  - Decide in the ticket whether `nationality_conflict` should floor (default:
-    no, because nationality data is noisy; note it).
-- **IS6-T5: Corpus categories and regression suite (G11, G12).**
-  - Add `diacritics`, `particles`, `alias_chain` (person alias-of-alias) and
-    `original_script_subject` categories. `alias_chain` is a subject that matches
-    only an alias the record carries through a second alias.
-  - Add `tests/screening/regressions/`: one JSON case per confirmed miss or false
-    positive, with a free-text `found_in` field. The recall gate and the
-    per-case expected band run in CI. It's never regenerated, only appended.
-  - Document the "confirmed failure → regression case" step in the runbook.
+### U1. IS6-T1 — Claim timestamps come from the snapshot (G1)
 
-### Phase 6b — Rules and thresholds (after D3, D4)
+- Record claims take `retrieved_at` from their `ListSnapshot`. Subject claims
+  keep the submission time.
+- RED test: a snapshot retrieved yesterday plus a run today; the claim must
+  equal the snapshot time.
+- No migration. Old rows are left as they are (append-only), and the evidence
+  panel (PLAN-IS-EVIDENCE) derives the snapshot time live.
 
-- **IS6-T6: Rule-version admin (G8).**
-  - `POST /screenings/rules` (lead only, audited, append-only), with a dry run
-    that returns the corpus metrics report for the proposed config next to the
-    current one.
-  - `GET /screenings/rules`.
-  - A minimal lead UI form (JSON editor + diff + metrics comparison).
-- **IS6-T7: Selector-based thresholds (G7).**
-  - Rule config grows `threshold_sets: [{when: {list_type?, risk_tier?, client_jurisdiction?}, thresholds}]`
-    with a default. The most specific match wins, and the tie-break is recorded.
-  - The decision stores the selected set and why it was selected.
-  - Optional `risk_tier` intake field (D3).
-  - Old rule configs (no `threshold_sets`) replay unchanged.
-- **IS6-T8: Rule version 2 (G4 + `match_at`).**
-  - One new rule version, created through IS6-T6, with the corpus report before
-    and after attached to the ticket.
-  - Owner approves the numbers before it becomes current.
+### U2. IS6-T2 — Replay guards against code drift (G9)
 
-### Phase 6c — Metrics and adversarial refresh
+- Replay compares the decision's `normalizer_version` (and a new
+  `SCORING_VERSION` constant) with the current ones. On mismatch it returns
+  `reproduced: null, reason: "code_version_changed"` and never reports a
+  silent pass or fail.
+- Add **golden decisions**: 30 frozen bundles plus expected verdicts, checked
+  in (fictional).
+- A CI test replays all of them. Changing a verdict needs a deliberate fixture
+  update and a version bump.
+- Replace the JSON round-trip "reproducibility" metric with golden-replay
+  reproducibility.
 
-- **IS6-T9: Operational metrics (G10).**
-  - Lead-only `GET /screenings/metrics?from&to`, derived live from decisions,
-    dispositions and runs. No new table (prior: derive, don't store).
-  - It reports:
-    - alerts per 1,000 screenings;
-    - REVIEW rate with a configurable healthy band and an out-of-band warning;
-    - time-to-disposition p50/p95;
-    - coverage (share of runs where every required list was complete);
-    - replay reproducibility over a sampled window.
-  - Every aggregate also reports its per-rule-version breakdown.
-  - Small lead panel on the Individuals page.
-- **IS6-T10: Scheduled adversarial refresh (G13, D2).**
-  - A seeded variant generator (transliteration tables, order swaps, particle
-    insertion/removal, diacritic folding and adding, alias chaining) with the
-    seed as a parameter.
-  - The weekly scheduled job generates variants of **fictional** records
-    (committed) and, if D2 = (b), of **live official-list entries** at runtime
-    (not committed). It reports recall and FP@100%-recall per category.
-  - Any recall miss files a ticket plus a regression case (IS6-T5).
-  - Resolves PRD Q4 (cadence = weekly, owner-adjustable).
+### U3. IS6-T3 — `source_unavailable` term (G5)
 
-### Phase 6d — Scope (after D1)
+- When a required list is missing or stale, each candidate (and a synthetic
+  "coverage" row when there are no candidates) gets a named term that cites the
+  snapshot or its absence.
+- Weight 0 on score, effect = floor at REVIEW. This keeps today's behavior,
+  now named.
+- Rules that predate the term replay unchanged (the same pattern as
+  `dob_partial_conflict`).
 
-- **IS6-T11: Entity-list coverage.**
-  - Per D1 (b): extend the KYB sanctions stage to UN/EU/UK entity records with
-    suffix normalization (Ltd/LLC/GmbH/OOO/…) and registration-number
-    corroboration.
-  - Add corporate-suffix and shell-alias corpus cases to the KYB sanctions tests.
-  - PRD amendments first: PRD.md for KYB, and PRD-IDV §[8] to state that
-    entities are out of scope.
+### U4. IS6-T4 — Conflict flag (G6)
+
+- `decide` returns `has_conflict` per candidate and per run.
+- The queue gets a "Conflicting evidence" filter/badge.
+- Decide in the ticket whether `nationality_conflict` should floor (default:
+  no, because nationality data is noisy; note it).
+
+### U5. IS6-T5 — Corpus categories and regression suite (G11, G12)
+
+- Add `diacritics`, `particles`, `alias_chain` (person alias-of-alias) and
+  `original_script_subject` categories. `alias_chain` is a subject that matches
+  only an alias the record carries through a second alias.
+- Add `tests/screening/regressions/`: one JSON case per confirmed miss or false
+  positive, with a free-text `found_in` field. The recall gate and the
+  per-case expected band run in CI. It's never regenerated, only appended.
+- Document the "confirmed failure → regression case" step in the runbook.
+
+**Phase 6b — Rules and thresholds (after D3, D4)**
+
+### U6. IS6-T6 — Rule-version admin (G8)
+
+- `POST /screenings/rules` (lead only, audited, append-only), with a dry run
+  that returns the corpus metrics report for the proposed config next to the
+  current one.
+- `GET /screenings/rules`.
+- A minimal lead UI form (JSON editor + diff + metrics comparison).
+
+### U7. IS6-T7 — Selector-based thresholds (G7)
+
+- Rule config grows `threshold_sets: [{when: {list_type?, risk_tier?, client_jurisdiction?}, thresholds}]`
+  with a default. The most specific match wins, and the tie-break is recorded.
+- The decision stores the selected set and why it was selected.
+- Optional `risk_tier` intake field (D3).
+- Old rule configs (no `threshold_sets`) replay unchanged.
+
+### U8. IS6-T8 — Rule version 2 (G4 + `match_at`)
+
+- One new rule version, created through IS6-T6, with the corpus report before
+  and after attached to the ticket.
+- Owner approves the numbers before it becomes current.
+
+**Phase 6c — Metrics and adversarial refresh**
+
+### U9. IS6-T9 — Operational metrics (G10)
+
+- Lead-only `GET /screenings/metrics?from&to`, derived live from decisions,
+  dispositions and runs. No new table (prior: derive, don't store).
+- It reports:
+  - alerts per 1,000 screenings;
+  - REVIEW rate with a configurable healthy band and an out-of-band warning;
+  - time-to-disposition p50/p95;
+  - coverage (share of runs where every required list was complete);
+  - replay reproducibility over a sampled window.
+- Every aggregate also reports its per-rule-version breakdown.
+- Small lead panel on the Individuals page.
+
+### U10. IS6-T10 — Scheduled adversarial refresh (G13, D2)
+
+- A seeded variant generator (transliteration tables, order swaps, particle
+  insertion/removal, diacritic folding and adding, alias chaining) with the
+  seed as a parameter.
+- The weekly scheduled job generates variants of **fictional** records
+  (committed) and, if D2 = (b), of **live official-list entries** at runtime
+  (not committed). It reports recall and FP@100%-recall per category.
+- Any recall miss files a ticket plus a regression case (IS6-T5).
+- Resolves PRD Q4 (cadence = weekly, owner-adjustable).
+
+**Phase 6d — Scope (after D1)**
+
+### U11. IS6-T11 — Entity-list coverage
+
+- Per D1 (b): extend the KYB sanctions stage to UN/EU/UK entity records with
+  suffix normalization (Ltd/LLC/GmbH/OOO/…) and registration-number
+  corroboration.
+- Add corporate-suffix and shell-alias corpus cases to the KYB sanctions tests.
+- PRD amendments first: PRD.md for KYB, and PRD-IDV §[8] to state that
+  entities are out of scope.
 
 ### Docs
 

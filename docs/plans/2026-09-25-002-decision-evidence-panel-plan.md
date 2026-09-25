@@ -180,54 +180,64 @@ unchanged and the panel loads lazily.
 - **Style.** Inline style objects and existing colors, with conflict red and
   support green reused from `IndividualDetail`.
 
-## [4] Tickets (`IS7-*`)
+## [4] Implementation Units
 
 Each ticket is test-first (RED test reviewed before implementation), with one
 commit per ticket and a human merge.
 
-- **IS7-T1: Band reasons in `dispose` (backend, S).**
-  - Extract `band_with_reason`; `decide()` uses it; add
-    `run_reason(results, source_status)`.
-  - RED:
-    - for every corpus case, `decide()` output is byte-identical before and
-      after the refactor (snapshot the current results first);
-    - each reason code has a test (one per tier, per CLAUDE.md §[12.1]);
-    - golden replay stays green.
-- **IS7-T2: Explanation builder and endpoint (backend, M).**
-  - `app/screening/explain.py` (pure: stored rows in, dict out) plus
-    `GET /screenings/{run_id}/explanation`, and `SOURCE_META` with verified
-    URLs.
-  - RED:
-    - for every corpus case run through the real pipeline in the e2e fixture,
-      each banding step's `band` equals the stored band, and the disposition
-      step equals `system_disposition`;
-    - the payload contains **no subject values**: assert that the subject's
-      name, DOB and document numbers never appear in the serialized JSON;
-    - it works after crypto-shred;
-    - an unavailable or stale list gives `auto_clear_blocked_by_coverage`;
-    - the common-name step appears when the penalty applied;
-    - an integration key reading another client's run gets 404;
-    - an examiner can read; the audit event is written;
-    - the query count is constant in the number of candidates (existing pattern).
-- **IS7-T3: Client types and API method (frontend, S).** Add
-  `ScreeningExplanation` types to `api/client.ts` and a `getScreeningExplanation`
-  method.
-- **IS7-T4: `DecisionEvidencePanel` component (frontend, M).**
-  - Vitest RED:
-    - opens from the header button and the per-candidate link, scrolled to that
-      candidate;
-    - Esc closes it and focus returns to the trigger;
-    - citation chips render the list name, entry, field and as-of date;
-    - error state is fail-soft;
-    - in-flight and shredded states render;
-    - the deep-link param opens the panel;
-    - a CLEAR auto-closed run shows the auto-CLEAR reason.
-- **IS7-T5: Wire into `IndividualDetail` + UX pass (frontend, S).**
-  - Remove the now-duplicated raw locator lines from the candidate cards, or
-    keep a one-line summary.
-  - Run the `ux-designer` agent on the panel and fix its findings.
-  - Check it in the demo (`./scripts/demo.sh`) with all three dispositions and a
-    monitoring run.
+### U1. IS7-T1 — Band reasons in `dispose` (backend, S)
+
+- Extract `band_with_reason`; `decide()` uses it; add
+  `run_reason(results, source_status)`.
+- RED:
+  - for every corpus case, `decide()` output is byte-identical before and
+    after the refactor (snapshot the current results first);
+  - each reason code has a test (one per tier, per CLAUDE.md §[12.1]);
+  - golden replay stays green.
+
+### U2. IS7-T2 — Explanation builder and endpoint (backend, M)
+
+- `app/screening/explain.py` (pure: stored rows in, dict out) plus
+  `GET /screenings/{run_id}/explanation`, and `SOURCE_META` with verified
+  URLs.
+- RED:
+  - for every corpus case run through the real pipeline in the e2e fixture,
+    each banding step's `band` equals the stored band, and the disposition
+    step equals `system_disposition`;
+  - the payload contains **no subject values**: assert that the subject's
+    name, DOB and document numbers never appear in the serialized JSON;
+  - it works after crypto-shred;
+  - an unavailable or stale list gives `auto_clear_blocked_by_coverage`;
+  - the common-name step appears when the penalty applied;
+  - an integration key reading another client's run gets 404;
+  - an examiner can read; the audit event is written;
+  - the query count is constant in the number of candidates (existing pattern).
+
+### U3. IS7-T3 — Client types and API method (frontend, S)
+
+Add
+`ScreeningExplanation` types to `api/client.ts` and a `getScreeningExplanation`
+method.
+
+### U4. IS7-T4 — `DecisionEvidencePanel` component (frontend, M)
+
+- Vitest RED:
+  - opens from the header button and the per-candidate link, scrolled to that
+    candidate;
+  - Esc closes it and focus returns to the trigger;
+  - citation chips render the list name, entry, field and as-of date;
+  - error state is fail-soft;
+  - in-flight and shredded states render;
+  - the deep-link param opens the panel;
+  - a CLEAR auto-closed run shows the auto-CLEAR reason.
+
+### U5. IS7-T5 — Wire into `IndividualDetail` + UX pass (frontend, S)
+
+- Remove the now-duplicated raw locator lines from the candidate cards, or
+  keep a one-line summary.
+- Run the `ux-designer` agent on the panel and fix its findings.
+- Check it in the demo (`./scripts/demo.sh`) with all three dispositions and a
+  monitoring run.
 
 **Order:** T1 → T2 → T3 → T4 → T5. T3 can start once T2's response schema is
 fixed.
