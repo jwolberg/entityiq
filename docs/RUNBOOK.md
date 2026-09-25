@@ -1,8 +1,8 @@
 # Dev Runbook
 
 Local setup and run instructions for EntityIQ (backend + frontend monorepo).
-Reflects the codebase as of Phase 2 (operator workbench, reporting + integration
-API, service-credential auth).
+Covers KYB business verification and the Individual Screening offering
+(sanctions screening of people). Last verified on dev 2026-09-24.
 
 For what the system is and how it's structured, see [ARCHITECTURE.md](./ARCHITECTURE.md);
 for build status see [BUILD_PLAN.md](./BUILD_PLAN.md).
@@ -290,6 +290,62 @@ Crypto-shred retention for screening subjects (ADR-0004), also scheduled:
 .venv/bin/python -m app.screening.retention
 ```
 
+### Testing screening by hand on dev
+
+`./scripts/demo.sh` sets everything below for you. To do it by hand on the
+quick-start path (SQLite, inline pipeline), from `backend/`:
+
+```bash
+export DATABASE_URL=sqlite:///./entityiq-dev.db CELERY_TASK_ALWAYS_EAGER=true
+export ENTITYIQ_SCREENING_MASTER_KEY="$(python -c 'import base64,os;print(base64.b64encode(os.urandom(32)).decode())')"
+# Screen against the fictional demo list only. Without these two, the four
+# official lists count as missing and every CLEAR is forced to REVIEW.
+export ENTITYIQ_SCREENING_REQUIRED_SOURCES=demo_watchlist
+export ENTITYIQ_SCREENING_MAX_LIST_AGE_DAYS=36500
+
+alembic upgrade head
+python -m app.seed                   # prints the demo logins + an API key
+python -m app.screening.demo_data    # demo list + 4 screened people
+uvicorn app.main:app --reload
+```
+
+Keep the same master key for the life of the database (for example, save it
+to a gitignored file as `demo.sh` does). A different key can't decrypt
+subjects stored under the old one, so screening reads on that database fail.
+Delete the SQLite file and start over if you lose it.
+To test against the real lists instead, run `python -m app.lists.ingest`
+(network) and leave the two list variables unset.
+
+Then, in another shell (`KEY` is the API key `app.seed` printed):
+
+```bash
+B=http://localhost:8000
+# Integration key: submit, then read the result back (own runs only).
+curl -s -X POST $B/screenings -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+  -d '{"name":"Ada Fictional","dob":"1980-01-01"}'
+# -> {"run_id":"...","status":"complete","disposition":"CLEAR","auto_closed":true}
+curl -s -X POST $B/screenings -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+  -d '{"name":"Teodor Vasilescu","dob":"1962-08-30","nationality":"RO"}'
+# -> {"...","disposition":"MATCH","auto_closed":false}
+curl -s $B/screenings/<run_id> -H "X-API-Key: $KEY"
+
+# Operator session (the field is session_token).
+T=$(curl -s -X POST $B/auth/sign-in -H 'Content-Type: application/json' \
+  -d '{"email":"operator@demo.entityiq.dev","password":"entityiq-demo"}' \
+  | python -c 'import json,sys;print(json.load(sys.stdin)["session_token"])')
+curl -s "$B/screenings?limit=2" -H "Authorization: Bearer $T"   # {"items":[...],"total":N,...}
+curl -s -X POST $B/screenings/<run_id>/disposition -H "Authorization: Bearer $T" \
+  -H 'Content-Type: application/json' -d '{"disposition":"CLEAR","notes":"dev test"}'   # 201
+```
+
+Expected on the demo data:
+
+- The queue is sorted MATCH, REVIEW, CLEAR.
+- An API key gets 401 on the queue, and 404 on runs it didn't submit.
+- An examiner (`examiner@demo.entityiq.dev`) gets `"reproduced": true` from
+  `POST /screenings/<run_id>/replay`, and 403 on any write.
+- The UI shows all of this under **Individuals**.
+
 ---
 
 ## Environment variables
@@ -315,7 +371,7 @@ Crypto-shred retention for screening subjects (ADR-0004), also scheduled:
 | `ENTITYIQ_SCREENING_STAGE_TIMEOUT_SECONDS` | `10` | Per-stage budget for individual screening (separate from KYB's). |
 | `ENTITYIQ_SCREENING_RUN_TIMEOUT_SECONDS` | `60` | Whole-run budget for individual screening. Celery soft limit is this + 30 s, hard + 45 s. Screening tasks run on the `screening` queue: start a worker with `celery -A app.worker worker -Q screening` (and one for the default queue for KYB).
 | `ENTITYIQ_SCREENING_REQUIRED_SOURCES` | `ofac_sdn,un_consolidated,eu_fsf,uk_ofsi` | Lists that must be loaded **and fresh** for a CLEAR to auto-close. Any missing or stale one forces REVIEW and shows as a coverage gap. `demo.sh` sets it to `demo_watchlist`. |
-| `ENTITYIQ_SCREENING_MAX_LIST_AGE_DAYS` | `7` | A required list whose latest snapshot is older than this counts as unavailable. Run `app.lists.ingest` daily. |
+| `ENTITYIQ_SCREENING_MAX_LIST_AGE_DAYS` | `7` | A required list whose latest snapshot is older than this counts as unavailable. Run `app.lists.ingest` daily. `demo.sh` sets `36500`, because the demo list is a fixed snapshot dated 2026-09-01. |
 | `TRUSTED_PROXY_DEPTH` | `0` | Hops to walk back from the right of `X-Forwarded-For` to find the client IP. `0` = use the direct connection peer (correct when not behind a proxy). Set to the number of trusted proxies in front of the app. |
 | `ENTITYIQ_RETENTION_NETWORK_DAYS` | `90` | Days a submission's raw network metadata (`source_ip`/`user_agent`/`forwarded_headers`) is kept before the retention job truncates/nulls it (ADR-0002). |
 | `ENTITYIQ_RETENTION_REVIEWED_DAYS` | `1825` | Days after a review decision before the retention job nulls a reviewed submission's PII (ADR-0002). |
@@ -331,7 +387,47 @@ Crypto-shred retention for screening subjects (ADR-0004), also scheduled:
 ruff check .            # lint
 ruff format --check .   # formatting
 pytest -q               # tests (run on SQLite; no Postgres/Redis needed)
+python -m app.screening.metrics screening-metrics.json   # screening gate (CI runs it)
 ```
+
+- **No setup needed.** `tests/conftest.py` sets test-only screening defaults:
+  - required lists = `ofac_sdn`;
+  - no list-age limit.
+
+  Tests that check freshness or the demo set their own env.
+- **The metrics gate** exits non-zero unless blocking recall and
+  reproducibility are both 1.0. It runs over the labeled corpus in
+  `tests/screening/corpus/v2.json`. After changing the corpus generator,
+  regenerate the corpus with `python -m tests.screening.corpus.generate`
+  (a test fails if the checked-in file drifts).
+- **Postgres-only tests** are skipped unless `TEST_POSTGRES_URL` is set;
+  `pytest -rs` lists them. They cover the append-only triggers and the
+  retention jobs running with them. CI runs them against a `postgres:16`
+  service.
+  - **They migrate the target database up and then down to `base`,** so point
+    them at a throwaway database, never your dev or compose database.
+  - With a host Postgres (verified 2026-09-24):
+
+    ```bash
+    export LC_ALL=en_US.UTF-8
+    initdb -D /tmp/eiq-pg -U postgres --auth=trust
+    pg_ctl -D /tmp/eiq-pg -l /tmp/eiq-pg.log -w start \
+      -o "-p 55432 -c listen_addresses=127.0.0.1 -c unix_socket_directories=''"
+    createdb -h 127.0.0.1 -p 55432 -U postgres eiq_test
+    TEST_POSTGRES_URL="postgresql+psycopg://postgres@127.0.0.1:55432/eiq_test" pytest -q
+    pg_ctl -D /tmp/eiq-pg stop
+    ```
+
+    TCP only (`unix_socket_directories=''`) avoids macOS's socket-path length
+    limit.
+  - With Docker (mirrors CI; not verified locally):
+
+    ```bash
+    docker run --rm -d --name eiq-test-pg -p 55432:5432 \
+      -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=eiq_test postgres:16
+    TEST_POSTGRES_URL="postgresql+psycopg://postgres:postgres@127.0.0.1:55432/eiq_test" pytest -q
+    docker stop eiq-test-pg
+    ```
 
 ### Frontend (from `frontend/`)
 
@@ -383,6 +479,11 @@ CI (GitHub Actions, `.github/workflows/ci.yml`) runs all of the above plus the f
 | POST | `/api-clients` | Create an integration API key; full key shown once (**lead only**; audited) |
 | GET | `/api-clients` | List integration API keys — prefix + metadata only, never the hash (**lead only**) |
 | POST | `/api-clients/{id}/revoke` | Revoke an integration API key; rejected on its next use (**lead only**; audited) |
+| POST | `/screenings` | Screen a person. `X-API-Key` or operator Bearer; 503 if `ENTITYIQ_SCREENING_MASTER_KEY` is unset |
+| GET | `/screenings` | Screening queue, most severe first. Filters: `disposition`, `trigger`, `list_source`, `older_than_days`; paging: `limit` (default 50, max 500), `offset`; returns `total` (operator only; audited) |
+| GET | `/screenings/{run_id}` | Screening detail. Operators see any run; an API key sees only its own runs (404 otherwise), without analyst notes (audited) |
+| POST | `/screenings/{run_id}/disposition` | Human CLEAR / MATCH with notes; append-only (operator or lead; audited) |
+| POST | `/screenings/{run_id}/replay` | Recompute from the frozen inputs and report whether it reproduces (lead or examiner; audited) |
 
 Exact request/response shapes are in the live `/docs`. Report responses are
 role-gated per ADR-0002 (`docs/decisions/0002-pii-retention-policy.md`): leads

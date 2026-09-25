@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import base64
 import os
+import re
+from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine
@@ -15,10 +17,27 @@ from app.screening import demo_data
 from app.screening.models import ScreeningDecision
 from tests.screening.conftest import load_people
 
+_DEMO_SH = Path(__file__).resolve().parents[3] / "scripts" / "demo.sh"
+
+
+def _demo_script_screening_env() -> dict[str, str]:
+    """The screening env defaults scripts/demo.sh exports (VAR=${VAR:-value})."""
+    return dict(
+        re.findall(
+            r'^export (ENTITYIQ_SCREENING_\w+)="\$\{\1:-([^}]*)\}"',
+            _DEMO_SH.read_text(),
+            re.M,
+        )
+    )
+
 
 @pytest.fixture
 def db(tmp_path, monkeypatch):
-    monkeypatch.setenv("ENTITYIQ_SCREENING_REQUIRED_SOURCES", "demo_watchlist")
+    # Behave exactly like ./scripts/demo.sh: its env on top of product
+    # defaults, not the relaxed test defaults from tests/conftest.py.
+    monkeypatch.delenv("ENTITYIQ_SCREENING_MAX_LIST_AGE_DAYS", raising=False)
+    for name, value in _demo_script_screening_env().items():
+        monkeypatch.setenv(name, value)
     monkeypatch.setenv(
         "ENTITYIQ_SCREENING_MASTER_KEY", base64.b64encode(os.urandom(32)).decode()
     )
@@ -43,6 +62,12 @@ def test_demo_covers_every_disposition_and_is_idempotent(db):
 
     assert demo_data.load_screening_demo(db) == 0
     assert db.query(ScreeningDecision).count() == added
+
+
+def test_demo_script_screens_only_against_the_demo_list():
+    assert _demo_script_screening_env()["ENTITYIQ_SCREENING_REQUIRED_SOURCES"] == (
+        "demo_watchlist"
+    )
 
 
 def test_demo_uses_a_clearly_fictional_source():

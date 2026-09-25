@@ -1,0 +1,20 @@
+# Upload only what the root Dockerfile needs to Cloud Build (ticket 0054).
+# Everything is excluded, then the build inputs are re-included.
+*
+!Dockerfile
+!backend/
+!frontend/
+
+# Never ship local state, secrets or real-company data.
+**/node_modules/
+**/.venv/
+**/__pycache__/
+**/*.db
+**/.screening-demo.key
+**/.env
+**/.env.*
+backend/tests/
+frontend/dist/
+frontend/*.tsbuildinfo
+**/.ruff_cache/
+**/.pytest_cache/
