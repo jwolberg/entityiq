@@ -74,6 +74,20 @@ fictional watchlist, so it's deterministic and works offline. Details are in
 | **Operator workbench** | Everything for reviewing one case: the submitted-vs-discovered diff, domain/DNS, registry, contacts, and an HQ map with address confidence. Operators can also flag risks, review with notes, correct and re-run, export JSON, and see a per-case activity timeline. |
 | **Integration API** | Endpoints: `POST /submissions` (API key or operator token, idempotent), report read and export, and re-analysis. Leads provision API keys in the UI. The client IP is captured at the trusted edge, so a client can't spoof it via `X-Forwarded-For`. |
 
+**A verification run.** Wingtip Freight Ltd (a fictional demo company) looks
+clean, with an overall risk score of 10. Its declared majority owner, however,
+is a MATCH on the (fictional) sanctions list, so the run is forced to
+`escalate`. The risk assessment names the signal behind that and cites its
+evidence. The Officers & Owners panel draws each person around the company,
+with their screening result; clicking a person opens their screening.
+
+<p>
+  <img src="docs/img/run-escalate.png" width="49%" alt="Verification run: overall score 10, triage escalate" />
+  <img src="docs/img/run-risk-assessment.png" width="49%" alt="Risk assessment: officer_sanctions_match forces escalation, with trust signals" />
+</p>
+
+![Officers & Owners: the owner is a MATCH, the registry director is CLEAR](docs/img/run-officers-owners.png)
+
 <p>
   <img src="docs/img/detail-volga.png" width="49%" alt="Company detail — sanctions escalation" />
   <img src="docs/img/audit-log.png" width="49%" alt="Lead audit log" />
@@ -94,6 +108,13 @@ fictional watchlist, so it's deterministic and works offline. Details are in
 | **Ongoing monitoring** | A new list snapshot re-screens affected subjects as new runs. Past decisions are never edited. |
 | **Privacy by design** | Each subject's data is encrypted with its own key. Once the 5-year AML retention period ends, the key is destroyed (crypto-shredding), which leaves the append-only records intact but unreadable. |
 | **Examiner role** | A read-only role for regulators. It can view every screening and the audit log and replay decisions, but can't write. |
+
+**A screening result with "Why this decision?" open** (`?why=1`). The subject
+matches the list entry on name, full date of birth and nationality. The panel
+walks through the lists checked, the candidates found, each scoring term with
+its citation, the final MATCH, and the human review still to come.
+
+![Screening result for a MATCH with the "Why this decision?" panel open](docs/img/screening-why.png)
 
 ## How it works
 
