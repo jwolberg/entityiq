@@ -1964,3 +1964,27 @@ Plan: `docs/plans/2026-09-25-002-decision-evidence-panel-plan.md` (PR #15).
   "View new run". Polling only runs while something is pending.
 - **Not changed:** individual screening (`screening/api.py`) still dispatches
   inline in eager mode; out of scope for this ticket.
+
+---
+
+## 2026-09-25 — Background individual screening (backlog 0075)
+
+- **Decision:** `enqueue_screening(run_id, background)` mirrors `enqueue_run`
+  (0074): eager dispatch is deferred to the endpoint's `BackgroundTasks`;
+  broker mode and monitoring re-screens (no request) stay inline.
+- **API contract:** in eager mode `POST /screenings` now returns
+  `status: "pending"` with `disposition: null`, which is what broker mode
+  already returned. Integrators must read the disposition from
+  `GET /screenings/{run_id}`, not the create response. Existing screening tests
+  are unaffected because their fixture runs the pipeline inline.
+- **UI change:** "Screen person" no longer jumps to the detail page. The queue
+  shows a background notice, then the system disposition with an "Open" link,
+  and refreshes the list once when the run finishes.
+- **Audit tradeoff:** the notice polls `GET /screenings/{run_id}` (every 3 s,
+  the detail page's existing cadence), and each poll records a
+  `screening.viewed` event, as the detail page's poll already does. Polling
+  the list would have logged a `screening.queue_viewed` event with every
+  visible run id on each tick instead.
+- **Measured:** intake returned in 0.45 s on the demo stack, and the run
+  completed shortly after. The old timing wasn't measured; screening makes no
+  network calls, so the gain is smaller than for company verification (27 s).

@@ -1,14 +1,31 @@
 /**
  * Individuals queue (ticket 0043): screening runs, most severe first.
- * Operators can also screen a person from here (intake, ticket 0036).
+ * Operators can also screen a person from here (intake, ticket 0036). The
+ * screening runs in the background: the operator stays on the queue, sees a
+ * notice, and gets the outcome with a link when it finishes (ticket 0075).
  */
 
 import { useEffect, useState } from "react";
-import { apiClient, ScreeningQueueItem } from "../../api/client";
+import { apiClient, ScreeningQueueItem, SystemDisposition } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
 import { DispositionBadge } from "../../components/DispositionBadge";
+import { SCREENING_POLL_MS } from "./IndividualDetail";
 
-export function IndividualsQueue({ onSelect }: { onSelect: (runId: string) => void }) {
+interface BackgroundScreening {
+  runId: string;
+  name: string;
+  state: "running" | "done" | "failed";
+  disposition: SystemDisposition | null;
+}
+
+export function IndividualsQueue({
+  onSelect,
+  pollMs = SCREENING_POLL_MS,
+}: {
+  onSelect: (runId: string) => void;
+  /** How often to check a background screening's status (ms). */
+  pollMs?: number;
+}) {
   const { auth } = useAuth();
   const [items, setItems] = useState<ScreeningQueueItem[] | null>(null);
   const [total, setTotal] = useState<number | null>(null);
@@ -20,6 +37,8 @@ export function IndividualsQueue({ onSelect }: { onSelect: (runId: string) => vo
   const [dob, setDob] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [background, setBackground] = useState<BackgroundScreening[]>([]);
+  const [pollTick, setPollTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +57,51 @@ export function IndividualsQueue({ onSelect }: { onSelect: (runId: string) => vo
       cancelled = true;
     };
   }, [auth.token, filter, trigger, refresh]);
+
+  // Poll only the runs we started (each read is an audited view, like the
+  // detail page's own poll); refresh the queue once when one finishes.
+  const running = background.filter((b) => b.state === "running").map((b) => b.runId);
+  const runningKey = running.join(",");
+  useEffect(() => {
+    if (!runningKey) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const results = await Promise.all(
+        runningKey.split(",").map((runId) =>
+          apiClient.getScreening(runId, auth.token).then(
+            (d) => ({ runId, d }),
+            () => ({ runId, d: null })
+          )
+        )
+      );
+      if (cancelled) return;
+      const finished = new Map<string, BackgroundScreening["state"]>();
+      const dispositions = new Map<string, SystemDisposition | null>();
+      for (const { runId, d } of results) {
+        const status = d?.run.status;
+        if (status && status !== "pending" && status !== "running") {
+          finished.set(runId, status === "failed" ? "failed" : "done");
+          dispositions.set(runId, d?.decision?.system_disposition ?? null);
+        }
+      }
+      if (finished.size === 0) {
+        setPollTick((n) => n + 1);
+        return;
+      }
+      setBackground((bs) =>
+        bs.map((b) =>
+          finished.has(b.runId)
+            ? { ...b, state: finished.get(b.runId)!, disposition: dispositions.get(b.runId) ?? null }
+            : b
+        )
+      );
+      setRefresh((n) => n + 1);
+    }, pollMs);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [runningKey, pollTick, auth.token, pollMs]);
 
   async function loadMore() {
     if (!items) return;
@@ -66,14 +130,16 @@ export function IndividualsQueue({ onSelect }: { onSelect: (runId: string) => vo
         { name: name.trim(), dob: dob.trim() || undefined },
         auth.token
       );
+      setBackground((bs) => [
+        ...bs,
+        { runId: r.run_id, name: name.trim(), state: "running", disposition: null },
+      ]);
       setName("");
       setDob("");
-      onSelect(r.run_id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
-      setRefresh((n) => n + 1);
     }
   }
 
@@ -127,6 +193,53 @@ export function IndividualsQueue({ onSelect }: { onSelect: (runId: string) => vo
           </button>
         </form>
       )}
+
+      {background.map((b) => (
+        <div
+          key={b.runId}
+          role="status"
+          data-testid="background-screening-notice"
+          style={b.state === "running" ? styles.notice : b.state === "failed" ? styles.noticeFailed : styles.noticeDone}
+        >
+          <span>
+            {b.state === "running" && (
+              <>
+                Screening <strong>{b.name}</strong> is running in the background.
+                You can keep working; the result will show here.
+              </>
+            )}
+            {b.state === "done" && (
+              <>
+                Screening <strong>{b.name}</strong> finished:{" "}
+                <DispositionBadge value={b.disposition} />
+              </>
+            )}
+            {b.state === "failed" && (
+              <>
+                Screening <strong>{b.name}</strong> failed. Open it for details.
+              </>
+            )}
+          </span>
+          {b.state !== "running" && (
+            <button
+              type="button"
+              onClick={() => onSelect(b.runId)}
+              style={styles.linkBtn}
+              data-testid="open-background-screening"
+            >
+              Open →
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setBackground((bs) => bs.filter((x) => x.runId !== b.runId))}
+            style={styles.dismiss}
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      ))}
 
       {error && <div role="alert" style={styles.error}>{error}</div>}
       {items === null && !error && <div>Loading…</div>}
@@ -199,6 +312,19 @@ const styles: Record<string, React.CSSProperties> = {
   button: { padding: "0.375rem 0.75rem", borderRadius: "0.375rem", border: "none",
             backgroundColor: "#1e3a5f", color: "#fff", cursor: "pointer" },
   error: { color: "#991b1b", marginBottom: "0.75rem" },
+  notice: { display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem",
+            padding: "0.75rem 1rem", backgroundColor: "#eff6ff", border: "1px solid #93c5fd",
+            borderRadius: "0.375rem", color: "#1e3a8a", fontSize: "0.85rem" },
+  noticeDone: { display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem",
+                padding: "0.75rem 1rem", backgroundColor: "#f0fdf4", border: "1px solid #86efac",
+                borderRadius: "0.375rem", color: "#166534", fontSize: "0.85rem" },
+  noticeFailed: { display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem",
+                  padding: "0.75rem 1rem", backgroundColor: "#fef2f2", border: "1px solid #fca5a5",
+                  borderRadius: "0.375rem", color: "#991b1b", fontSize: "0.85rem" },
+  linkBtn: { background: "none", border: "none", color: "#1d4ed8", cursor: "pointer",
+             fontWeight: 600, fontSize: "0.85rem", padding: 0 },
+  dismiss: { marginLeft: "auto", background: "none", border: "none", color: "inherit",
+             fontSize: "1.1rem", lineHeight: 1, cursor: "pointer" },
   table: { width: "100%", borderCollapse: "collapse", backgroundColor: "#fff" },
   th: { textAlign: "left", padding: "0.5rem", borderBottom: "1px solid #e5e7eb",
         fontSize: "0.75rem", color: "#6b7280", textTransform: "uppercase" },

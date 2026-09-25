@@ -121,6 +121,55 @@ describe("IndividualsQueue", () => {
     expect(calls.some((c) => c.includes("offset=3"))).toBe(true);
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
   });
+
+  it("screens in the background: stays on the queue, then reports the outcome", async () => {
+    const Wrapper = withRole("operator");
+    const calls: string[] = [];
+    let detailPolls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, opts?: RequestInit) => {
+        const method = opts?.method ?? "GET";
+        calls.push(`${method} ${url}`);
+        if (method === "POST" && url === "/api/screenings") {
+          return { ok: true, json: async () => ({ run_id: "r-new", status: "pending", disposition: null }) };
+        }
+        if (url.startsWith("/api/screenings/r-new")) {
+          detailPolls += 1;
+          const body =
+            detailPolls < 2
+              ? detail({ run_id: "r-new", decision: null, run: { status: "running", trigger: "intake" } })
+              : detail({ run_id: "r-new" });
+          return { ok: true, json: async () => body };
+        }
+        return { ok: true, json: async () => QUEUE };
+      })
+    );
+    const onSelect = vi.fn();
+    render(<Wrapper><IndividualsQueue onSelect={onSelect} pollMs={10} /></Wrapper>);
+    await waitFor(() => expect(screen.getAllByTestId("screening-row")).toHaveLength(3));
+
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Teodor Vasilescu" } });
+    fireEvent.submit(screen.getByTestId("screen-person-form"));
+
+    const notice = await screen.findByTestId("background-screening-notice");
+    expect(notice.textContent).toContain("Teodor Vasilescu");
+    expect(notice.textContent).toContain("running in the background");
+    expect(onSelect).not.toHaveBeenCalled();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("background-screening-notice").textContent).toContain("MATCH")
+    );
+    const listLoads = () => calls.filter((c) => c.startsWith("GET /api/screenings?") || c === "GET /api/screenings").length;
+    await waitFor(() => expect(listLoads()).toBe(2)); // initial + one refresh when it finished
+    const pollsWhenDone = detailPolls;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(detailPolls).toBe(pollsWhenDone); // polling stopped
+    expect(listLoads()).toBe(2);
+
+    fireEvent.click(screen.getByTestId("open-background-screening"));
+    expect(onSelect).toHaveBeenCalledWith("r-new");
+  });
 });
 
 describe("IndividualDetail", () => {
