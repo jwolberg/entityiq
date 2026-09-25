@@ -1877,3 +1877,65 @@ Gotchas:
   `docs/runbooks/deploy-cloud-run.md`.
 - To stop spending while paused:
   `gcloud sql instances patch entityiq-pg --activation-policy NEVER --project entityiq-demo`.
+
+## 2026-09-25 — Decision evidence panel (tickets 0066–0070)
+
+Plan: `docs/plans/2026-09-25-002-decision-evidence-panel-plan.md` (PR #15).
+
+- **One band rule (0066):**
+  - `band_with_reason` / `run_reason` now back `decide()`, and the explanation
+    calls them too.
+  - `decide()` output didn't change. `tests/screening/fixtures/decide_corpus_golden.json`
+    pins it for every corpus case (with and without a coverage gap): a readable
+    per-case summary plus a SHA-256 of the full output.
+  - Mutation check: dropping the conflict floor failed 4 tests.
+  - Known blind spot: moving `match_at` by +0.05 does *not* trip the golden,
+    because no corpus score falls in [0.9, 0.95). The exact-threshold unit
+    test covers that boundary instead.
+- **Derived, not stored (0067):**
+  - `GET /screenings/{run_id}/explanation` builds everything from stored rows
+    and never decrypts the subject. So it works after a crypto-shred and
+    carries no subject values (a test checks the name, DOB, document number,
+    place of birth and address).
+  - Snapshot dates in citations come from the `list_snapshot` row, not
+    `claim.retrieved_at`. That stores the run start (gap G1, ticket 0055), so
+    old rows cite correctly without a migration.
+- **Drift flag (0067):**
+  - Bands and the run disposition are recomputed with today's rules and
+    compared to what was stored (`consistent`).
+  - Per-candidate drift and run-level drift are separate: the run check
+    re-applies the run rule to the *stored* bands.
+- **Deviation from the plan (0067):**
+  - The blocking step doesn't say whether a candidate was a "full" or
+    "partial" name match. Working that out needs the subject's name tokens,
+    i.e. decrypting PII.
+  - It shows the matched keys and states the cap rule instead.
+- **Deviation from the plan (0067):**
+  - No per-entry deep links to publisher pages. None were verified as stable,
+    so citations link to the published list file and give the entry id.
+- **Deep link (0070):**
+  - `?why=1&candidate=<id>` opens the panel.
+  - The app has no router, so the link only restores the panel on a run
+    that's already open. It doesn't navigate to the run.
+  - Leaving the page clears the params. Found in the demo: without that, the
+    next run opened popped the panel on its own.
+- **UX review (0070):** fixed every high and medium finding from the
+  ux-designer pass:
+  - raw JSON list values (now `formatListValue`, also used on the detail cards);
+  - misleading drift wording;
+  - full width only below 440px instead of 720px (now a media query in an
+    injected `<style>`, since the UI uses inline styles only);
+  - Esc was document-wide on a non-modal panel (now only when focus is inside
+    the panel);
+  - a candidate deep link didn't move focus;
+  - no copy feedback;
+  - "name key" / "capped" jargon;
+  - no retry on error.
+- **Found in the demo, not fixed here:**
+  - "theodor vasilescu" was auto-CLEARed against the listed
+    "Teodor Vasilescu". `theodor` and `teodor` share no blocking key
+    (`mp:0TR`/`sk:thdr` vs `mp:TTR`/`sk:tdr`), so the given name doesn't
+    match, only the surname does (partial, 0.2).
+  - A th/t spelling of a listed first name can therefore auto-clear. This is
+    a recall risk for the normalizer and the corpus: ticket 0073 (related to
+    gap G12 and ticket 0058).

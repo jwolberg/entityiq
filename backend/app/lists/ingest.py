@@ -64,6 +64,15 @@ SOURCES: dict[str, SourceSpec] = {
 }
 
 
+# Human-readable list names for evidence citations (ticket 0067).
+SOURCE_NAMES: dict[str, str] = {
+    "ofac_sdn": "OFAC SDN List",
+    "un_consolidated": "UN Security Council Consolidated List",
+    "eu_fsf": "EU Consolidated Financial Sanctions List",
+    "uk_ofsi": "UK OFSI Consolidated List",
+}
+
+
 @dataclass
 class IngestResult:
     source: str

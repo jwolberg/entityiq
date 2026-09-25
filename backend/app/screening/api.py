@@ -299,6 +299,23 @@ def _load_run(db: Session, run_id: str) -> ScreeningRun:
     return run
 
 
+def _visible_run(
+    db: Session, run_id: str, principal: Principal
+) -> tuple[ScreeningRun, ScreeningSubject]:
+    """Operators see any run; an integration key only runs it submitted."""
+    run = _load_run(db, run_id)
+    subject = db.get(ScreeningSubject, run.subject_id)
+    if (
+        principal.operator_id is None
+        and subject.api_client_id != principal.api_client_id
+    ):
+        # Same answer as a missing run: don't reveal other clients' runs.
+        raise HTTPException(
+            status_code=404, detail=f"Screening run {run_id!r} not found."
+        )
+    return run, subject
+
+
 @router.get("/{run_id}")
 def get_screening(
     run_id: str,
@@ -306,14 +323,8 @@ def get_screening(
     principal: Principal = Depends(get_principal),
 ) -> dict:
     """Operators see any run; an integration key only runs it submitted."""
-    run = _load_run(db, run_id)
-    subject = db.get(ScreeningSubject, run.subject_id)
+    run, subject = _visible_run(db, run_id, principal)
     is_operator = principal.operator_id is not None
-    if not is_operator and subject.api_client_id != principal.api_client_id:
-        # Same answer as a missing run: don't reveal other clients' runs.
-        raise HTTPException(
-            status_code=404, detail=f"Screening run {run_id!r} not found."
-        )
     try:
         pii: dict | None = crypto.get_subject_pii(db, subject)
     except crypto.SubjectShredded:
@@ -445,6 +456,88 @@ def get_screening(
             for d in dispositions
         ],
     }
+
+
+@router.get("/{run_id}/explanation")
+def explain_screening(
+    run_id: str,
+    db: Session = Depends(_get_db),
+    principal: Principal = Depends(get_principal),
+) -> dict:
+    """Why the run was decided as it was, step by step, with citations.
+
+    Derived from stored rows without decrypting the subject (ticket 0067).
+    """
+    from app.models.audit_event import AuditEvent  # noqa: PLC0415
+    from app.models.list_snapshot import ListSnapshot  # noqa: PLC0415
+    from app.screening.explain import build_explanation  # noqa: PLC0415
+    from app.screening.stages import (  # noqa: PLC0415
+        max_list_age_days,
+        required_sources,
+    )
+
+    run, subject = _visible_run(db, run_id, principal)
+    decision = db.query(ScreeningDecision).filter_by(run_id=run_id).one_or_none()
+    if decision is None:
+        raise HTTPException(status_code=409, detail="The run has no decision yet.")
+    rule = db.get(ScreeningRuleVersion, decision.rule_version_id)
+    candidate_ids = [e["candidate_id"] for e in decision.terms]
+    candidates = {
+        c.id: c
+        for c in db.query(ScreeningCandidate).filter(
+            ScreeningCandidate.id.in_(candidate_ids)
+        )
+    }
+    records = {
+        r.id: r
+        for r in db.query(WatchlistRecord).filter(
+            WatchlistRecord.id.in_([c.watchlist_record_id for c in candidates.values()])
+        )
+    }
+    snapshots = {
+        s.id: s
+        for s in db.query(ListSnapshot).filter(
+            ListSnapshot.id.in_(decision.snapshot_ids or [])
+        )
+    }
+    replays = (
+        db.query(AuditEvent)
+        .filter(
+            AuditEvent.event_type == "screening.replayed",
+            AuditEvent.payload["run_id"].as_string() == run_id,
+        )
+        .order_by(AuditEvent.occurred_at, AuditEvent.id)
+        .all()
+    )
+    body = build_explanation(
+        run=run,
+        subject=subject,
+        decision=decision,
+        rule_config=rule.config,
+        rule_version=rule.version,
+        candidates=candidates,
+        records=records,
+        term_rows=db.query(ScreeningTerm).filter_by(run_id=run_id).all(),
+        claims={c.id: c for c in db.query(ScreeningClaim).filter_by(run_id=run_id)},
+        snapshots=snapshots,
+        dispositions=db.query(ScreeningDisposition)
+        .filter_by(decision_id=decision.id)
+        .order_by(ScreeningDisposition.created_at, ScreeningDisposition.id)
+        .all(),
+        replays=replays,
+        show_operator_detail=principal.operator_id is not None,
+        required_sources=required_sources(),
+        max_list_age_days=max_list_age_days(),
+    )
+    record_event(
+        db,
+        "screening.explanation_viewed",
+        operator_id=principal.operator_id,
+        api_client_id=principal.api_client_id,
+        payload={"run_id": run_id},
+    )
+    db.commit()
+    return body
 
 
 def _monitoring_block(

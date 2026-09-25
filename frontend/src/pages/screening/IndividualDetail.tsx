@@ -5,6 +5,10 @@
  * it cites (source + locator), conflicts shown beside matches, list snapshot
  * and rule version, coverage gaps, disposition form (operators/leads), and
  * replay (leads/examiners). Polls while the run is still in flight.
+ *
+ * "Why this decision?" opens the evidence panel (ticket 0070), which holds
+ * the full decision trail and source citations; `?why=1&candidate=<id>`
+ * deep-links to it.
  */
 
 import { useEffect, useState } from "react";
@@ -15,7 +19,10 @@ import {
   ScreeningDetail,
 } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
+import { DecisionEvidencePanel } from "../../components/DecisionEvidencePanel";
 import { DispositionBadge } from "../../components/DispositionBadge";
+import { formatListValue } from "../../components/formatValue";
+import { readWhyParams } from "../../components/whyParams";
 
 export const SCREENING_POLL_MS = 3000;
 
@@ -26,13 +33,17 @@ const CONFLICT_TERMS = new Set([
   "common_name_penalty",
 ]);
 
-function fmt(value: unknown): string {
-  if (value === null || value === undefined) return "—";
-  if (typeof value === "string") return value;
-  return JSON.stringify(value);
-}
+const fmt = formatListValue;
 
-function Candidate({ cand, subject }: { cand: ScreeningCandidateView; subject: Record<string, unknown> | null }) {
+function Candidate({
+  cand,
+  subject,
+  onWhy,
+}: {
+  cand: ScreeningCandidateView;
+  subject: Record<string, unknown> | null;
+  onWhy: () => void;
+}) {
   return (
     <div data-testid={`candidate-${cand.candidate_id}`} style={styles.card}>
       <div style={styles.cardHeader}>
@@ -42,6 +53,9 @@ function Candidate({ cand, subject }: { cand: ScreeningCandidateView; subject: R
           {cand.record.source}:{cand.record.source_entry_id}
           {cand.record.program ? ` · ${cand.record.program}` : ""}
         </span>
+        <button data-testid={`why-cand-link-${cand.candidate_id}`} onClick={onWhy} style={styles.linkBtn}>
+          Why? See the evidence
+        </button>
       </div>
       <div style={styles.sideBySide}>
         <div>
@@ -70,20 +84,21 @@ function Candidate({ cand, subject }: { cand: ScreeningCandidateView; subject: R
               <strong>{t.name}</strong>{" "}
               <span>{t.weight > 0 ? `+${t.weight}` : t.weight}</span>
               <div style={styles.muted}>list value: {fmt(t.record_value)}</div>
-              {t.claim_ids
-                .map((id) => cand.claims[id])
-                .filter(Boolean)
-                .map((c) => (
-                  <div key={c.locator} style={styles.claim}>
-                    {c.locator}
-                  </div>
-                ))}
             </li>
           );
         })}
       </ul>
     </div>
   );
+}
+
+function clearWhyParams() {
+  const q = new URLSearchParams(window.location.search);
+  if (!q.has("why") && !q.has("candidate")) return;
+  q.delete("why");
+  q.delete("candidate");
+  const rest = q.toString();
+  window.history.replaceState(window.history.state, "", rest ? `?${rest}` : window.location.pathname);
 }
 
 export function IndividualDetail({
@@ -102,6 +117,25 @@ export function IndividualDetail({
   const [busy, setBusy] = useState(false);
   const [replay, setReplay] = useState<ReplayResult | null>(null);
   const [tick, setTick] = useState(0);
+  const [why, setWhy] = useState(() => readWhyParams(window.location.search));
+
+  // Leaving the page drops the deep link, so the next run opened doesn't
+  // pop the panel open on its own.
+  useEffect(() => clearWhyParams, []);
+
+  function openWhy(candidate: string | null) {
+    setWhy({ open: true, candidate });
+    const q = new URLSearchParams(window.location.search);
+    q.set("why", "1");
+    if (candidate) q.set("candidate", candidate);
+    else q.delete("candidate");
+    window.history.replaceState(window.history.state, "", `?${q.toString()}`);
+  }
+
+  function closeWhy() {
+    setWhy({ open: false, candidate: null });
+    clearWhyParams();
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -137,6 +171,8 @@ export function IndividualDetail({
   async function runReplay() {
     try {
       setReplay(await apiClient.replayScreening(runId, auth.token));
+      setTick((n) => n + 1); // the evidence panel lists replays
+
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -158,6 +194,9 @@ export function IndividualDetail({
           <h2 style={styles.heading}>
             {data.subject_shredded ? "(subject data shredded)" : fmt(data.subject?.name)}{" "}
             <DispositionBadge value={data.decision?.system_disposition ?? null} auto={data.decision?.auto_closed} />
+            <button data-testid="why-open" onClick={() => openWhy(null)} style={styles.whyBtn}>
+              Why this decision?
+            </button>
           </h2>
 
           {data.monitoring && (
@@ -206,7 +245,12 @@ export function IndividualDetail({
             <div style={styles.muted}>No list candidates matched this subject.</div>
           )}
           {data.candidates.map((c) => (
-            <Candidate key={c.candidate_id} cand={c} subject={data.subject} />
+            <Candidate
+              key={c.candidate_id}
+              cand={c}
+              subject={data.subject}
+              onWhy={() => openWhy(c.candidate_id)}
+            />
           ))}
 
           <section style={styles.section}>
@@ -255,6 +299,17 @@ export function IndividualDetail({
               </div>
             )}
           </section>
+
+          {why.open && (
+            <DecisionEvidencePanel
+              runId={runId}
+              token={auth.token}
+              decided={data.decision !== null}
+              focusCandidateId={why.candidate}
+              refreshKey={tick}
+              onClose={closeWhy}
+            />
+          )}
         </>
       )}
     </div>
@@ -276,7 +331,9 @@ const styles: Record<string, React.CSSProperties> = {
   colTitle: { fontSize: "0.7rem", textTransform: "uppercase", color: "#6b7280" },
   terms: { listStyle: "none", padding: 0, margin: 0 },
   term: { borderLeft: "3px solid", padding: "0.25rem 0.5rem", marginBottom: "0.375rem", fontSize: "0.85rem" },
-  claim: { fontFamily: "monospace", fontSize: "0.75rem", color: "#6b7280" },
+  whyBtn: { marginLeft: "0.75rem", fontSize: "0.8rem", fontWeight: 500, background: "#eff6ff",
+            color: "#1e3a8a", border: "1px solid #bfdbfe", borderRadius: "0.375rem",
+            padding: "0.25rem 0.625rem", cursor: "pointer", verticalAlign: "middle" },
   muted: { color: "#6b7280", fontSize: "0.8rem" },
   section: { marginTop: "1rem" },
   sub: { fontSize: "1rem", margin: "0 0 0.5rem" },
