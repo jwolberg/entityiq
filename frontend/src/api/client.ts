@@ -386,6 +386,15 @@ export interface ScreeningQueueItem {
   top_score: number | null;
   human_disposition: "CLEAR" | "MATCH" | null;
   created_at: string | null;
+  /** Set for officer/owner screenings: the company they belong to (0083). */
+  kyb_entity_id?: string | null;
+}
+
+/** The company behind an officer/owner screening (ticket 0083). */
+export interface OfficerEntityLink {
+  entity_id: string;
+  company_name: string;
+  latest_run_id: string | null;
 }
 
 export interface ScreeningClaim {
@@ -634,6 +643,11 @@ export const apiClient = {
 
   getScreening(runId: string, token: string): Promise<ScreeningDetail> {
     return request(`/screenings/${runId}`, {}, token);
+  },
+
+  /** GET /officer-screening/entities/{id}: the company behind an officer screening. */
+  getOfficerEntity(entityId: string, token: string): Promise<OfficerEntityLink> {
+    return request(`/officer-screening/entities/${entityId}`, {}, token);
   },
 
   disposeScreening(

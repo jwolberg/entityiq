@@ -117,6 +117,7 @@ function AppShell() {
             runId={route.runId}
             onBack={() => navigate({ page: "individuals" })}
             onOpenRun={(runId) => navigate({ page: "individual", runId })}
+            onOpenCompany={(runId) => navigate({ page: "detail", runId })}
           />
         )}
         {route.page === "audit" && (

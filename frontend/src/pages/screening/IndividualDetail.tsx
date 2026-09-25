@@ -14,6 +14,7 @@
 import { useEffect, useState } from "react";
 import {
   apiClient,
+  OfficerEntityLink,
   ReplayResult,
   ScreeningCandidateView,
   ScreeningDetail,
@@ -105,10 +106,13 @@ export function IndividualDetail({
   runId,
   onBack,
   onOpenRun,
+  onOpenCompany,
 }: {
   runId: string;
   onBack: () => void;
   onOpenRun?: (runId: string) => void;
+  /** Open a company run (officer/owner screenings link back, ticket 0083). */
+  onOpenCompany?: (runId: string) => void;
 }) {
   const { auth } = useAuth();
   const [data, setData] = useState<ScreeningDetail | null>(null);
@@ -117,6 +121,7 @@ export function IndividualDetail({
   const [busy, setBusy] = useState(false);
   const [replay, setReplay] = useState<ReplayResult | null>(null);
   const [tick, setTick] = useState(0);
+  const [company, setCompany] = useState<OfficerEntityLink | null>(null);
   const [why, setWhy] = useState(() => readWhyParams(window.location.search));
 
   // Leaving the page drops the deep link, so the next run opened doesn't
@@ -147,6 +152,19 @@ export function IndividualDetail({
       cancelled = true;
     };
   }, [runId, auth.token, tick]);
+
+  const entityId = data?.kyb_entity_id ?? null;
+  useEffect(() => {
+    if (!entityId) return;
+    let cancelled = false;
+    apiClient
+      .getOfficerEntity(entityId, auth.token)
+      .then((c) => !cancelled && setCompany(c))
+      .catch(() => !cancelled && setCompany(null)); // the link is a convenience
+    return () => {
+      cancelled = true;
+    };
+  }, [entityId, auth.token]);
 
   const inFlight = data !== null && (data.run.status === "pending" || data.run.status === "running");
   useEffect(() => {
@@ -198,6 +216,24 @@ export function IndividualDetail({
               Why this decision?
             </button>
           </h2>
+
+          {company && (
+            <div data-testid="company-link" style={styles.companyLink}>
+              Officer or owner of <strong>{company.company_name}</strong>
+              {company.latest_run_id && onOpenCompany && (
+                <>
+                  {" "}
+                  <button
+                    data-testid="open-company"
+                    onClick={() => onOpenCompany(company.latest_run_id!)}
+                    style={styles.linkBtn}
+                  >
+                    Open company →
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           {data.monitoring && (
             <div data-testid="monitoring-banner" style={styles.monitoring}>
@@ -346,6 +382,8 @@ const styles: Record<string, React.CSSProperties> = {
   matchBtn: { padding: "0.375rem 0.75rem", borderRadius: "0.375rem", border: "none",
               background: "#991b1b", color: "#fff", cursor: "pointer" },
   error: { color: "#991b1b", marginBottom: "0.75rem" },
+  companyLink: { background: "#e0f2fe", color: "#075985", padding: "0.5rem 0.75rem",
+                 borderRadius: "0.375rem", marginBottom: "0.75rem", fontSize: "0.875rem" },
   monitoring: { background: "#ede9fe", color: "#4c1d95", padding: "0.5rem 0.75rem",
                 borderRadius: "0.375rem", marginBottom: "0.75rem", fontSize: "0.85rem" },
   linkBtn: { background: "none", border: "none", color: "#4c1d95", textDecoration: "underline",

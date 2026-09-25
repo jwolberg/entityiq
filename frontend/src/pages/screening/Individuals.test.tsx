@@ -236,6 +236,19 @@ describe("IndividualsQueue", () => {
     expect(refresh).toContain("limit=4");
     expect(refresh).not.toContain("offset=");
   });
+
+  it("labels officer screenings and filters by them (ticket 0083)", async () => {
+    const Wrapper = withRole("operator");
+    const officer = { ...QUEUE.items[0], run_id: "r-off", trigger: "kyb_officer", kyb_entity_id: "ent-1" };
+    const calls = routed({ "/screenings": [{ items: [officer, QUEUE.items[1]] }, { items: [officer] }] });
+    render(<Wrapper><IndividualsQueue onSelect={vi.fn()} /></Wrapper>);
+
+    await waitFor(() => expect(screen.getAllByTestId("screening-row")).toHaveLength(2));
+    expect(screen.getAllByTestId("officer-label")).toHaveLength(1);
+
+    fireEvent.change(screen.getByTestId("filter-trigger"), { target: { value: "kyb_officer" } });
+    await waitFor(() => expect(calls.some((c) => c.includes("trigger=kyb_officer"))).toBe(true));
+  });
 });
 
 describe("IndividualDetail", () => {
@@ -403,5 +416,30 @@ describe("IndividualDetail evidence panel (ticket 0070)", () => {
     await screen.findByRole("dialog");
     expect(screen.getByTestId("disposition-form")).toBeDefined();
     expect((screen.getByTestId("dispose-CLEAR") as HTMLButtonElement).disabled).toBe(false);
+  });
+  it("links an officer screening back to its company (ticket 0083)", async () => {
+    const Wrapper = withRole("operator");
+    routed({
+      "/screenings/r-off": detail({
+        run_id: "r-off",
+        kyb_entity_id: "ent-1",
+        run: { status: "complete", trigger: "kyb_officer", started_at: null, finished_at: null,
+               duration_seconds: null, stages: {} },
+      }),
+      "/officer-screening/entities/ent-1": {
+        entity_id: "ent-1", company_name: "Harbor Freight Lines", latest_run_id: "run-kyb",
+      },
+    });
+    const onOpenCompany = vi.fn();
+    render(
+      <Wrapper>
+        <IndividualDetail runId="r-off" onBack={vi.fn()} onOpenCompany={onOpenCompany} />
+      </Wrapper>
+    );
+
+    const link = await screen.findByTestId("open-company");
+    expect(screen.getByTestId("company-link").textContent).toContain("Harbor Freight Lines");
+    fireEvent.click(link);
+    expect(onOpenCompany).toHaveBeenCalledWith("run-kyb");
   });
 });
