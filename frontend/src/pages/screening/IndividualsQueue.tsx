@@ -5,7 +5,7 @@
  * notice, and gets the outcome with a link when it finishes (ticket 0075).
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiClient, ScreeningQueueItem, SystemDisposition } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
 import { DispositionBadge } from "../../components/DispositionBadge";
@@ -40,13 +40,21 @@ export function IndividualsQueue({
   const [refresh, setRefresh] = useState(0);
   const [background, setBackground] = useState<BackgroundScreening[]>([]);
   const [pollTick, setPollTick] = useState(0);
+  // A background refresh reloads everything already loaded (not just page
+  // one), so "Load more" pages survive it. Consumed by the next list load.
+  const itemsRef = useRef<ScreeningQueueItem[] | null>(null);
+  itemsRef.current = items;
+  const refreshLimit = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
+    const limit = refreshLimit.current;
+    refreshLimit.current = undefined;
     apiClient
       .listScreenings(auth.token, {
         disposition: filter || undefined,
         trigger: trigger || undefined,
+        limit,
       })
       .then((r) => {
         if (cancelled) return;
@@ -98,7 +106,11 @@ export function IndividualsQueue({
             : b
         )
       );
-      if ([...finished.values()].every((state) => state === "error")) return;
+      const loaded = itemsRef.current ?? [];
+      const done = [...finished].filter(([, state]) => state !== "error").map(([id]) => id);
+      if (done.length === 0) return;
+      const added = done.filter((id) => !loaded.some((i) => i.run_id === id)).length;
+      refreshLimit.current = Math.min(500, Math.max(loaded.length + added, 1));
       setRefresh((n) => n + 1);
     }, pollMs);
     return () => {

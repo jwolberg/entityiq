@@ -1991,7 +1991,7 @@ Plan: `docs/plans/2026-09-25-002-decision-evidence-panel-plan.md` (PR #15).
 
 ---
 
-## 2026-09-25 — Failed/stuck background runs (backlog 0076)
+## 2026-09-25 — Failed/stuck background runs (backlog 0076) and pagination (0077)
 
 From the post-merge review of PR #18.
 
@@ -2015,3 +2015,6 @@ From the post-merge review of PR #18.
 - **Decision:** failure is detected from the report's `run.status` rather
   than a new run-status endpoint or a list field, so there's no API change.
   Cost: one extra `GET /reports/{id}` per landed Dashboard submission.
+- **0077:** when a background screening finishes, the Individuals queue
+  reloads with `limit = rows already loaded + new runs` (capped at the API's
+  500) instead of page one, so "Load more" pages survive the refresh.

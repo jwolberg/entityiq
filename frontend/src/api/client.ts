@@ -611,7 +611,7 @@ export const apiClient = {
   /** GET /screenings: individual screening queue. */
   listScreenings(
     token: string,
-    filters: { disposition?: string; trigger?: string; offset?: number } = {}
+    filters: { disposition?: string; trigger?: string; offset?: number; limit?: number } = {}
   ): Promise<ScreeningQueuePage> {
     const q = new URLSearchParams(
       Object.entries(filters)

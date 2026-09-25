@@ -197,6 +197,45 @@ describe("IndividualsQueue", () => {
     expect(detailPolls).toBe(polls); // stopped
   });
 
+  it("keeps loaded pages when a background screening finishes", async () => {
+    const Wrapper = withRole("operator");
+    const row = (id: string, name: string) => ({ run_id: id, subject_name: name, status: "complete",
+      trigger: "intake", system_disposition: "CLEAR", auto_closed: true, top_score: null,
+      human_disposition: null, created_at: null });
+    const page1 = [row("a", "Ann A"), row("b", "Ben B")];
+    const page2 = [row("c", "Cal C")];
+    const listUrls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, opts?: RequestInit) => {
+      if (opts?.method === "POST") {
+        return { ok: true, json: async () => ({ run_id: "r-new", status: "pending", disposition: null }) };
+      }
+      if (url.startsWith("/api/screenings/r-new")) {
+        return { ok: true, json: async () => detail({ run_id: "r-new" }) };
+      }
+      listUrls.push(url);
+      if (url.includes("offset=2")) return { ok: true, json: async () => ({ items: page2, total: 3 }) };
+      if (url.includes("limit=")) {
+        // The refresh asks for everything the operator had loaded, plus the new run.
+        return { ok: true, json: async () => ({ items: [row("r-new", "Teodor Vasilescu"), ...page1, ...page2], total: 4 }) };
+      }
+      return { ok: true, json: async () => ({ items: page1, total: 3 }) };
+    }));
+    render(<Wrapper><IndividualsQueue onSelect={vi.fn()} pollMs={10} /></Wrapper>);
+    await waitFor(() => expect(screen.getAllByTestId("screening-row")).toHaveLength(2));
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    await waitFor(() => expect(screen.getAllByTestId("screening-row")).toHaveLength(3));
+
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Teodor Vasilescu" } });
+    fireEvent.submit(screen.getByTestId("screen-person-form"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("background-screening-notice").textContent).toContain("MATCH")
+    );
+    await waitFor(() => expect(screen.getAllByTestId("screening-row")).toHaveLength(4));
+    const refresh = listUrls[listUrls.length - 1];
+    expect(refresh).toContain("limit=4");
+    expect(refresh).not.toContain("offset=");
+  });
 });
 
 describe("IndividualDetail", () => {
