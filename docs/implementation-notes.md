@@ -1640,3 +1640,55 @@ single-tenant internal tool; multi-tenant would need per-client scoping.
   link hidden client-side (the API is the real gate), a dedicated page
   component, hash-based routing in `App.tsx`. No new dependency, no
   react-router.
+
+---
+
+## 2026-09-24 — Domain-ownership verification (backlog 0003, plan U24)
+
+- **Challenges are scoped to a run, not the submission/entity.** A challenge
+  is issued under a specific `run_id`; on verification its Evidence row is
+  attached to that same `verification_run_id` (Evidence.verification_run_id
+  is non-nullable). This keeps the feature self-contained and testable, but
+  means a re-analysis run does **not** automatically inherit a prior run's
+  verified ownership — the operator would need to re-issue/re-verify for the
+  new run, or a follow-up could carry ownership evidence forward across runs
+  for the same submission/entity. Not specified by the ticket; flagging as a
+  deliberate scope cut.
+- **Bounded trust signal, never authorization.** `domain_ownership_verified`
+  is a representation-layer trust signal with weight 0.25 (max 10-point swing
+  on the 0–100 layer score — see `_layer_score_from_signals`). The signal
+  description explicitly disclaims authorization, per PRD § Domain Ownership
+  Verification / USERS § 4. Tests assert the bound directly
+  (`tests/scoring/test_signals.py::TestOwnershipVerificationSignal`) rather
+  than relying on convention alone.
+- **DNS TXT / HTML meta-tag** are live checks against injectable clients
+  (`DnsTxtClient`, `HttpPageFetcher`) re-run on each `/verify` call — so a
+  challenge can be retried while DNS propagates or before the meta tag is
+  published, without re-issuing. **Email** has no independent network check
+  at verify time: the emailed token itself is the proof of mailbox control,
+  so verification is `submitted_token == challenge.token` (constant-time
+  compare). All three write the identical Evidence contract
+  (`source="ownership"`, `field="domain_ownership_verified"`), so
+  `app/scoring/signals.py` only needs one check to cover all three methods.
+- **Verify always returns 200**, with `verified: bool` — an absent/incorrect
+  token is a normal "not yet" outcome (e.g., DNS still propagating), not a
+  client error, so callers can safely poll/retry it.
+- **Email delivery is out of scope.** `EmailSender` defaults to an
+  "unconfigured" stub that raises (same pattern as
+  `UnconfiguredTaxIdProvider`); issuing an email challenge still succeeds
+  and returns the token so an operator can relay it manually. No new env var
+  or dependency was added for this — nothing to add to the runbook.
+- **Auth:** both operator (Bearer session) and integration API key
+  (`X-API-Key`) can issue/verify, via the existing shared `get_principal`
+  dependency (same pattern as `GET /reports`) — the ticket allows either,
+  and registrants never call EntityIQ's API directly (USERS § 4).
+- **Frontend:** added a minimal `OwnershipPanel` on the existing
+  `CompanyDetail` page (issue + list + check-verification), reusing
+  `OperatorActions`' inline-style conventions. It fetches on mount like
+  `ActivityPanel`, so two existing `CompanyDetail.test.tsx` tests that
+  hard-coded an exact `fetch` call order were switched to URL-routed mocks
+  (matches the file's own `routedFetch` pattern used elsewhere in the same
+  file) — a mechanical fix, not a behavior change.
+- **Migration:** `b3f7a2c9d4e1` (down_revision `a1b2c3d4e5f6`, current head
+  at the time this ticket was branched) adds `ownership_challenge`. Verified
+  upgrade/downgrade against a throwaway SQLite file.

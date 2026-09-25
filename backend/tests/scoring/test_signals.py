@@ -867,3 +867,115 @@ def test_free_email_domain_is_an_elevated_representation_signal():
     ev = _ev("run-f", "submission", 0, "free_email_domain", "true")
     signals = {s.name: s for s in representation_confidence_signals([ev], [])}
     assert signals["free_email_domain"].direction == "elevated"
+
+
+# ---------------------------------------------------------------------------
+# Ticket 0003 — domain-ownership verification: bounded representation signal
+# ---------------------------------------------------------------------------
+
+
+def _ownership_ev(method: str = "dns_txt") -> Evidence:
+    return _ev(
+        "run-ownership",
+        "ownership",
+        3,
+        "domain_ownership_verified",
+        method,
+        normalized="true",
+    )
+
+
+class TestOwnershipVerificationSignal:
+    """Verified domain ownership adds a small, bounded trust signal only.
+
+    Ticket 0003 acceptance criteria:
+      - A correct token verifies and adds an ownership trust signal.
+      - An absent/incorrect token adds no trust signal at all.
+      - The signal never asserts "authorization" — it must stay bounded
+        (small weight) and its description must disclaim authorization.
+      - DNS TXT, email, and HTML meta-tag all produce the identical signal
+        (same evidence contract regardless of method).
+    """
+
+    def test_verified_ownership_adds_trust_signal_citing_evidence(self):
+        ev = _ownership_ev("dns_txt")
+        signals = {s.name: s for s in representation_confidence_signals([ev], [])}
+        sig = signals["domain_ownership_verified"]
+        assert sig.direction == "trust"
+        assert sig.layer == "representation"
+        assert ev.id in sig.evidence_ids
+
+    def test_no_ownership_evidence_adds_no_signal(self):
+        # No evidence at all — the signal must not appear just because the
+        # feature exists; it requires an actual verified challenge.
+        signals = {s.name for s in representation_confidence_signals([], [])}
+        assert "domain_ownership_verified" not in signals
+
+    def test_unverified_field_value_adds_no_signal(self):
+        # Defensive: only normalized_value == "true" counts as verified.
+        ev = _ev(
+            "run-ownership",
+            "ownership",
+            3,
+            "domain_ownership_verified",
+            "dns_txt",
+            normalized="false",
+        )
+        signals = {s.name for s in representation_confidence_signals([ev], [])}
+        assert "domain_ownership_verified" not in signals
+
+    @pytest.mark.parametrize("method", ["dns_txt", "email", "html_meta"])
+    def test_all_three_methods_produce_the_same_signal(self, method):
+        ev = _ownership_ev(method)
+        signals = {s.name: s for s in representation_confidence_signals([ev], [])}
+        sig = signals["domain_ownership_verified"]
+        assert sig.direction == "trust"
+        assert method in sig.description
+
+    def test_signal_is_bounded_and_disclaims_authorization(self):
+        """INVARIANT (PRD § Domain Ownership Verification, USERS § 4):
+        verified ownership never asserts organizational authorization.
+
+        Enforced two ways: the weight is small enough that this signal alone
+        can never single-handedly clear the representation score to its
+        minimum (0 = maximal trust), and the description explicitly
+        disclaims authorization.
+        """
+        ev = _ownership_ev()
+        sig = next(
+            s
+            for s in representation_confidence_signals([ev], [])
+            if s.name == "domain_ownership_verified"
+        )
+        # weight * 40 is the max point swing (see _layer_score_from_signals);
+        # bounded well under the neutral starting score of 50.
+        assert 0.0 < sig.weight <= 0.3
+        assert "authoriz" in sig.description.lower()
+        assert "not" in sig.description.lower()
+
+    def test_present_alongside_field_comparisons(self):
+        """Ownership signal still appears when other representation signals
+        are present (not just in the no-field-comparisons shortcut path)."""
+        from app.models.field_comparison import FieldComparison
+
+        fc = FieldComparison(
+            verification_run_id="run-ownership",
+            field_name="company_name",
+            submitted_value="Acme Inc",
+            discovered_value="Acme Inc",
+            match_status="match",
+        )
+        ev = _ownership_ev()
+        signals = {s.name for s in representation_confidence_signals([ev], [fc])}
+        assert "domain_ownership_verified" in signals
+        assert "consistent_company_name" in signals
+
+    def test_verified_ownership_alone_does_not_zero_out_representation_risk(self):
+        """A single verified-ownership signal must not drive the
+        representation score to 0 (i.e. it cannot look like "fully
+        confirmed / authorized" on its own)."""
+        from app.scoring.engine import _score_representation_confidence
+
+        ev = _ownership_ev()
+        score, _sigs = _score_representation_confidence([ev], [])
+        assert score > 0.0

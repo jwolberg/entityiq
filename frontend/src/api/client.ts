@@ -291,6 +291,57 @@ export interface RevokeApiClientResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Domain-ownership verification (ticket 0003)
+// ---------------------------------------------------------------------------
+
+export type OwnershipMethod = "dns_txt" | "email" | "html_meta";
+
+export interface IssueOwnershipChallengeRequest {
+  method: OwnershipMethod;
+  /** Required for method === "email"; ignored otherwise. */
+  target?: string;
+}
+
+export interface OwnershipChallengeInstructions {
+  method: OwnershipMethod;
+  dns_record_type?: string | null;
+  dns_record_name?: string | null;
+  dns_record_value?: string | null;
+  html_snippet?: string | null;
+  email_target?: string | null;
+}
+
+export interface OwnershipChallenge {
+  challenge_id: string;
+  run_id: string;
+  submission_id: string;
+  domain: string;
+  method: OwnershipMethod;
+  /** Null for email challenges: the token only goes to the emailed address. */
+  token: string | null;
+  /** "pending" | "verified" */
+  status: string;
+  issued_at: string;
+  verified_at: string | null;
+  instructions: OwnershipChallengeInstructions;
+  message: string;
+}
+
+export interface VerifyOwnershipChallengeRequest {
+  /** Required for method === "email"; ignored otherwise. */
+  submitted_token?: string;
+}
+
+export interface VerifyOwnershipChallengeResponse {
+  challenge_id: string;
+  method: OwnershipMethod;
+  verified: boolean;
+  status: string;
+  verified_at: string | null;
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
 // Client implementation
 // ---------------------------------------------------------------------------
 
@@ -455,6 +506,44 @@ export const apiClient = {
     return request<RevokeApiClientResponse>(
       `/api-clients/${id}/revoke`,
       { method: "POST" },
+      token
+    );
+  },
+
+  /** GET /ownership/runs/{run_id}/challenges — list challenges for a run */
+  listOwnershipChallenges(
+    runId: string,
+    token: string
+  ): Promise<OwnershipChallenge[]> {
+    return request<OwnershipChallenge[]>(
+      `/ownership/runs/${runId}/challenges`,
+      {},
+      token
+    );
+  },
+
+  /** POST /ownership/runs/{run_id}/challenges — issue a domain-ownership challenge */
+  issueOwnershipChallenge(
+    runId: string,
+    body: IssueOwnershipChallengeRequest,
+    token: string
+  ): Promise<OwnershipChallenge> {
+    return request<OwnershipChallenge>(
+      `/ownership/runs/${runId}/challenges`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  },
+
+  /** POST /ownership/challenges/{challenge_id}/verify — attempt verification */
+  verifyOwnershipChallenge(
+    challengeId: string,
+    body: VerifyOwnershipChallengeRequest,
+    token: string
+  ): Promise<VerifyOwnershipChallengeResponse> {
+    return request<VerifyOwnershipChallengeResponse>(
+      `/ownership/challenges/${challengeId}/verify`,
+      { method: "POST", body: JSON.stringify(body) },
       token
     );
   },

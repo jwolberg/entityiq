@@ -350,7 +350,14 @@ _Track: Integration & reporting API_
 - P3-T3 — PII retention & access policy
   - Depends on: P0-T4; Open decision #7 (resolved: ADR-0002) · AC: ARCHITECTURE § 6 (PII handling); ADR-0002 · Status: Todo
 - P3-T4 — Optional domain-ownership verification (email / DNS TXT / HTML meta)
-  - Depends on: P1-T1 · AC: PRD § Domain Ownership Verification; USERS § 4 · Status: Todo
+  - Depends on: P1-T1 · AC: PRD § Domain Ownership Verification; USERS § 4 · Status: Complete (2026-09-24) —
+    `POST /ownership/runs/{run_id}/challenges` issues a token (dns_txt / email /
+    html_meta, same issue/verify contract); `POST /ownership/challenges/{id}/verify`
+    re-checks DNS TXT / HTML meta live via injectable clients, or compares the
+    submitted token for email; a verified challenge writes a bounded
+    representation-layer trust signal (`domain_ownership_verified`, weight 0.25)
+    that never asserts authorization. Operator + API-key auth; every issue/verify
+    attempt audited. Minimal `OwnershipPanel` on the company detail page. Ticket 0003.
 - P3-T5 — Test coverage (BE + FE) + documentation
   - Depends on: Phase 2 · AC: PRD § Technical Success, § Code Quality Expectations;
     CLAUDE.md § Validation · Status: Partial (2026-09-24) —
