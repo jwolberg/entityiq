@@ -150,7 +150,7 @@ POST /screenings ──► FastAPI ──► encrypted subject + ScreeningRun
 
 ## Quality
 
-- **951 backend tests** and **89 frontend tests**, plus ruff, eslint and tsc,
+- **1007 backend tests** and **108 frontend tests**, plus ruff, eslint and tsc,
   all run in [GitHub Actions](.github/workflows/ci.yml).
 - **Screening release gates in CI**, measured over a versioned, fictional
   adversarial name corpus:
