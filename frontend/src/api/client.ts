@@ -52,6 +52,17 @@ export interface SubmissionRequest {
   phone?: string;
   requester_full_name?: string;
   linkedin_url?: string;
+  /** Officers and owners, each screened individually (ticket 0079). */
+  people?: DeclaredPerson[];
+}
+
+export interface DeclaredPerson {
+  name: string;
+  relationship: "officer" | "owner";
+  role?: string;
+  dob?: string;
+  nationality?: string;
+  ownership_pct?: number;
 }
 
 export interface SubmissionResponse {

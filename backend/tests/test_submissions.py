@@ -318,3 +318,64 @@ def test_submission_without_auth_returns_401(sqlite_engine):
         assert resp.status_code == 401, resp.text
     finally:
         app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Declared officers / owners (ticket 0079)
+# ---------------------------------------------------------------------------
+
+
+def test_declared_people_are_stored(api_client: TestClient, db_session):
+    people = [
+        {"name": "  Ann Lee ", "relationship": "officer", "role": "Director"},
+        {
+            "name": "Bo Chen",
+            "relationship": "owner",
+            "ownership_pct": 60,
+            "dob": "1971-04",
+            "nationality": "SG",
+        },
+    ]
+    resp = api_client.post("/submissions", json={**_VALID_PAYLOAD, "people": people})
+    assert resp.status_code == 202, resp.text
+    sub = db_session.get(Submission, resp.json()["submission_id"])
+    assert sub.declared_people == [
+        {"name": "Ann Lee", "relationship": "officer", "role": "Director"},
+        {
+            "name": "Bo Chen",
+            "relationship": "owner",
+            "ownership_pct": 60.0,
+            "dob": "1971-04",
+            "nationality": "SG",
+        },
+    ]
+
+
+def test_people_are_optional(api_client: TestClient, db_session):
+    resp = api_client.post("/submissions", json=_VALID_PAYLOAD)
+    assert resp.status_code == 202, resp.text
+    sub = db_session.get(Submission, resp.json()["submission_id"])
+    assert sub.declared_people is None
+
+
+@pytest.mark.parametrize(
+    "person",
+    [
+        {"relationship": "officer"},  # no name
+        {"name": "   ", "relationship": "officer"},  # blank name
+        {"name": "Ann Lee", "relationship": "cousin"},  # unknown relationship
+        {"name": "Ann Lee", "relationship": "owner", "ownership_pct": 150},
+        {"name": "Ann Lee", "relationship": "owner", "ownership_pct": -1},
+        {"name": "Ann Lee", "relationship": "officer", "dob": "1990-13"},
+        {"name": "Ann Lee", "relationship": "officer", "dob": "04/1990"},
+    ],
+)
+def test_invalid_declared_person_is_422(api_client: TestClient, person):
+    resp = api_client.post("/submissions", json={**_VALID_PAYLOAD, "people": [person]})
+    assert resp.status_code == 422, resp.text
+
+
+def test_too_many_declared_people_is_422(api_client: TestClient):
+    people = [{"name": f"Person {i}", "relationship": "officer"} for i in range(51)]
+    resp = api_client.post("/submissions", json={**_VALID_PAYLOAD, "people": people})
+    assert resp.status_code == 422, resp.text
