@@ -5,9 +5,12 @@ OIDC/SSO (ARCHITECTURE § 5) can replace it without touching route code.
 
 Session mechanism (MVP):
   - Operator accounts are stored in the `operator` table with a hashed password.
-  - Sign-in validates the password and issues a random opaque session token
-    (stored in an in-memory dict — appropriate for a single-process MVP; a Redis
-    session store or JWT would replace this for multi-process/OIDC).
+  - Sign-in validates the password and issues a random opaque session token.
+  - Sessions are stored via a SessionStore (app.auth.session_store, ticket
+    0024): Redis-backed when Redis is reachable at startup (sessions then
+    survive an API restart and are shared across instances), falling back to
+    an in-memory dict — with a logged warning — for single-process dev/demo
+    without Redis.
   - The token is returned in the response and expected as a Bearer token in
     subsequent requests.
 
@@ -25,7 +28,7 @@ Password hashing:
   This is intentionally simple for the MVP; swap for argon2 / bcrypt in P3.
 
 Replacing the session mechanism (OIDC/SSO):
-  1. Replace `_session_store` + `sign_in()` with OIDC token exchange.
+  1. Replace the SessionStore + `sign_in()` with OIDC token exchange.
   2. Keep `get_current_operator()` signature unchanged — it reads from the
      DB regardless of auth mechanism.
   3. The FastAPI routes do not need to change.
@@ -45,6 +48,11 @@ from typing import TYPE_CHECKING
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.auth.session_store import (
+    InMemorySessionStore,
+    SessionStore,
+    build_session_store,
+)
 from app.db.session import SessionLocal
 
 if TYPE_CHECKING:
@@ -101,51 +109,60 @@ def verify_password(password: str, stored_hash: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# In-memory session store (MVP — single-process)
+# Session store (ticket 0024 — Redis-backed, falls back to in-memory)
 #
-# Maps session_token (str) → (operator_id, expires_at epoch seconds).
-# Replacement path: swap this dict for a Redis-backed store or JWT validation.
+# _store is a SessionStore (app.auth.session_store): Redis-backed when
+# reachable, in-memory otherwise.  It defaults to in-memory at import time —
+# deterministic for tests and safe (no network access on import).
+# configure_session_store() is called once from the FastAPI startup event
+# (app/main.py) to try upgrading to Redis for real runs (dev, demo,
+# production); any connection failure falls back with a logged warning.
 # ---------------------------------------------------------------------------
 
 SESSION_TTL_SECONDS: int = int(os.environ.get("SESSION_TTL_HOURS", "12")) * 3600
-
-_session_store: dict[str, tuple[str, float]] = {}
+_REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
 
 def _now() -> float:
     return time.time()
 
 
+# Late-binding lambda (not `now_func=_now`): tests monkeypatch the module-level
+# `_now` name after this store is constructed, and the store must see that.
+_store: SessionStore = InMemorySessionStore(now_func=lambda: _now())
+
+
+def configure_session_store(redis_url: str | None = None) -> None:
+    """Try to back operator sessions with Redis; fall back + warn on failure.
+
+    Not called at import time (importing this module must never touch the
+    network). Call once at application startup instead.
+    """
+    global _store
+    _store = build_session_store(redis_url or _REDIS_URL, now_func=lambda: _now())
+
+
 def _new_session_token(operator_id: str) -> str:
     """Generate and store a new session token for the given operator."""
-    token = secrets.token_urlsafe(32)
-    _session_store[token] = (operator_id, _now() + SESSION_TTL_SECONDS)
-    return token
+    return _store.create(operator_id, SESSION_TTL_SECONDS)
 
 
 def _get_operator_id_from_token(token: str) -> str | None:
     """Look up an operator_id from a session token.
 
-    Returns None if the token is unknown or expired (expired tokens are purged).
+    Returns None if the token is unknown or expired.
     """
-    entry = _session_store.get(token)
-    if entry is None:
-        return None
-    operator_id, expires_at = entry
-    if _now() >= expires_at:
-        _session_store.pop(token, None)
-        return None
-    return operator_id
+    return _store.get(token)
 
 
 def invalidate_session(token: str) -> None:
     """Remove a session token (sign-out)."""
-    _session_store.pop(token, None)
+    _store.delete(token)
 
 
 def _clear_all_sessions() -> None:
     """For testing only: clear all sessions."""
-    _session_store.clear()
+    _store.clear_all()
 
 
 # ---------------------------------------------------------------------------

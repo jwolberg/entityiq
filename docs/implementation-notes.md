@@ -1255,3 +1255,140 @@ A fresh-context reviewer found no high-severity issues. Fixed:
 Left open (design question, not a regression): any valid API key can read
 every company's report, not only its own submissions. That's fine for a
 single-tenant internal tool; multi-tenant would need per-client scoping.
+
+---
+
+## 2026-09-24 — Submit-to-review e2e test (backlog 0004)
+
+- **Coverage thresholds not added.** The ticket allows adding them only if
+  the coverage tooling is already a dev dependency. It isn't: `pytest-cov`
+  is absent from `backend/pyproject.toml` / the shared venv, and no vitest
+  coverage provider (`@vitest/coverage-v8` / `-istanbul`) is in
+  `frontend/package.json` or installed. Adding either is a new dependency,
+  which this workflow requires stopping and reporting on rather than adding
+  unilaterally. `docs/BUILD_PLAN.md` P3-T5 marked Partial; this remains open.
+- **e2e test location:** `backend/tests/e2e/test_submission_to_review.py`,
+  collected by the existing `pytest` run (`testpaths = ["tests"]` in
+  `backend/pyproject.toml`) — not the top-level `tests/` placeholder, which
+  has no runner wired up and isn't part of CI.
+- **Fixture data:** reuses `app.demo_data.SCENARIOS[0]` (Northwind Traders,
+  `pre_clear`) and its `_stages()` recorded-response builder, so the test
+  needs no network and stays consistent with the demo dataset.
+- **Pipeline execution:** the test calls `Orchestrator(...).run_sync()`
+  directly against the same SQLite engine the TestClient uses, per the
+  project's established Celery-testability pattern — `enqueue_run` is
+  stubbed like every other API test, and the real Celery path is untested
+  here (that's ticket 0025's job, against Postgres + a live worker).
+- **Scope vs. existing tests:** `tests/pipeline/test_pipeline_e2e.py` already
+  covers stage-by-stage signal correctness; this test only asserts the API →
+  pipeline → report → operator-review boundary (HTTP submit, HTTP report
+  read before/after the pipeline runs, operator sign-in, mark-reviewed,
+  unauthenticated-review rejection, and the resulting audit trail).
+
+---
+
+## 2026-09-24 — Redis-backed operator sessions (backlog 0024)
+
+- **Redis probed once, at FastAPI startup, not at import time.** Importing
+  `app.auth.operator` must never touch the network (tests import it freely).
+  `_store` defaults to `InMemorySessionStore` at import; `configure_session_store()`
+  is wired into a `lifespan` handler in `app/main.py` and tries Redis there.
+  Existing tests build `TestClient(app, ...)` without a `with` block, so
+  lifespan never runs for them and they keep getting the deterministic
+  in-memory store regardless of whether the dev machine happens to have a
+  live Redis — avoids the "tests behave differently depending on what's
+  running on localhost" trap.
+- **New env var `REDIS_URL`** (default `redis://localhost:6379/0`), separate
+  from `CELERY_BROKER_URL` even though they default to the same address —
+  sessions and the Celery broker are different concerns and an operator may
+  want them on different Redis DBs/instances. Session keys are namespaced
+  (`entityiq:session:*`) so the two never collide if they do share one Redis.
+- **TTL:** `RedisSessionStore` uses `SETEX`, so Redis's own key expiry
+  enforces `SESSION_TTL_HOURS` — no separate purge loop to keep in sync.
+- **`fakeredis` is not installed** (checked: not in the venv or
+  pyproject.toml). Per the "no new dependencies without approval" rule,
+  `backend/tests/auth/test_redis_sessions.py` hand-rolls a `_FakeRedis`
+  implementing the small slice of the redis-py interface the store uses
+  (`ping`/`setex`/`get`/`delete`/`scan_iter`), with an injectable clock so
+  TTL expiry is deterministic (no real sleeping).
+- **`clear_all()` on the Redis store only deletes its own `entityiq:session:*`
+  keys** (`SCAN` + `DELETE`), never `FLUSHDB` — the Redis instance may be
+  shared with the Celery broker.
+- **`_now()` late-binding:** `_store`'s in-memory fallback is constructed
+  with `now_func=lambda: _now()` rather than `now_func=_now`, so that
+  `tests/auth/test_sessions.py`'s `monkeypatch.setattr(op_auth, "_now", ...)`
+  (which reassigns the module attribute after the store already exists)
+  still takes effect. Passing the function object directly would have
+  captured the pre-monkeypatch reference and silently broken that test.
+- **Switched `app/main.py` from `@app.on_event("startup")` to a `lifespan`
+  context manager** — `on_event` is deprecated in FastAPI 0.111 and was
+  emitting a warning on every test run; `lifespan` is the direct replacement
+  and behaves identically for TestClient purposes (only runs inside a `with`
+  block).
+- Existing auth tests (`test_operator.py`, `test_sessions.py`) required no
+  changes — `_new_session_token` / `_get_operator_id_from_token` /
+  `invalidate_session` / `_clear_all_sessions` kept their exact signatures,
+  now delegating to whichever `SessionStore` is active.
+
+---
+
+## 2026-09-24 — docker-compose full stack, live-verified (backlog 0025)
+
+- **Docker daemon was down at task start** (`docker info` failed: no
+  `docker.sock`). Started Docker Desktop (`open -a Docker`) and polled
+  `docker info` until the daemon came up (~6s) — then ran the full live
+  verification below. If Docker had stayed unavailable this would be
+  reported as not-done per the ticket, but it came up, so the compose file,
+  images, migrations, worker, and a real submission were all verified live,
+  not just written.
+- **Files added:** `docker-compose.yml` (root), `backend/Dockerfile` +
+  `backend/.dockerignore`, `frontend/Dockerfile` + `frontend/.dockerignore`.
+  No existing Dockerfiles existed to reuse.
+- **`frontend/.dockerignore` excludes `node_modules`.** The worktree's
+  `frontend/node_modules` is a symlink into the primary checkout, outside
+  this build context — without excluding it, `COPY . .` would either fail
+  ("forbidden path outside the build context") or copy garbage. `npm ci`
+  installs a real `node_modules` inside the image instead.
+- **`ui` service is a Vite dev server** (`npm run dev -- --host 0.0.0.0`),
+  not a production build — matches this ticket's "verify the full stack for
+  dev" scope. `VITE_API_TARGET=http://api:8000` reuses the proxy env var
+  `vite.config.ts` already supports; no frontend code changed.
+- **`REDIS_URL` also wired into the `api` service** (ticket 0024's operator
+  sessions), separate from `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND`, even
+  though all three point at the same `redis` service by default in compose.
+- **Live verification performed (not just "should work"):**
+  1. `docker compose build` — all three images (`api`, `worker`, `ui`) built
+     clean.
+  2. `docker compose up -d` — `db`/`redis` reported healthy, `api` ran
+     `alembic upgrade head` against Postgres (all 3 revisions applied,
+     ending at `a1b2c3d4e5f6`) then started; `worker` connected to
+     `redis://redis:6379/0`; `ui` served on :5173.
+  3. `docker compose exec -T api python -m app.seed` — seeded demo
+     accounts + an integration API key against Postgres.
+  4. `POST /submissions` (real API key, `stripe.com`) → enqueued to the
+     **real, non-eager Celery worker**. Confirmed via `app/worker.py` that
+     `run_verification_task` always passes `stage_timeout_seconds`, which is
+     what puts the orchestrator on the isolated-stage-session path (ticket
+     0001) — so this run exercised that path on Postgres, not SQLite.
+     Completed in ~25s: `run.status == "complete"`, `triage_tier ==
+     "pre_clear"`. Real external calls succeeded (sanctions CSV, WHOIS/DNS/
+     SSL, web fetch, OSM geocode); OpenCorporates/tax-id/LinkedIn correctly
+     reported `unavailable` (no token/provider configured) without failing
+     the run (P4-T3 behavior, now also observed against Postgres/live
+     network instead of only recorded fixtures).
+  5. Verified `alembic_version` directly via `psql` inside the `db`
+     container: `a1b2c3d4e5f6` (head).
+  6. Signed in as the seeded operator, called `POST /reviews/{run_id}` ->
+     201 (ties ticket 0004's flow together live, on Postgres).
+  7. Restarted the `api` container (`docker compose restart api`) and reused
+     the pre-restart session token: `GET /reports/{run_id}` still returned
+     200 (Redis-backed session survived the restart — ticket 0024, now
+     proven live against a real Redis, not just the in-test fake). Signed
+     out with the same token -> 204, then the same token -> 401 (revocation
+     took effect immediately).
+  8. Cleaned up: `docker compose down -v` (containers, network, and the
+     Postgres volume all removed — no lingering state from this
+     verification run).
+- **Not covered by this pass:** a production frontend build inside Docker
+  (out of scope — see "ui service" note above), and TLS/ingress (MVP has
+  none anywhere yet).
