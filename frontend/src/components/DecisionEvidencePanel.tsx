@@ -123,12 +123,16 @@ function Explanation({ data, focus }: { data: ScreeningExplanation; focus: strin
   const drift =
     (banding?.candidates ?? []).some((c) => !c.consistent) || disposition?.consistent === false;
 
-  // A candidate deep link lands keyboard and screen-reader users on it too.
+  // A candidate deep link lands keyboard and screen-reader users on it too,
+  // once per target: a background refetch must not pull focus back here.
+  const focusedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!focus) return;
+    if (!focus || focusedFor.current === focus) return;
     const el = document.getElementById(`why-cand-${focus}`);
-    el?.scrollIntoView?.({ block: "start" });
-    el?.focus();
+    if (!el) return;
+    focusedFor.current = focus;
+    el.scrollIntoView?.({ block: "start" });
+    el.focus();
   }, [focus, data]);
 
   return (

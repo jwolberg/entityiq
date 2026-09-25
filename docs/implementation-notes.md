@@ -1937,4 +1937,5 @@ Plan: `docs/plans/2026-09-25-002-decision-evidence-panel-plan.md` (PR #15).
     (`mp:0TR`/`sk:thdr` vs `mp:TTR`/`sk:tdr`), so the given name doesn't
     match, only the surname does (partial, 0.2).
   - A th/t spelling of a listed first name can therefore auto-clear. This is
-    a recall risk for the normalizer and the corpus (gap G12, ticket 0058).
+    a recall risk for the normalizer and the corpus: ticket 0073 (related to
+    gap G12 and ticket 0058).

@@ -171,6 +171,8 @@ export function IndividualDetail({
   async function runReplay() {
     try {
       setReplay(await apiClient.replayScreening(runId, auth.token));
+      setTick((n) => n + 1); // the evidence panel lists replays
+
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }

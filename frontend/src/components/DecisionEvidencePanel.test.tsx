@@ -141,6 +141,31 @@ describe("DecisionEvidencePanel", () => {
     await waitFor(() => expect(document.activeElement).toBe(c2));
   });
 
+  it("doesn't steal focus back on a background refresh", async () => {
+    mockFetch(ok(EXPLANATION));
+    function Page() {
+      const [tick, setTick] = useState(0);
+      return (
+        <>
+          <textarea data-testid="notes" />
+          <button onClick={() => setTick((n) => n + 1)}>tick</button>
+          <DecisionEvidencePanel runId="r1" token="t" decided focusCandidateId="c2"
+            refreshKey={tick} onClose={() => {}} />
+        </>
+      );
+    }
+    render(<Page />);
+    const c2 = await screen.findByTestId("why-cand-c2");
+    await waitFor(() => expect(document.activeElement).toBe(c2));
+    const notes = screen.getByTestId("notes");
+    notes.focus();
+    await act(async () => {
+      fireEvent.click(screen.getByText("tick"));
+    });
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(document.activeElement).toBe(notes);
+  });
+
   it("shows list values as plain text, not JSON", async () => {
     mockFetch(ok(EXPLANATION));
     render(<Harness />);

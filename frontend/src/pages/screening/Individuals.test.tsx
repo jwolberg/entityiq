@@ -262,6 +262,24 @@ describe("IndividualDetail evidence panel (ticket 0070)", () => {
     expect(window.location.search).toBe("");
   });
 
+  it("refreshes the open panel after a replay", async () => {
+    const calls = routed({
+      "/screenings/r-match/explanation": EXPLANATION,
+      "/screenings/r-match/replay": { reproduced: true, shredded: false, differences: [],
+        original: { disposition: "MATCH" }, replayed: { disposition: "MATCH" } },
+      "/screenings/r-match": detail(),
+    });
+    const Lead = withRole("lead");
+    render(<Lead><IndividualDetail runId="r-match" onBack={vi.fn()} /></Lead>);
+    fireEvent.click(await screen.findByTestId("why-open"));
+    await screen.findByTestId("why-step-human");
+    const before = calls.filter((c) => c.endsWith("/explanation")).length;
+    fireEvent.click(screen.getByTestId("replay-button"));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.endsWith("/explanation")).length).toBe(before + 1)
+    );
+  });
+
   it("keeps the disposition form usable with the panel open", async () => {
     routed(routes());
     const Wrapper = withRole("operator");
