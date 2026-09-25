@@ -20,6 +20,7 @@ import {
   apiClient,
   CorrectableField,
   CorrectAndRerunRequest,
+  HttpError,
 } from "../api/client";
 
 interface OperatorActionsProps {
@@ -59,7 +60,11 @@ export function OperatorActions({
   // --- Re-run analysis ---
   const [rerunning, setRerunning] = useState(false);
   const [newRunId, setNewRunId] = useState<string | null>(null);
-  const [newRunReady, setNewRunReady] = useState(false);
+  // running → ready | failed (the run ended failed; partial report) | error
+  // (couldn't check its status; polling stopped).
+  const [newRunState, setNewRunState] = useState<
+    "running" | "ready" | "failed" | "error"
+  >("running");
   const [actionError, setActionError] = useState<string | null>(null);
 
   // --- Correct + re-run form ---
@@ -83,18 +88,26 @@ export function OperatorActions({
   const [exporting, setExporting] = useState(false);
 
   // The new run collects data in the background; its report exists only once
-  // the pipeline finishes, so poll for it until it does.
+  // the pipeline finishes (failed runs keep a partial one), so poll for it.
+  // A 404 means "not yet"; any other error stops polling.
   useEffect(() => {
     if (!newRunId) return;
-    setNewRunReady(false);
+    setNewRunState("running");
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     const check = async () => {
       try {
-        await apiClient.getReport(newRunId, token);
-        if (!cancelled) setNewRunReady(true);
-      } catch {
-        if (!cancelled) timer = setTimeout(check, pollMs);
+        const report = await apiClient.getReport(newRunId, token);
+        if (!cancelled) {
+          setNewRunState(report.run?.status === "failed" ? "failed" : "ready");
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof HttpError && err.status === 404) {
+          timer = setTimeout(check, pollMs);
+        } else {
+          setNewRunState("error");
+        }
       }
     };
     timer = setTimeout(check, pollMs);
@@ -230,9 +243,24 @@ export function OperatorActions({
 
       {newRunId && (
         <div style={styles.successBanner} data-testid="new-run-banner">
-          {newRunReady ? (
+          {newRunState === "running" && (
             <>
-              New run is ready — it supersedes this run.{" "}
+              Re-analysis started. Data collection is running in the
+              background; you can keep working here. We'll let you know when
+              the new run is ready.
+            </>
+          )}
+          {newRunState === "error" && (
+            <>
+              Re-analysis started. Couldn't check its progress — reload the
+              page to see whether the new run has finished.
+            </>
+          )}
+          {(newRunState === "ready" || newRunState === "failed") && (
+            <>
+              {newRunState === "ready"
+                ? "New run is ready — it supersedes this run. "
+                : "The new run failed; its partial report is available. "}
               {onOpenRun && (
                 <button
                   onClick={() => onOpenRun(newRunId)}
@@ -242,12 +270,6 @@ export function OperatorActions({
                   View new run →
                 </button>
               )}
-            </>
-          ) : (
-            <>
-              Re-analysis started. Data collection is running in the
-              background; you can keep working here. We'll let you know when
-              the new run is ready.
             </>
           )}
         </div>

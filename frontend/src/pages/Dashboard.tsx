@@ -6,7 +6,8 @@
  * the company detail view (hash-based routing via `onSelect`).
  *
  * A submitted company is verified in the background; the queue shows a notice
- * and re-polls until its report lands, then says it's ready.
+ * and re-polls until its report lands, then says whether it's ready or failed.
+ * If the queue can't be refreshed, polling stops and the notice says so.
  */
 
 import { useEffect, useState } from "react";
@@ -23,7 +24,9 @@ interface DashboardProps {
 interface BackgroundRun {
   runId: string;
   companyName: string;
-  ready: boolean;
+  // running → checking (report landed; reading its run status) →
+  // ready | failed. error: the queue couldn't be refreshed; polling stopped.
+  state: "running" | "checking" | "ready" | "failed" | "error";
 }
 
 const TIER_COLOR: Record<string, string> = {
@@ -116,6 +119,11 @@ export function Dashboard({ onSelect, pollMs = 5000 }: DashboardProps) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load");
           setLoading(false);
+          setBackgroundRuns((runs) =>
+            runs.some((r) => r.state === "running")
+              ? runs.map((r) => (r.state === "running" ? { ...r, state: "error" } : r))
+              : runs
+          );
         }
       });
     return () => {
@@ -123,17 +131,42 @@ export function Dashboard({ onSelect, pollMs = 5000 }: DashboardProps) {
     };
   }, [auth.token, refreshKey]);
 
-  // A run's report appears in the list only once its pipeline finishes.
+  // A run's report appears in the list only once its pipeline finishes (a
+  // failed run keeps a partial one), so read the run's status once it lands.
   useEffect(() => {
     const landed = new Set(items.map((i) => i.run_id));
     setBackgroundRuns((runs) =>
-      runs.some((r) => !r.ready && landed.has(r.runId))
-        ? runs.map((r) => (landed.has(r.runId) ? { ...r, ready: true } : r))
+      runs.some((r) => r.state === "running" && landed.has(r.runId))
+        ? runs.map((r) =>
+            r.state === "running" && landed.has(r.runId) ? { ...r, state: "checking" } : r
+          )
         : runs
     );
   }, [items]);
 
-  const stillRunning = backgroundRuns.some((r) => !r.ready);
+  const checkingKey = backgroundRuns
+    .filter((r) => r.state === "checking")
+    .map((r) => r.runId)
+    .join(",");
+  useEffect(() => {
+    if (!checkingKey) return;
+    for (const runId of checkingKey.split(",")) {
+      apiClient
+        .getReport(runId, auth.token)
+        .then(
+          (report) => (report.run?.status === "failed" ? "failed" : "ready"),
+          // The report is in the queue either way; don't block on this read.
+          () => "ready" as const
+        )
+        .then((state) =>
+          setBackgroundRuns((runs) =>
+            runs.map((r) => (r.runId === runId && r.state === "checking" ? { ...r, state } : r))
+          )
+        );
+    }
+  }, [checkingKey, auth.token]);
+
+  const stillRunning = backgroundRuns.some((r) => r.state === "running");
   useEffect(() => {
     if (!stillRunning) return;
     const timer = setInterval(() => setRefreshKey((k) => k + 1), pollMs);
@@ -186,7 +219,7 @@ export function Dashboard({ onSelect, pollMs = 5000 }: DashboardProps) {
             setShowForm(false);
             setBackgroundRuns((runs) => [
               ...runs,
-              { runId: resp.run_id, companyName, ready: false },
+              { runId: resp.run_id, companyName, state: "running" },
             ]);
             setRefreshKey((k) => k + 1);
           }}
@@ -196,17 +229,36 @@ export function Dashboard({ onSelect, pollMs = 5000 }: DashboardProps) {
       {backgroundRuns.map((r) => (
         <div
           key={r.runId}
-          style={r.ready ? styles.noticeReady : styles.notice}
+          style={
+            r.state === "ready"
+              ? styles.noticeReady
+              : r.state === "failed" || r.state === "error"
+                ? styles.noticeFailed
+                : styles.notice
+          }
           role="status"
           data-testid="background-run-notice"
         >
           <span>
-            {r.ready ? (
+            {r.state === "ready" && (
               <>
                 <strong>{r.companyName}</strong> is ready — its report is now
                 in the queue.
               </>
-            ) : (
+            )}
+            {r.state === "failed" && (
+              <>
+                Data collection for <strong>{r.companyName}</strong> failed.
+                Its partial report is in the queue.
+              </>
+            )}
+            {r.state === "error" && (
+              <>
+                Couldn't check on <strong>{r.companyName}</strong> — the queue
+                didn't refresh. Reload the page to see whether it has finished.
+              </>
+            )}
+            {(r.state === "running" || r.state === "checking") && (
               <>
                 Data collection for <strong>{r.companyName}</strong> is
                 running in the background. It will appear in the queue when
@@ -442,6 +494,18 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #86efac",
     borderRadius: "0.375rem",
     color: "#166534",
+    fontSize: "0.85rem",
+  },
+  noticeFailed: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+    marginBottom: "0.75rem",
+    padding: "0.75rem 1rem",
+    backgroundColor: "#fef2f2",
+    border: "1px solid #fca5a5",
+    borderRadius: "0.375rem",
+    color: "#991b1b",
     fontSize: "0.85rem",
   },
   noticeDismiss: {

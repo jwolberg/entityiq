@@ -170,6 +170,33 @@ describe("IndividualsQueue", () => {
     fireEvent.click(screen.getByTestId("open-background-screening"));
     expect(onSelect).toHaveBeenCalledWith("r-new");
   });
+
+  it("stops polling and shows an error when a background screening can't be checked", async () => {
+    const Wrapper = withRole("operator");
+    let detailPolls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (url: string, opts?: RequestInit) => {
+      if (opts?.method === "POST") {
+        return { ok: true, json: async () => ({ run_id: "r-new", status: "pending", disposition: null }) };
+      }
+      if (url.startsWith("/api/screenings/r-new")) {
+        detailPolls += 1;
+        return { ok: false, status: 500, json: async () => ({ detail: "boom" }) };
+      }
+      return { ok: true, json: async () => QUEUE };
+    }));
+    render(<Wrapper><IndividualsQueue onSelect={vi.fn()} pollMs={10} /></Wrapper>);
+    await waitFor(() => expect(screen.getAllByTestId("screening-row")).toHaveLength(3));
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Teodor Vasilescu" } });
+    fireEvent.submit(screen.getByTestId("screen-person-form"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("background-screening-notice").textContent).toContain("Couldn't check")
+    );
+    const polls = detailPolls;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(detailPolls).toBe(polls); // stopped
+  });
+
 });
 
 describe("IndividualDetail", () => {

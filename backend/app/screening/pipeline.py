@@ -46,5 +46,5 @@ def run_screening(
         stage_timeout_seconds=stage_timeout_seconds,
         run_timeout_seconds=run_timeout_seconds,
         run_model=ScreeningRun,
-        on_time_limit=_no_partial_report,
+        on_failure=_no_partial_report,
     ).run_sync(run_id, db)

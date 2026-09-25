@@ -1988,3 +1988,30 @@ Plan: `docs/plans/2026-09-25-002-decision-evidence-panel-plan.md` (PR #15).
 - **Measured:** intake returned in 0.45 s on the demo stack, and the run
   completed shortly after. The old timing wasn't measured; screening makes no
   network calls, so the gain is smaller than for company verification (27 s).
+
+---
+
+## 2026-09-25 — Failed/stuck background runs (backlog 0076)
+
+From the post-merge review of PR #18.
+
+- **0076, backend:** a run that fails outside stage handling (the
+  orchestrator's unexpected-exception branch) now gets the same treatment as a
+  time-limit failure: roll back, mark unfinished stages unavailable, fail the
+  run with the traceback as the reason, keep a partial report. Before, it was
+  marked failed with no report, so a UI waiting for the report would wait
+  forever. It also didn't roll back first, so a DB error could stop it from
+  even recording the failure. `_finish_after_time_limit` became
+  `_finish_failed(reason=...)`, and the `Orchestrator(on_time_limit=)` hook was
+  renamed `on_failure` (two call sites).
+- **0076, frontend:** `request()` now throws `HttpError` with the HTTP
+  status (still an `Error`, so existing `err.message` handling is unchanged).
+  The re-run poll treats only a 404 as "not ready yet"; any other error stops
+  polling and says it couldn't check. When the report arrives, a
+  `run.status === "failed"` shows "failed; partial report available". The
+  Dashboard reads the landed run's report once to tell ready from failed, and
+  stops polling with an error notice if the queue can't refresh. The
+  Individuals notice treats a failed status read as an error and stops.
+- **Decision:** failure is detected from the report's `run.status` rather
+  than a new run-status endpoint or a list field, so there's no API change.
+  Cost: one extra `GET /reports/{id}` per landed Dashboard submission.

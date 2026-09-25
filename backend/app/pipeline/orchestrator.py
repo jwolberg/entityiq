@@ -239,7 +239,7 @@ class Orchestrator:
         stage_timeout_seconds: float | None = None,
         run_timeout_seconds: float | None = None,
         run_model: type = VerificationRun,
-        on_time_limit: Callable[[str, Session], None] | None = None,
+        on_failure: Callable[[str, Session], None] | None = None,
     ) -> None:
         self.stages = stages
         self.stage_timeout_seconds = stage_timeout_seconds
@@ -248,9 +248,9 @@ class Orchestrator:
         # source_availability works: KYB's VerificationRun (default) or the
         # screening offering's ScreeningRun (ticket 0035).
         self.run_model = run_model
-        # Saves the partial result after a Celery soft time limit. Default:
-        # assemble the KYB report.
-        self.on_time_limit = on_time_limit or _assemble_kyb_report
+        # Saves the partial result when the run fails (Celery soft time limit
+        # or an unexpected error). Default: assemble the KYB report.
+        self.on_failure = on_failure or _assemble_kyb_report
 
     def _stage_budget(
         self, stage: PipelineStage, deadline: float | None
@@ -364,20 +364,20 @@ class Orchestrator:
             # Keep what we have: mark unfinished stages unavailable, fail the
             # run with a clear reason, and still assemble the partial report.
             logger.error("Orchestrator: run %s hit the task time limit", run_id)
-            _finish_after_time_limit(run_id, db, self.run_model, self.on_time_limit)
+            _finish_failed(
+                run_id,
+                db,
+                "Task time limit exceeded; partial report kept.",
+                self.run_model,
+                self.on_failure,
+            )
         except Exception:
-            # Unexpected error outside stage execution (e.g. DB failure).
+            # Unexpected error outside stage execution (e.g. DB failure). Keep
+            # the partial report too: operators wait for a run's report to know
+            # it has finished (ticket 0076).
             tb = traceback.format_exc()
             logger.error("Orchestrator: run %s failed unexpectedly:\n%s", run_id, tb)
-            try:
-                run = db.get(self.run_model, run_id)
-                if run is not None:
-                    run.status = "failed"
-                    run.finished_at = datetime.now(tz=timezone.utc)
-                    run.failure_reason = tb[:2000]
-                    db.commit()
-            except Exception:
-                pass
+            _finish_failed(run_id, db, tb[:2000], self.run_model, self.on_failure)
 
 
 def _assemble_kyb_report(run_id: str, db: Session) -> None:
@@ -386,12 +386,14 @@ def _assemble_kyb_report(run_id: str, db: Session) -> None:
     assemble_report(run_id, db)
 
 
-def _finish_after_time_limit(
+def _finish_failed(
     run_id: str,
     db: Session,
+    reason: str,
     run_model: type = VerificationRun,
     finalize: Callable[[str, Session], None] = _assemble_kyb_report,
 ) -> None:
+    """Fail the run, mark unfinished stages unavailable, keep a partial report."""
     try:
         db.rollback()
         run = db.get(run_model, run_id)
@@ -403,7 +405,7 @@ def _finish_after_time_limit(
         }
         run.status = "failed"
         run.finished_at = datetime.now(tz=timezone.utc)
-        run.failure_reason = "Task time limit exceeded; partial report kept."
+        run.failure_reason = reason
         db.commit()
         finalize(run_id, db)
         db.commit()

@@ -14,7 +14,8 @@ import { SCREENING_POLL_MS } from "./IndividualDetail";
 interface BackgroundScreening {
   runId: string;
   name: string;
-  state: "running" | "done" | "failed";
+  // error: its status couldn't be read; polling stopped.
+  state: "running" | "done" | "failed" | "error";
   disposition: SystemDisposition | null;
 }
 
@@ -69,17 +70,19 @@ export function IndividualsQueue({
       const results = await Promise.all(
         runningKey.split(",").map((runId) =>
           apiClient.getScreening(runId, auth.token).then(
-            (d) => ({ runId, d }),
-            () => ({ runId, d: null })
+            (d) => ({ runId, d, failed: false }),
+            () => ({ runId, d: null, failed: true })
           )
         )
       );
       if (cancelled) return;
       const finished = new Map<string, BackgroundScreening["state"]>();
       const dispositions = new Map<string, SystemDisposition | null>();
-      for (const { runId, d } of results) {
+      for (const { runId, d, failed } of results) {
         const status = d?.run.status;
-        if (status && status !== "pending" && status !== "running") {
+        if (failed) {
+          finished.set(runId, "error");
+        } else if (status && status !== "pending" && status !== "running") {
           finished.set(runId, status === "failed" ? "failed" : "done");
           dispositions.set(runId, d?.decision?.system_disposition ?? null);
         }
@@ -95,6 +98,7 @@ export function IndividualsQueue({
             : b
         )
       );
+      if ([...finished.values()].every((state) => state === "error")) return;
       setRefresh((n) => n + 1);
     }, pollMs);
     return () => {
@@ -199,7 +203,13 @@ export function IndividualsQueue({
           key={b.runId}
           role="status"
           data-testid="background-screening-notice"
-          style={b.state === "running" ? styles.notice : b.state === "failed" ? styles.noticeFailed : styles.noticeDone}
+          style={
+            b.state === "running"
+              ? styles.notice
+              : b.state === "done"
+                ? styles.noticeDone
+                : styles.noticeFailed
+          }
         >
           <span>
             {b.state === "running" && (
@@ -214,13 +224,19 @@ export function IndividualsQueue({
                 <DispositionBadge value={b.disposition} />
               </>
             )}
+            {b.state === "error" && (
+              <>
+                Couldn't check on screening <strong>{b.name}</strong>. Reload
+                the page to see whether it has finished.
+              </>
+            )}
             {b.state === "failed" && (
               <>
                 Screening <strong>{b.name}</strong> failed. Open it for details.
               </>
             )}
           </span>
-          {b.state !== "running" && (
+          {(b.state === "done" || b.state === "failed") && (
             <button
               type="button"
               onClick={() => onSelect(b.runId)}

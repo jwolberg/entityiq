@@ -85,6 +85,10 @@ describe("Dashboard", () => {
           }),
         };
       }
+      if (url.includes("/reports/run-new")) {
+        return { ok: true, json: async () => ({ run_id: "run-new", run: { status: "complete", started_at: null,
+          finished_at: null, duration_seconds: null, stages: {} } }) };
+      }
       listCalls += 1;
       // Initial load and the first poll: not there yet; then it lands.
       const items = listCalls >= 3 ? [newItem] : [];
@@ -124,6 +128,67 @@ describe("Dashboard", () => {
 
     fireEvent.click(screen.getByTestId("dismiss-background-notice"));
     expect(screen.queryByTestId("background-run-notice")).toBeNull();
+  });
+
+  async function submitAcme() {
+    await waitFor(() => expect(screen.getByTestId("open-new-company-form")).toBeDefined());
+    fireEvent.click(screen.getByTestId("open-new-company-form"));
+    for (const [id, v] of [
+      ["field-company_name", "Acme Corp"],
+      ["field-work_email", "cto@acme.example"],
+      ["field-company_domain", "acme.example"],
+      ["field-country", "US"],
+    ]) {
+      fireEvent.change(screen.getByTestId(id), { target: { value: v } });
+    }
+    fireEvent.click(screen.getByTestId("submit-new-company"));
+    await screen.findByTestId("background-run-notice");
+  }
+
+  const SUBMITTED = {
+    ok: true,
+    json: async () => ({ submission_id: "sub-new", run_id: "run-new", status: "pending",
+      is_free_email_domain: false, message: "ok" }),
+  };
+
+  it("says the run failed when its report shows a failed run", async () => {
+    const landed = { run_id: "run-new", report_id: "rep-new", company_name: "Acme Corp",
+      domain: "acme.example", status: "complete", overall_score: null, triage_tier: null,
+      review_status: null, generated_at: "2026-09-25T10:00:00Z" };
+    let listCalls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (url: string, opts?: RequestInit) => {
+      if (opts?.method === "POST") return SUBMITTED;
+      if (url.includes("/reports/run-new")) {
+        return { ok: true, json: async () => ({ run_id: "run-new", run: { status: "failed", started_at: null,
+          finished_at: null, duration_seconds: null, stages: {} } }) };
+      }
+      listCalls += 1;
+      const items = listCalls >= 2 ? [landed] : [];
+      return { ok: true, json: async () => ({ items, total: items.length }) };
+    }));
+    render(<Wrapper><Dashboard onSelect={vi.fn()} pollMs={10} /></Wrapper>);
+    await submitAcme();
+    await waitFor(() =>
+      expect(screen.getByTestId("background-run-notice").textContent).toContain("failed")
+    );
+  });
+
+  it("stops polling and says so when the queue can't be refreshed", async () => {
+    let listCalls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, opts?: RequestInit) => {
+      if (opts?.method === "POST") return SUBMITTED;
+      listCalls += 1;
+      if (listCalls >= 2) return { ok: false, status: 401, json: async () => ({ detail: "Not authenticated" }) };
+      return { ok: true, json: async () => ({ items: [], total: 0 }) };
+    }));
+    render(<Wrapper><Dashboard onSelect={vi.fn()} pollMs={10} /></Wrapper>);
+    await submitAcme();
+    await waitFor(() =>
+      expect(screen.getByTestId("background-run-notice").textContent).toContain("Couldn't check")
+    );
+    const calls = listCalls;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(listCalls).toBe(calls); // stopped
   });
 
   it("renders loading state initially", () => {
