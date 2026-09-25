@@ -217,3 +217,7 @@ The business-verification audit, including a live-data run, is in
 - [docs/decisions/](docs/decisions/): ADRs (PII retention, screening libraries, crypto-shred retention, Cloud Run hosting)
 - [docs/RUNBOOK.md](docs/RUNBOOK.md) and [docs/runbooks/](docs/runbooks/): setup, list ingestion and monitoring, full-stack mode, deployment
 - [docs/implementation-notes.md](docs/implementation-notes.md): dated decision log
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).
