@@ -67,6 +67,8 @@ CRITICAL_ESCALATION_SIGNALS: frozenset[str] = frozenset(
         "sanctions_hit",
         "sanctions_hit_fraud_flag",
         "ip_asn_reuse_high",
+        # An officer or owner is a screening MATCH (ticket 0082, ADR-0006).
+        "officer_sanctions_match",
     }
 )
 
