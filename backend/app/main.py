@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 
 from app.api.api_clients import router as api_clients_router
 from app.api.audit import router as audit_router
@@ -10,7 +10,9 @@ from app.api.reports import router as reports_router
 from app.api.reviews import router as reviews_router
 from app.api.submissions import router as submissions_router
 from app.api.workflow import router as workflow_router
+from app.auth.examiner_guard import forbid_examiner_writes
 from app.auth.operator import auth_router, configure_session_store
+from app.screening.api import router as screening_router
 
 
 @asynccontextmanager
@@ -23,6 +25,8 @@ async def _lifespan(_app: FastAPI):
 
 
 app = FastAPI(
+    # Examiners are read-only on every route (ticket 0042).
+    dependencies=[Depends(forbid_examiner_writes)],
     title="EntityIQ API",
     description="Enterprise Business Verification & Risk Intelligence Platform",
     version="0.1.0",
@@ -38,6 +42,7 @@ app.include_router(workflow_router)
 app.include_router(audit_router)
 app.include_router(api_clients_router)
 app.include_router(ownership_router)
+app.include_router(screening_router)
 
 
 @app.get("/health")

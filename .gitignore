@@ -40,3 +40,6 @@ AGENTS.md
 .status.md
 .claude/pre-tm-backup/
 .claude/scheduled_tasks.lock
+# Local demo master key for individual screening (scripts/demo.sh)
+backend/.screening-demo.key
+backend/screening-metrics.json
