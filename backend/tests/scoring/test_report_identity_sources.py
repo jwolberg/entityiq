@@ -16,6 +16,8 @@ from app.scoring.report import _build_summary
         ("verify_linkedin", "linkedin", 3),
         # Officers/owners from registries (ticket 0080): a coverage gap.
         ("collect_people", "registry_people", 1),
+        # Screening not configured (ticket 0081): officers went unscreened.
+        ("screen_people", "officer_screening", 1),
     ],
 )
 def test_unavailable_identity_stage_is_listed_as_unavailable_source(

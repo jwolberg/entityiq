@@ -34,6 +34,7 @@ from app.models.risk_assessment import RiskAssessment
 from app.models.submission import Submission
 from app.models.verification_run import VerificationRun
 from app.officer_screening.people import CollectPeopleStage, StubRegistryPeopleProvider
+from app.officer_screening.screen import ScreenPeopleStage
 from app.pipeline.consistency import ConsistencyChecksStage
 from app.pipeline.normalize import NormalizeInputStage
 from app.pipeline.orchestrator import Orchestrator, default_stages
@@ -162,6 +163,7 @@ def _stages(*, age_days: int, mx: list[str], txt: list[str], registry: dict):
         VerifyTaxIdStage(TaxIdAdapter(provider=StubTaxIdProvider())),
         SanctionsScreeningStage(fetcher=_Sdn()),
         CollectPeopleStage(provider=StubRegistryPeopleProvider({})),
+        ScreenPeopleStage(),
         AnalyzeDomainStage(
             whois_client=_Whois(age_days),
             dns_client=_Dns(mx, txt),

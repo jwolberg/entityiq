@@ -54,6 +54,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Officer/owner screening evidence (ADR-0006, written by app.officer_screening).
+# It's about a person, not the company: never registry evidence or coverage.
+OFFICER_SCREENING_SOURCE = "officer_screening"
+OFFICER_SCREENING_FIELD = "officer_screening_result"
+
 # ---------------------------------------------------------------------------
 # Layer 1 — Entity legitimacy
 # ---------------------------------------------------------------------------
@@ -79,7 +84,11 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
 
     # Tax-ID rows are Tier 1 too, but they aren't registry evidence; they get
     # their own signals (IC1-T3) and must not shift the registry checks below.
-    tier1_evidence = [e for e in evidence_rows if e.tier == 1 and e.source != "tax_id"]
+    tier1_evidence = [
+        e
+        for e in evidence_rows
+        if e.tier == 1 and e.source not in ("tax_id", OFFICER_SCREENING_SOURCE)
+    ]
     name_evidence = [e for e in tier1_evidence if e.field == "company_name"]
     reg_number_evidence = [
         e for e in tier1_evidence if e.field == "registration_number"

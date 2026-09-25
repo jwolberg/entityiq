@@ -36,6 +36,7 @@ from app.models.entity import Entity
 from app.models.submission import Submission
 from app.models.verification_run import VerificationRun
 from app.officer_screening.people import CollectPeopleStage, StubRegistryPeopleProvider
+from app.officer_screening.screen import ScreenPeopleStage
 from app.pipeline.consistency import ConsistencyChecksStage
 from app.pipeline.normalize import NormalizeInputStage
 from app.pipeline.orchestrator import Orchestrator
@@ -416,6 +417,7 @@ def _stages(s: Scenario) -> list:
         VerifyTaxIdStage(TaxIdAdapter(provider=StubTaxIdProvider(s.tax_id_records))),
         SanctionsScreeningStage(fetcher=_Sdn()),
         CollectPeopleStage(provider=StubRegistryPeopleProvider({})),
+        ScreenPeopleStage(),
         AnalyzeDomainStage(
             whois_client=_Whois(s.domain_age_days),
             dns_client=_Dns(s.mx, s.txt),
