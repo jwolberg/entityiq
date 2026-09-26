@@ -9,7 +9,17 @@ Uses generic JSON (not JSONB) so the schema builds on SQLite in tests.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, String, Text, func
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -17,6 +27,18 @@ from app.db.session import Base
 
 class Evidence(Base):
     __tablename__ = "evidence"
+    __table_args__ = (
+        # Cross-submission ASN reuse lookup (ticket 0088). Partial so only the
+        # short ip_asn values are indexed — long normalized_value text from
+        # other sources would bloat it (and can exceed btree row limits).
+        Index(
+            "ix_evidence_ip_asn_reuse",
+            "normalized_value",
+            "created_at",
+            postgresql_where=text("field = 'ip_asn'"),
+            sqlite_where=text("field = 'ip_asn'"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())

@@ -2063,3 +2063,61 @@ under their own trigger, dependency-free SVG graph.
 - **Follow-ups:** live registry sources (0086); a later monitoring MATCH on
   an officer doesn't re-score the company yet; the correct-and-re-run form
   can't edit declared people.
+
+## 2026-09-25 — ASN reuse signal fixes (backlog 0088)
+
+- **Bug fixed:** the reuse query excluded only the current run, so a
+  re-analysis matched its own earlier run(s) and raised `ip_asn_reuse`
+  against a clean company. It now excludes runs of the same submission and
+  of the same entity.
+- **Decision — same entity is not reuse.** A company resubmitting from its own
+  network is not a coordinated campaign, so other submissions resolved to the
+  same entity are excluded too. Not in the ticket's must-haves; revisit if
+  entity resolution ever merges unrelated submitters.
+- **Window:** 30 days by default (`ENTITYIQ_ASN_REUSE_WINDOW_DAYS`; invalid or
+  non-positive values fall back to 30), measured from scoring time against
+  `evidence.created_at`. Descriptions now say "in N other submission(s) in the
+  last 30 days".
+- **Count:** distinct other submissions, computed in SQL. The old per-ASN
+  `.limit(5)` before de-duplication is gone, so counts are exact.
+- **Index:** partial `ix_evidence_ip_asn_reuse (normalized_value, created_at)
+  WHERE field = 'ip_asn'`. Partial because `normalized_value` is `Text` and
+  other sources store long values there. The `'ip_asn'` literal is inlined in
+  the query so Postgres can match the partial index under a generic prepared
+  plan. Checked on local Postgres 17 with ~24k evidence rows: EXPLAIN shows an
+  index scan on it.
+- **Unchanged (follow-ups):** reuse is still keyed on the ASN, not the IP
+  (noisy for big ISPs and clouds), and a DB error still logs and yields no
+  signal (fails open).
+
+## 2026-09-25 — Paginated report list (backlog 0089)
+
+- **One query plus a COUNT.** `GET /reports` joins run, submission, risk
+  assessment and review in SQL. It used to make ~3 queries per report and
+  filter the tier in Python. It selects only the list columns, not the large
+  `summary` JSON.
+- **Tier and score come from `risk_assessment`** through
+  `report.risk_assessment_id`, not a new column on `report`. `assemble_report`
+  writes the summary copy from the same row, so they agree. Checked live on
+  the 7 demo companies: list and detail match for every one. The list-test
+  helper now links an assessment the way production does.
+- **Pagination:** `limit` (default 50, max 500) and `offset`; the response
+  adds `limit` and `offset`, and `total` now counts all matches, not the page.
+  Ordered newest first by `created_at`, with `id` breaking ties so pages
+  stay stable.
+- **Filters moved to the server:** `triage_tier` (existing), plus
+  `review_status` (`pending` | `reviewed`) and `q` (case-insensitive name or
+  domain substring, with `%` and `_` treated literally). The review filter
+  had to move too, or it would only have filtered the loaded page.
+- **Indexes:** `risk_assessment.triage_tier` (ticket) and `report.created_at`
+  (not in the ticket; it backs newest-first paging).
+- **Dashboard:** search is debounced (300 ms) and sent as `q`, filters are
+  sent as params, "Load more" fetches the next page, and the footer shows
+  "Showing N of M". The header count now says "N matching" instead of
+  "N of M reports", since the unfiltered total is no longer known when
+  filters are on.
+- **Tradeoff — background-run notice:** submitting a company clears the
+  filters so its report can land in view. If the operator re-applies a filter
+  that hides it while it runs, the notice keeps polling (one page per poll)
+  until the filter is cleared. Accepted for now; polling the run directly
+  would remove this edge.

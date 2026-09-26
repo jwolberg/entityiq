@@ -263,8 +263,35 @@ describe("Dashboard", () => {
     expect(badgeTexts).toContain("Approved");
   });
 
-  it("filters by search, review status, and triage tier", async () => {
-    const items = [
+  // A stand-in for GET /reports that applies the same filters and paging as
+  // the backend (ticket 0089), and records every URL it was called with.
+  const last = (urls: URL[]) => urls[urls.length - 1];
+
+  function fakeReportsServer(all: Record<string, unknown>[]) {
+    const urls: URL[] = [];
+    const fetchMock = vi.fn(async (input: string) => {
+      const url = new URL(input, "http://test");
+      urls.push(url);
+      const p = url.searchParams;
+      const q = (p.get("q") ?? "").toLowerCase();
+      const matches = all.filter((i) => {
+        if (q && !`${i.company_name} ${i.domain}`.toLowerCase().includes(q)) return false;
+        if (p.get("triage_tier") && i.triage_tier !== p.get("triage_tier")) return false;
+        if (p.get("review_status") === "pending" && i.review_status !== null) return false;
+        if (p.get("review_status") === "reviewed" && i.review_status === null) return false;
+        return true;
+      });
+      const limit = Number(p.get("limit") ?? 50);
+      const offset = Number(p.get("offset") ?? 0);
+      const items = matches.slice(offset, offset + limit);
+      return { ok: true, json: async () => ({ items, total: matches.length, limit, offset }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return urls;
+  }
+
+  it("filters by search, review status, and triage tier on the server", async () => {
+    const urls = fakeReportsServer([
       {
         run_id: "run-1",
         report_id: "rep-1",
@@ -298,32 +325,23 @@ describe("Dashboard", () => {
         review_status: null,
         generated_at: "2026-05-24T09:00:00Z",
       },
-    ];
-
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ items, total: 3 }),
-      })
-    );
+    ]);
 
     render(
       <Wrapper>
-        <Dashboard onSelect={vi.fn()} />
+        <Dashboard onSelect={vi.fn()} searchDebounceMs={0} />
       </Wrapper>
     );
+    await screen.findByTestId("dashboard-table");
+    expect(urls[0].search).toBe(""); // first page, no filters
 
-    await waitFor(() => {
-      expect(screen.getByTestId("dashboard-table")).toBeDefined();
-    });
-
-    // Search narrows to Globex
+    // Search narrows to Globex — sent to the server as q
     fireEvent.change(screen.getByTestId("dashboard-search"), {
       target: { value: "globex" },
     });
-    expect(screen.queryByText("Acme Corp")).toBeNull();
+    await waitFor(() => expect(screen.queryByText("Acme Corp")).toBeNull());
     expect(screen.getByText("Globex Ltd")).toBeDefined();
+    expect(last(urls).searchParams.get("q")).toBe("globex");
 
     // Clear search; filter to pending review → Acme + Volga
     fireEvent.change(screen.getByTestId("dashboard-search"), {
@@ -332,9 +350,11 @@ describe("Dashboard", () => {
     fireEvent.change(screen.getByTestId("filter-review"), {
       target: { value: "pending" },
     });
+    await waitFor(() => expect(screen.queryByText("Globex Ltd")).toBeNull());
     expect(screen.getByText("Acme Corp")).toBeDefined();
     expect(screen.getByText("Volga Maritime")).toBeDefined();
-    expect(screen.queryByText("Globex Ltd")).toBeNull();
+    expect(last(urls).searchParams.get("review_status")).toBe("pending");
+    expect(last(urls).searchParams.has("q")).toBe(false);
 
     // Tier filter "escalate" + status all → only Volga, even at a low score
     fireEvent.change(screen.getByTestId("filter-review"), {
@@ -343,15 +363,50 @@ describe("Dashboard", () => {
     fireEvent.change(screen.getByTestId("filter-tier"), {
       target: { value: "escalate" },
     });
+    await waitFor(() => expect(screen.queryByText("Acme Corp")).toBeNull());
     expect(screen.getByText("Volga Maritime")).toBeDefined();
-    expect(screen.queryByText("Acme Corp")).toBeNull();
-    expect(screen.queryByText("Globex Ltd")).toBeNull();
+    expect(last(urls).searchParams.get("triage_tier")).toBe("escalate");
+    expect(last(urls).searchParams.has("review_status")).toBe(false);
 
-    // Combination that matches nothing → no-matches notice
+    // Combination that matches nothing → no-matches notice; filters stay usable
     fireEvent.change(screen.getByTestId("dashboard-search"), {
       target: { value: "globex" },
     });
-    expect(screen.getByTestId("dashboard-no-matches")).toBeDefined();
+    await screen.findByTestId("dashboard-no-matches");
+    expect(screen.getByTestId("dashboard-filters")).toBeDefined();
+    expect(screen.queryByTestId("dashboard-empty")).toBeNull();
+  });
+
+  it("loads the next page with Load more", async () => {
+    const all = Array.from({ length: 60 }, (_, i) => ({
+      run_id: `run-${i}`,
+      report_id: `rep-${i}`,
+      company_name: `Company ${i}`,
+      domain: `c${i}.example`,
+      status: "complete",
+      overall_score: 10,
+      triage_tier: "review",
+      review_status: null,
+      generated_at: "2026-05-26T10:00:00Z",
+    }));
+    const urls = fakeReportsServer(all);
+
+    render(
+      <Wrapper>
+        <Dashboard onSelect={vi.fn()} />
+      </Wrapper>
+    );
+    await screen.findByTestId("dashboard-table");
+    expect(screen.getAllByRole("button", { name: /View details/ })).toHaveLength(50);
+    expect(screen.getByTestId("dashboard-count").textContent).toBe("Showing 50 of 60");
+
+    fireEvent.click(screen.getByTestId("load-more-reports"));
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: /View details/ })).toHaveLength(60)
+    );
+    expect(last(urls).searchParams.get("offset")).toBe("50");
+    expect(screen.getByTestId("dashboard-count").textContent).toBe("Showing 60 of 60");
+    expect(screen.queryByTestId("load-more-reports")).toBeNull();
   });
 
   it("renders empty state when no reports exist", async () => {

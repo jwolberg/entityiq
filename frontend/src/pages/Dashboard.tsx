@@ -8,9 +8,12 @@
  * A submitted company is verified in the background; the queue shows a notice
  * and re-polls until its report lands, then says whether it's ready or failed.
  * If the queue can't be refreshed, polling stops and the notice says so.
+ *
+ * Search and filters run on the server, one page at a time, with "Load more"
+ * for the next page (ticket 0089).
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiClient, ReportListItem } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { NewCompanyForm } from "../components/NewCompanyForm";
@@ -19,7 +22,12 @@ interface DashboardProps {
   onSelect: (runId: string) => void;
   /** How often to re-poll the queue while a submission is running (ms). */
   pollMs?: number;
+  /** Wait after the last keystroke before searching (ms). */
+  searchDebounceMs?: number;
 }
+
+const PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 500;
 
 interface BackgroundRun {
   runId: string;
@@ -86,16 +94,39 @@ function formatDate(iso: string | null): string {
 type ReviewFilter = "all" | "pending" | "reviewed";
 type TierFilter = "all" | "escalate" | "review" | "pre_clear";
 
-export function Dashboard({ onSelect, pollMs = 5000 }: DashboardProps) {
+export function Dashboard({ onSelect, pollMs = 5000, searchDebounceMs = 300 }: DashboardProps) {
   const { auth } = useAuth();
   const [items, setItems] = useState<ReportListItem[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filters / search (client-side over the fetched list)
+  // Search and filters are applied by the server (GET /reports).
   const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
+
+  useEffect(() => {
+    const next = search.trim();
+    if (next === query) return;
+    const timer = setTimeout(() => setQuery(next), searchDebounceMs);
+    return () => clearTimeout(timer);
+  }, [search, query, searchDebounceMs]);
+
+  const filters = {
+    q: query || undefined,
+    review_status: reviewFilter === "all" ? undefined : reviewFilter,
+    triage_tier: tierFilter === "all" ? undefined : tierFilter,
+  };
+  const filtersKey = JSON.stringify(filters);
+
+  // A poll reloads everything already loaded (not just page one), so "Load
+  // more" pages survive it. Consumed by the next list load.
+  const itemsRef = useRef<ReportListItem[]>(items);
+  itemsRef.current = items;
+  const refreshLimit = useRef<number | undefined>(undefined);
 
   // New-company form modal + queue refresh trigger
   const [showForm, setShowForm] = useState(false);
@@ -107,11 +138,14 @@ export function Dashboard({ onSelect, pollMs = 5000 }: DashboardProps) {
   useEffect(() => {
     let cancelled = false;
     setError(null);
+    const limit = refreshLimit.current;
+    refreshLimit.current = undefined;
     apiClient
-      .listReports(auth.token)
+      .listReports(auth.token, { ...JSON.parse(filtersKey), limit })
       .then((resp) => {
         if (!cancelled) {
           setItems(resp.items);
+          setTotal(resp.total);
           setLoading(false);
         }
       })
@@ -129,7 +163,7 @@ export function Dashboard({ onSelect, pollMs = 5000 }: DashboardProps) {
     return () => {
       cancelled = true;
     };
-  }, [auth.token, refreshKey]);
+  }, [auth.token, refreshKey, filtersKey]);
 
   // A run's report appears in the list only once its pipeline finishes (a
   // failed run keeps a partial one), so read the run's status once it lands.
@@ -169,26 +203,32 @@ export function Dashboard({ onSelect, pollMs = 5000 }: DashboardProps) {
   const stillRunning = backgroundRuns.some((r) => r.state === "running");
   useEffect(() => {
     if (!stillRunning) return;
-    const timer = setInterval(() => setRefreshKey((k) => k + 1), pollMs);
+    const timer = setInterval(() => {
+      const loaded = itemsRef.current.length;
+      refreshLimit.current = Math.min(MAX_PAGE_SIZE, Math.max(PAGE_SIZE, loaded + 1));
+      setRefreshKey((k) => k + 1);
+    }, pollMs);
     return () => clearInterval(timer);
   }, [stillRunning, pollMs]);
 
-  const query = search.trim().toLowerCase();
-  const filtered = items.filter((item) => {
-    if (query) {
-      const haystack = `${item.company_name} ${item.domain}`.toLowerCase();
-      if (!haystack.includes(query)) return false;
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const resp = await apiClient.listReports(auth.token, {
+        ...filters,
+        offset: items.length,
+      });
+      setItems((prev) => [...prev, ...resp.items]);
+      setTotal(resp.total);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoadingMore(false);
     }
-    if (reviewFilter === "pending" && item.review_status !== null) return false;
-    if (reviewFilter === "reviewed" && item.review_status === null) return false;
-    if (tierFilter !== "all" && item.triage_tier !== tierFilter) {
-      return false;
-    }
-    return true;
-  });
+  }
 
   const filtersActive =
-    query !== "" || reviewFilter !== "all" || tierFilter !== "all";
+    search.trim() !== "" || reviewFilter !== "all" || tierFilter !== "all";
 
   return (
     <div>
@@ -198,8 +238,8 @@ export function Dashboard({ onSelect, pollMs = 5000 }: DashboardProps) {
           {loading
             ? ""
             : filtersActive
-              ? `${filtered.length} of ${items.length} report${items.length !== 1 ? "s" : ""}`
-              : `${items.length} report${items.length !== 1 ? "s" : ""}`}
+              ? `${total} matching`
+              : `${total} report${total !== 1 ? "s" : ""}`}
         </span>
         <button
           type="button"
@@ -217,6 +257,11 @@ export function Dashboard({ onSelect, pollMs = 5000 }: DashboardProps) {
           onClose={() => setShowForm(false)}
           onSuccess={(resp, companyName) => {
             setShowForm(false);
+            // Clear filters so the new company's report can land in view.
+            setSearch("");
+            setQuery("");
+            setReviewFilter("all");
+            setTierFilter("all");
             setBackgroundRuns((runs) => [
               ...runs,
               { runId: resp.run_id, companyName, state: "running" },
@@ -280,7 +325,7 @@ export function Dashboard({ onSelect, pollMs = 5000 }: DashboardProps) {
         </div>
       ))}
 
-      {!loading && !error && items.length > 0 && (
+      {!loading && !error && (items.length > 0 || filtersActive) && (
         <div style={styles.filterBar} data-testid="dashboard-filters">
           <input
             type="search"
@@ -329,20 +374,20 @@ export function Dashboard({ onSelect, pollMs = 5000 }: DashboardProps) {
         </div>
       )}
 
-      {!loading && !error && items.length === 0 && (
+      {!loading && !error && items.length === 0 && !filtersActive && (
         <div style={styles.state} data-testid="dashboard-empty">
           No reports yet. Submissions will appear here once analysis is
           complete.
         </div>
       )}
 
-      {!loading && !error && items.length > 0 && filtered.length === 0 && (
+      {!loading && !error && items.length === 0 && filtersActive && (
         <div style={styles.state} data-testid="dashboard-no-matches">
           No reports match the current filters.
         </div>
       )}
 
-      {!loading && !error && filtered.length > 0 && (
+      {!loading && !error && items.length > 0 && (
         <table style={styles.table} data-testid="dashboard-table">
           <thead>
             <tr>
@@ -355,7 +400,7 @@ export function Dashboard({ onSelect, pollMs = 5000 }: DashboardProps) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((item) => (
+            {items.map((item) => (
               <tr
                 key={item.run_id}
                 style={styles.row}
@@ -407,6 +452,25 @@ export function Dashboard({ onSelect, pollMs = 5000 }: DashboardProps) {
             ))}
           </tbody>
         </table>
+      )}
+
+      {!loading && !error && items.length > 0 && (
+        <div style={styles.footer}>
+          <span data-testid="dashboard-count">
+            Showing {items.length} of {total}
+          </span>
+          {items.length < total && (
+            <button
+              type="button"
+              onClick={loadMore}
+              disabled={loadingMore}
+              style={styles.loadMore}
+              data-testid="load-more-reports"
+            >
+              {loadingMore ? "Loading…" : "Load more"}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -460,6 +524,22 @@ const styles: Record<string, React.CSSProperties> = {
   count: {
     color: "#6b7280",
     fontSize: "0.875rem",
+  },
+  footer: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: "0.75rem",
+    fontSize: "0.875rem",
+    color: "#6b7280",
+  },
+  loadMore: {
+    padding: "0.375rem 0.75rem",
+    borderRadius: "0.375rem",
+    border: "none",
+    backgroundColor: "#1e3a5f",
+    color: "#ffffff",
+    cursor: "pointer",
   },
   newBtn: {
     marginLeft: "auto",

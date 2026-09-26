@@ -19,7 +19,7 @@ Test scenarios:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import create_engine
@@ -737,6 +737,141 @@ class TestIPASNReuse:
         signal_names = {s.name for s in sigs}
         assert "ip_asn_reuse" not in signal_names
         assert "ip_asn_reuse_high" not in signal_names
+
+    # --- Ticket 0088: re-analysis, time window, distinct-submission count ---
+
+    @staticmethod
+    def _asn_ev(run_id: str, asn: str, created_at: datetime | None = None):
+        ev = Evidence(
+            verification_run_id=run_id,
+            source="ipinfo",
+            tier=2,
+            field="ip_asn",
+            raw_value=asn,
+            normalized_value=asn,
+            confidence=0.9,
+            fetched_at=datetime.now(tz=timezone.utc),
+        )
+        if created_at is not None:
+            ev.created_at = created_at
+        return ev
+
+    @staticmethod
+    def _rerun(db: Session, run_id: str) -> str:
+        """A re-analysis: new run on the same submission + entity."""
+        prior = db.get(VerificationRun, run_id)
+        rerun = VerificationRun(
+            submission_id=prior.submission_id,
+            entity_id=prior.entity_id,
+            status="running",
+            source_availability={},
+            supersedes_id=run_id,
+        )
+        db.add(rerun)
+        db.commit()
+        return rerun.id
+
+    def _reuse(self, db: Session, run_id: str, asn: str) -> list:
+        current = self._asn_ev(run_id, asn)
+        db.add(current)
+        db.commit()
+        sigs = fraud_staging_risk_signals([current], run_id=run_id, db=db)
+        return [s for s in sigs if s.name.startswith("ip_asn_reuse")]
+
+    def test_reanalysis_does_not_count_its_own_prior_run(self, db: Session):
+        """Re-running a submission must not flag it as reusing its own ASN."""
+        _, run_1 = _make_run(db)
+        db.add(self._asn_ev(run_1, "AS40001"))
+        db.commit()
+        run_2 = self._rerun(db, run_1)
+        db.add(self._asn_ev(run_2, "AS40001"))
+        db.commit()
+        run_3 = self._rerun(db, run_2)
+
+        assert self._reuse(db, run_3, "AS40001") == []
+
+    def test_other_submission_for_same_entity_is_not_reuse(self, db: Session):
+        """The same company resubmitting from its own network is not reuse."""
+        entity_id, run_1 = _make_run(db)
+        db.add(self._asn_ev(run_1, "AS40002"))
+        sub = Submission(
+            company_name="Test Corp",
+            domain="testcorp.example",
+            work_email="cfo@testcorp.example",
+            country="US",
+            entity_id=entity_id,
+        )
+        db.add(sub)
+        db.flush()
+        run_2 = VerificationRun(
+            submission_id=sub.id,
+            entity_id=entity_id,
+            status="running",
+            source_availability={},
+        )
+        db.add(run_2)
+        db.commit()
+
+        assert self._reuse(db, run_2.id, "AS40002") == []
+
+    def test_prior_run_outside_window_is_not_counted(self, db: Session):
+        """Reuse only counts inside the window (default 30 days)."""
+        _, old_run = _make_run(db)
+        db.add(
+            self._asn_ev(
+                old_run,
+                "AS40003",
+                created_at=datetime.now(tz=timezone.utc) - timedelta(days=45),
+            )
+        )
+        db.commit()
+        _, current = _make_run(db)
+
+        assert self._reuse(db, current, "AS40003") == []
+
+    def test_window_is_configurable(self, db: Session, monkeypatch):
+        monkeypatch.setenv("ENTITYIQ_ASN_REUSE_WINDOW_DAYS", "60")
+        _, old_run = _make_run(db)
+        db.add(
+            self._asn_ev(
+                old_run,
+                "AS40004",
+                created_at=datetime.now(tz=timezone.utc) - timedelta(days=45),
+            )
+        )
+        db.commit()
+        _, current = _make_run(db)
+
+        names = [s.name for s in self._reuse(db, current, "AS40004")]
+        assert names == ["ip_asn_reuse"]
+
+    def test_counts_distinct_submissions_not_runs(self, db: Session):
+        """One submission re-run three times is one prior submission, not three."""
+        _, run_1 = _make_run(db)
+        db.add(self._asn_ev(run_1, "AS40005"))
+        db.commit()
+        prev = run_1
+        for _ in range(2):
+            prev = self._rerun(db, prev)
+            db.add(self._asn_ev(prev, "AS40005"))
+            db.commit()
+        _, current = _make_run(db)
+
+        sigs = self._reuse(db, current, "AS40005")
+        assert [s.name for s in sigs] == ["ip_asn_reuse"]
+        assert "1 other submission" in sigs[0].description
+
+    def test_count_is_not_capped_at_five(self, db: Session):
+        """The old per-ASN .limit(5) capped the count; the description must be exact."""
+        for _ in range(7):
+            _, prior = _make_run(db)
+            db.add(self._asn_ev(prior, "AS40006"))
+        db.commit()
+        _, current = _make_run(db)
+
+        sigs = self._reuse(db, current, "AS40006")
+        assert [s.name for s in sigs] == ["ip_asn_reuse_high"]
+        assert "7 other submission(s) in the last 30 days" in sigs[0].description
 
 
 # ---------------------------------------------------------------------------

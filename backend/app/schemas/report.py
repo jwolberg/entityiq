@@ -171,7 +171,9 @@ class ReportListItemSchema(BaseModel):
 
 
 class ReportListResponse(BaseModel):
-    """Response for GET /reports/."""
+    """Response for GET /reports/ — one page; ``total`` counts all matches."""
 
     items: list[ReportListItemSchema]
     total: int
+    limit: int = 50
+    offset: int = 0
