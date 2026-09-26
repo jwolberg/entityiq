@@ -2063,3 +2063,29 @@ under their own trigger, dependency-free SVG graph.
 - **Follow-ups:** live registry sources (0086); a later monitoring MATCH on
   an officer doesn't re-score the company yet; the correct-and-re-run form
   can't edit declared people.
+
+## 2026-09-25 — ASN reuse signal fixes (backlog 0088)
+
+- **Bug fixed:** the reuse query excluded only the current run, so a
+  re-analysis matched its own earlier run(s) and raised `ip_asn_reuse`
+  against a clean company. It now excludes runs of the same submission and
+  of the same entity.
+- **Decision — same entity is not reuse.** A company resubmitting from its own
+  network is not a coordinated campaign, so other submissions resolved to the
+  same entity are excluded too. Not in the ticket's must-haves; revisit if
+  entity resolution ever merges unrelated submitters.
+- **Window:** 30 days by default (`ENTITYIQ_ASN_REUSE_WINDOW_DAYS`; invalid or
+  non-positive values fall back to 30), measured from scoring time against
+  `evidence.created_at`. Descriptions now say "in N other submission(s) in the
+  last 30 days".
+- **Count:** distinct other submissions, computed in SQL. The old per-ASN
+  `.limit(5)` before de-duplication is gone, so counts are exact.
+- **Index:** partial `ix_evidence_ip_asn_reuse (normalized_value, created_at)
+  WHERE field = 'ip_asn'`. Partial because `normalized_value` is `Text` and
+  other sources store long values there. The `'ip_asn'` literal is inlined in
+  the query so Postgres can match the partial index under a generic prepared
+  plan. Checked on local Postgres 17 with ~24k evidence rows: EXPLAIN shows an
+  index scan on it.
+- **Unchanged (follow-ups):** reuse is still keyed on the ASN, not the IP
+  (noisy for big ISPs and clouds), and a DB error still logs and yields no
+  signal (fails open).

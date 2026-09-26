@@ -45,6 +45,8 @@ The function is called by fraud_staging_risk_signals when a session is supplied.
 from __future__ import annotations
 
 import logging
+import os
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from app.scoring.engine import Signal
@@ -53,6 +55,9 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+# Cross-submission ASN reuse look-back (ticket 0088).
+_DEFAULT_ASN_REUSE_WINDOW_DAYS = 30
 
 # Officer/owner screening evidence (ADR-0006, written by app.officer_screening).
 # It's about a person, not the company: never registry evidence or coverage.
@@ -1344,23 +1349,39 @@ def fraud_staging_risk_signals(
 # ---------------------------------------------------------------------------
 
 
+def _asn_reuse_window_days() -> int:
+    """Look-back window for ASN reuse, in days (ticket 0088; default 30)."""
+    raw = os.environ.get("ENTITYIQ_ASN_REUSE_WINDOW_DAYS", "")
+    try:
+        days = int(raw)
+    except ValueError:
+        return _DEFAULT_ASN_REUSE_WINDOW_DAYS
+    return days if days > 0 else _DEFAULT_ASN_REUSE_WINDOW_DAYS
+
+
 def _cross_submission_reuse_signals(
     run_id: str,
     db: "Session",
     ip_asn_evidence: list,
     all_evidence: list,  # noqa: ARG001 — reserved for future IP-level reuse
 ) -> list[Signal]:
-    """Query prior submissions for IP/ASN reuse and emit risk signals.
+    """Query prior submissions for ASN reuse and emit risk signals.
 
-    Searches Evidence rows from OTHER runs that share the same ip_asn value
-    (same ASN = same network operator).
+    Counts DISTINCT other submissions whose runs recorded the same ``ip_asn``
+    (same ASN = same network operator) within the look-back window
+    (``ENTITYIQ_ASN_REUSE_WINDOW_DAYS``, default 30).  Runs of the current
+    submission (re-analyses) and of the same entity (the company resubmitting)
+    are excluded — they are not a coordinated campaign (ticket 0088).
 
-    A single reuse hit is unusual but not conclusive; multiple hits in a
-    short window are a strong fraud/staging indicator.
+    A single reuse hit is unusual but not conclusive; three or more in the
+    window are a strong fraud/staging indicator.
 
     Returns a list of Signals — empty if no reuse detected.
     """
+    from sqlalchemy import bindparam, distinct, func  # noqa: PLC0415
+
     from app.models.evidence import Evidence  # noqa: PLC0415
+    from app.models.verification_run import VerificationRun  # noqa: PLC0415
 
     signals: list[Signal] = []
 
@@ -1374,26 +1395,32 @@ def _cross_submission_reuse_signals(
     if not current_asns:
         return signals
 
+    window_days = _asn_reuse_window_days()
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=window_days)
+
     try:
-        # Query evidence rows from OTHER runs with matching ASN values
-        reuse_evidence: list = []
-
-        for asn in current_asns:
-            prior_asn_ev = (
-                db.query(Evidence)
-                .filter(
-                    Evidence.field == "ip_asn",
-                    Evidence.normalized_value == asn,
-                    Evidence.verification_run_id != run_id,
-                )
-                .limit(5)
-                .all()
+        query = (
+            db.query(func.count(distinct(VerificationRun.submission_id)))
+            .select_from(Evidence)
+            .join(VerificationRun, Evidence.verification_run_id == VerificationRun.id)
+            .filter(
+                # Inlined so Postgres can match the partial index
+                # ix_evidence_ip_asn_reuse (WHERE field = 'ip_asn') even
+                # under a generic prepared plan.
+                Evidence.field
+                == bindparam("asn_field", "ip_asn", literal_execute=True),
+                Evidence.normalized_value.in_(sorted(current_asns)),
+                Evidence.created_at >= cutoff,
+                Evidence.verification_run_id != run_id,
             )
-            reuse_evidence.extend(prior_asn_ev)
-
-        # De-duplicate by verification_run_id
-        prior_run_ids: set[str] = {e.verification_run_id for e in reuse_evidence}
-        reuse_count = len(prior_run_ids)
+        )
+        current_run = db.get(VerificationRun, run_id)
+        if current_run is not None:
+            query = query.filter(
+                VerificationRun.submission_id != current_run.submission_id,
+                VerificationRun.entity_id != current_run.entity_id,
+            )
+        reuse_count = query.scalar() or 0
 
         if reuse_count >= 3:
             signals.append(
@@ -1403,10 +1430,10 @@ def _cross_submission_reuse_signals(
                     direction="elevated",
                     weight=0.6,
                     description=(
-                        f"IP ASN appears in {reuse_count} other submission(s) — "
-                        "high reuse suggests a coordinated registration campaign. "
-                        "PRD § Network & IP Intelligence: 'Repeated registrations "
-                        "from same IP/ASN'."
+                        f"IP ASN appears in {reuse_count} other submission(s) in "
+                        f"the last {window_days} days — high reuse suggests a "
+                        "coordinated registration campaign. PRD § Network & IP "
+                        "Intelligence: 'Repeated registrations from same IP/ASN'."
                     ),
                     evidence_ids=[e.id for e in ip_asn_evidence],
                 )
@@ -1419,9 +1446,10 @@ def _cross_submission_reuse_signals(
                     direction="elevated",
                     weight=0.3,
                     description=(
-                        f"IP ASN appears in {reuse_count} other submission(s) — "
-                        "potential reuse pattern. PRD § Network & IP Intelligence: "
-                        "'Repeated registrations from same IP/ASN'."
+                        f"IP ASN appears in {reuse_count} other submission(s) in "
+                        f"the last {window_days} days — potential reuse pattern. "
+                        "PRD § Network & IP Intelligence: 'Repeated registrations "
+                        "from same IP/ASN'."
                     ),
                     evidence_ids=[e.id for e in ip_asn_evidence],
                 )
