@@ -62,7 +62,9 @@ class RiskAssessment(Base):
     overall_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Triage tier: "pre_clear" | "review" | "escalate"
-    triage_tier: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    triage_tier: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, index=True
+    )
 
     # List of contributing signal objects (each has name, weight, evidence_id).
     contributing_signals: Mapped[list | None] = mapped_column(JSON, nullable=True)

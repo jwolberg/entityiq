@@ -2089,3 +2089,35 @@ under their own trigger, dependency-free SVG graph.
 - **Unchanged (follow-ups):** reuse is still keyed on the ASN, not the IP
   (noisy for big ISPs and clouds), and a DB error still logs and yields no
   signal (fails open).
+
+## 2026-09-25 — Paginated report list (backlog 0089)
+
+- **One query plus a COUNT.** `GET /reports` joins run, submission, risk
+  assessment and review in SQL. It used to make ~3 queries per report and
+  filter the tier in Python. It selects only the list columns, not the large
+  `summary` JSON.
+- **Tier and score come from `risk_assessment`** through
+  `report.risk_assessment_id`, not a new column on `report`. `assemble_report`
+  writes the summary copy from the same row, so they agree. Checked live on
+  the 7 demo companies: list and detail match for every one. The list-test
+  helper now links an assessment the way production does.
+- **Pagination:** `limit` (default 50, max 500) and `offset`; the response
+  adds `limit` and `offset`, and `total` now counts all matches, not the page.
+  Ordered newest first by `created_at`, with `id` breaking ties so pages
+  stay stable.
+- **Filters moved to the server:** `triage_tier` (existing), plus
+  `review_status` (`pending` | `reviewed`) and `q` (case-insensitive name or
+  domain substring, with `%` and `_` treated literally). The review filter
+  had to move too, or it would only have filtered the loaded page.
+- **Indexes:** `risk_assessment.triage_tier` (ticket) and `report.created_at`
+  (not in the ticket; it backs newest-first paging).
+- **Dashboard:** search is debounced (300 ms) and sent as `q`, filters are
+  sent as params, "Load more" fetches the next page, and the footer shows
+  "Showing N of M". The header count now says "N matching" instead of
+  "N of M reports", since the unfiltered total is no longer known when
+  filters are on.
+- **Tradeoff — background-run notice:** submitting a company clears the
+  filters so its report can land in view. If the operator re-applies a filter
+  that hides it while it runs, the notice keeps polling (one page per poll)
+  until the filter is cleared. Accepted for now; polling the run directly
+  would remove this edge.

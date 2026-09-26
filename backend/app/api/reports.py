@@ -11,12 +11,15 @@ Each section carries a status (pending / complete / unavailable) so partial
 
 Routes:
   GET /reports/{run_id}  — retrieve report by verification run ID
-  GET /reports/          — list recent reports (thin list; scores + run_id only)
+  GET /reports/          — paginated list of reports (thin; filters in SQL)
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.audit.recorder import record_event
@@ -25,6 +28,7 @@ from app.auth.service import Principal, get_principal
 from app.db.session import SessionLocal
 from app.models.report import Report
 from app.models.review import Review
+from app.models.risk_assessment import RiskAssessment
 from app.models.submission import Submission
 from app.models.verification_run import VerificationRun
 from app.schemas.report import (
@@ -195,78 +199,112 @@ def _serialize_report(
 # ---------------------------------------------------------------------------
 
 
+def _like_pattern(q: str) -> str:
+    """Case-insensitive substring pattern with LIKE wildcards escaped."""
+    escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 @router.get(
     "",
     response_model=ReportListResponse,
-    summary="List all reports (operator dashboard)",
+    summary="List reports, newest first (operator dashboard)",
 )
 def list_reports(
     triage_tier: str | None = None,
+    review_status: Literal["pending", "reviewed"] | None = None,
+    q: str | None = Query(default=None, max_length=200),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(_get_db),
     _principal: Principal = Depends(get_principal),
 ) -> ReportListResponse:
-    """Return a summary list of all reports for the operator dashboard.
+    """Return one page of report summaries for the operator dashboard.
 
     Each item includes company name, domain, report status, overall risk
-    score, triage tier, review status, and analysis date.  Results are
-    ordered newest first by generated_at (falling back to created_at).
+    score, triage tier, review status, and analysis date, ordered newest
+    first by created_at. ``total`` counts every match across pages.
 
-    ``triage_tier`` optionally filters to one tier (``pre_clear`` | ``review``
-    | ``escalate``). Filtering by tier — not the score band derived from
-    ``overall_score`` — matters because a critical signal (e.g. a sanctions
-    hit) can force ``escalate`` at a low score (ARCHITECTURE § triage).
+    Filters (all applied in SQL, before paging — ticket 0089):
 
-    This is a thin list — it does NOT return evidence, mismatches, or
-    full scores.  Use GET /reports/{run_id} for the full report.
+    - ``triage_tier`` (``pre_clear`` | ``review`` | ``escalate``). Filtering by
+      tier — not the score band derived from ``overall_score`` — matters
+      because a critical signal (e.g. a sanctions hit) can force ``escalate``
+      at a low score (ARCHITECTURE § triage).
+    - ``review_status``: ``pending`` (no review yet) or ``reviewed``.
+    - ``q``: case-insensitive substring of the company name or domain.
+
+    Score and tier come from the run's linked RiskAssessment (the same values
+    assemble_report copies into the summary). Two statements per call: the
+    page and its COUNT. This is a thin list — no evidence, mismatches, or
+    full scores; use GET /reports/{run_id} for the full report.
     """
-    reports = db.query(Report).order_by(Report.created_at.desc()).all()
-
-    items: list[ReportListItemSchema] = []
-    for report in reports:
-        # Overall score / tier from summary JSON
-        summary = report.summary or {}
-        scores_data = summary.get("scores") or {}
-        overall_score = scores_data.get("overall_score")
-        report_triage_tier = scores_data.get("triage_tier")
-
-        if triage_tier is not None and report_triage_tier != triage_tier:
-            continue
-
-        # Resolve company info from submission via verification_run
-        run = db.get(VerificationRun, report.verification_run_id)
-        company_name = ""
-        domain = ""
-        if run is not None:
-            sub = db.get(Submission, run.submission_id)
-            if sub is not None:
-                company_name = sub.company_name
-                domain = sub.domain
-
-        # Review status — None if no review row exists
-        review = (
-            db.query(Review)
-            .filter(Review.verification_run_id == report.verification_run_id)
-            .first()
-        )
-        review_status = review.status if review is not None else None
-
-        generated_at = report.generated_at.isoformat() if report.generated_at else None
-
-        items.append(
-            ReportListItemSchema(
-                run_id=report.verification_run_id,
-                report_id=report.id,
-                company_name=company_name,
-                domain=domain,
-                status=report.status,
-                overall_score=overall_score,
-                triage_tier=report_triage_tier,
-                review_status=review_status,
-                generated_at=generated_at,
+    filtered = (
+        select(Report.id)
+        .join(VerificationRun, VerificationRun.id == Report.verification_run_id)
+        .join(Submission, Submission.id == VerificationRun.submission_id)
+        .outerjoin(RiskAssessment, RiskAssessment.id == Report.risk_assessment_id)
+        .outerjoin(Review, Review.verification_run_id == Report.verification_run_id)
+    )
+    if triage_tier is not None:
+        filtered = filtered.where(RiskAssessment.triage_tier == triage_tier)
+    if review_status == "pending":
+        filtered = filtered.where(Review.id.is_(None))
+    elif review_status == "reviewed":
+        filtered = filtered.where(Review.id.is_not(None))
+    if q and q.strip():
+        pattern = _like_pattern(q.strip())
+        filtered = filtered.where(
+            or_(
+                Submission.company_name.ilike(pattern, escape="\\"),
+                Submission.domain.ilike(pattern, escape="\\"),
             )
         )
 
-    return ReportListResponse(items=items, total=len(items))
+    total = db.scalar(select(func.count()).select_from(filtered.subquery())) or 0
+
+    rows = db.execute(
+        filtered.with_only_columns(
+            Report.id,
+            Report.verification_run_id,
+            Report.status,
+            Report.generated_at,
+            Submission.company_name,
+            Submission.domain,
+            RiskAssessment.overall_score,
+            RiskAssessment.triage_tier,
+            Review.status,
+        )
+        .order_by(Report.created_at.desc(), Report.id.desc())
+        .limit(limit)
+        .offset(offset)
+    ).all()
+
+    items = [
+        ReportListItemSchema(
+            run_id=run_id,
+            report_id=report_id,
+            company_name=company_name or "",
+            domain=domain or "",
+            status=report_status,
+            overall_score=overall_score,
+            triage_tier=tier,
+            review_status=review,
+            generated_at=generated_at.isoformat() if generated_at else None,
+        )
+        for (
+            report_id,
+            run_id,
+            report_status,
+            generated_at,
+            company_name,
+            domain,
+            overall_score,
+            tier,
+            review,
+        ) in rows
+    ]
+    return ReportListResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get(

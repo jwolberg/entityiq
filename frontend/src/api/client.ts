@@ -90,9 +90,21 @@ export interface ReportListItem {
   generated_at: string | null;
 }
 
+/** One page of GET /reports; `total` counts every match across pages. */
 export interface ReportListResponse {
   items: ReportListItem[];
   total: number;
+  limit?: number;
+  offset?: number;
+}
+
+/** Server-side filters and paging for GET /reports (ticket 0089). */
+export interface ReportListFilters {
+  q?: string;
+  triage_tier?: string;
+  review_status?: "pending" | "reviewed";
+  offset?: number;
+  limit?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -742,12 +754,17 @@ export const apiClient = {
     return request<AuditEventList>(`/audit/events?limit=${limit}`, {}, token);
   },
 
-  /** GET /reports — dashboard list */
-  listReports(token: string): Promise<ReportListResponse> {
+  /** GET /reports — one page of the dashboard list */
+  listReports(token: string, filters: ReportListFilters = {}): Promise<ReportListResponse> {
+    const q = new URLSearchParams(
+      Object.entries(filters)
+        .filter(([, v]) => v)
+        .map(([k, v]) => [k, String(v)])
+    ).toString();
     // No trailing slash: the backend route is exactly "/reports". A trailing
     // slash triggers a 307 redirect to the absolute backend URL, which the
     // browser can't follow cross-origin (CORS) → "Failed to fetch".
-    return request<ReportListResponse>("/reports", {}, token);
+    return request<ReportListResponse>(`/reports${q ? `?${q}` : ""}`, {}, token);
   },
 
   /** GET /reports/{run_id} — full report for detail view */

@@ -87,3 +87,15 @@ def test_head_adds_partial_index_for_asn_reuse(tmp_path, monkeypatch):
             "SELECT sql FROM sqlite_master WHERE name = 'ix_evidence_ip_asn_reuse'"
         ).scalar_one()
     assert "WHERE field = 'ip_asn'" in ddl
+
+
+def test_head_indexes_report_list_filter_and_order(tmp_path, monkeypatch):
+    """Report list (ticket 0089) filters by tier and pages by created_at."""
+    url = f"sqlite:///{tmp_path / 'r.db'}"
+    command.upgrade(_config(url, monkeypatch), "head")
+    insp = inspect(create_engine(url))
+
+    ra = {i["name"]: i["column_names"] for i in insp.get_indexes("risk_assessment")}
+    assert ra["ix_risk_assessment_triage_tier"] == ["triage_tier"]
+    rep = {i["name"]: i["column_names"] for i in insp.get_indexes("report")}
+    assert rep["ix_report_created_at"] == ["created_at"]

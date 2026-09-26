@@ -45,7 +45,7 @@ class Report(Base):
         DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
