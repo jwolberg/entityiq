@@ -30,6 +30,62 @@ action is audited.
 
 ![Verification queue](docs/img/dashboard.png)
 
+## Checks, in order
+
+Each check below links to the code that performs it. Each entry names the
+class or function rather than a line number, so you can search for it.
+
+### Business verification
+
+The stages run in this order, set in `default_stages()` in
+[`pipeline/orchestrator.py`](backend/app/pipeline/orchestrator.py). If a source
+fails, that stage is marked "unavailable" and the run continues.
+
+| # | Check | What it checks | Code |
+|---|---|---|---|
+| 1 | Normalize input | Canonicalizes the submitted name, country, address, domain and tax ID. Produces no verdict. | [`pipeline/normalize.py`](backend/app/pipeline/normalize.py) `NormalizeInputStage` |
+| 2 | Resolve entity | Ranks the candidate companies the submission could be, and flags conflicting identities. Runs offline. | [`pipeline/resolve.py`](backend/app/pipeline/resolve.py) `ResolveEntityCandidatesStage` |
+| 3 | Business registry | OpenCorporates: is the name confirmed, is there a registration number, is the company active or inactive? | [`adapters/opencorporates.py`](backend/app/adapters/opencorporates.py) `QueryRegistriesStage` |
+| 4 | Tax ID (FEIN) | Does the FEIN exist, is its entity active, and is it registered to the submitted name? | [`adapters/tax_id.py`](backend/app/adapters/tax_id.py) `VerifyTaxIdStage` |
+| 5 | Company sanctions | The company name against OFAC SDN: exact match after removing legal suffixes such as Inc and LLC. | [`adapters/sanctions.py`](backend/app/adapters/sanctions.py) `SanctionsScreeningStage` |
+| 6 | Collect officers & owners | Merges the people declared on the submission with the registry's officers and owners, removing duplicates. | [`officer_screening/people.py`](backend/app/officer_screening/people.py) `CollectPeopleStage` |
+| 7 | Screen officers & owners | Runs each person through individual screening (below). | [`officer_screening/screen.py`](backend/app/officer_screening/screen.py) `ScreenPeopleStage` |
+| 8 | Domain & email | Domain age from WHOIS (flagged when under 180 days), DNS, MX, SPF, DKIM, and the SSL certificate. | [`adapters/domain.py`](backend/app/adapters/domain.py) `AnalyzeDomainStage` |
+| 9 | Network / IP | IPinfo for the submitter's IP: does its country match the submission, and is it a hosting, VPN or proxy address? Also the ASN (the network operator). | [`adapters/ipinfo.py`](backend/app/adapters/ipinfo.py) `EnrichNetworkIPStage` |
+| 10 | Public web | Site content, contact pages and press footprint. Extracts contacts, each attributed to its source. | [`adapters/web.py`](backend/app/adapters/web.py) `WebEvidenceStage` |
+| 11 | LinkedIn | Is there a company page, and is it established, thin or new? Does its website match the domain, and is the requester associated with it? | [`adapters/linkedin.py`](backend/app/adapters/linkedin.py) `VerifyLinkedInStage` |
+| 12 | Consistency | Submitted vs. discovered values: name, country vs. jurisdiction, billing vs. legal address, tax-ID status and registered name, LinkedIn website vs. domain. Each comes out as match, mismatch or unverified. | [`pipeline/consistency.py`](backend/app/pipeline/consistency.py) `ConsistencyChecksStage` |
+| 13 | HQ geocode | Puts the HQ on a map with OpenStreetMap Nominatim and rates address confidence high, medium or low by how many sources agree. | [`adapters/geocode.py`](backend/app/adapters/geocode.py) `GeocodeHQStage` |
+| 14 | Scoring & triage | Turns the evidence into signals with a layer, a direction and a weight. Scores four layers 0–100, combines them into an overall score, and assigns a tier: `pre_clear` (≤ 30), `review` (31–69) or `escalate` (≥ 70). Critical signals force `escalate`. | [`scoring/engine.py`](backend/app/scoring/engine.py) `ScoringStage`, `_triage_tier`, `CRITICAL_ESCALATION_SIGNALS` |
+| 15 | Report | Assembles the queryable report the operator UI reads. | [`scoring/report.py`](backend/app/scoring/report.py) `StoreReportStage` |
+
+The scoring step (14) also computes these signals without a stage of their
+own. All are in [`scoring/signals.py`](backend/app/scoring/signals.py):
+
+- **Free email domain.** The submitter used a webmail address. See `_append_intake_signals`.
+- **Domain ownership proven.** Uses an optional DNS TXT, meta tag or email
+  challenge. See [`pipeline/ownership.py`](backend/app/pipeline/ownership.py)
+  and `_append_ownership_signals`.
+- **Cross-submission reuse.** The submitter's ASN appears on other
+  submissions in the last 30 days, not counting re-analyses or the same
+  company resubmitting. Three or more force `escalate`. See
+  `_cross_submission_reuse_signals`.
+- **Officer screening results.** A MATCH forces `escalate`; a REVIEW adds an
+  elevated signal. See `_officer_screening_signals`.
+
+### Individual screening
+
+The screening stages run in this order, set in `screening_stages()` in
+[`screening/pipeline.py`](backend/app/screening/pipeline.py).
+
+| # | Check | What it checks | Code |
+|---|---|---|---|
+| 1 | List coverage | Each required list (OFAC SDN, UN, EU, UK OFSI) is present and less than 7 days old. A missing or stale list blocks auto-CLEAR. | [`screening/stages.py`](backend/app/screening/stages.py) `list_coverage` |
+| 2 | Block candidates | Finds candidates recall-first against every list. It tolerates transliteration, name order, particles, nicknames and initials. | [`screening/stages.py`](backend/app/screening/stages.py) `BlockCandidatesStage`, [`screening/blocking.py`](backend/app/screening/blocking.py) |
+| 3 | Score candidates | Applies named, weighted terms for name, date of birth, ID number, nationality and place of birth, plus a common-name penalty. Conflicts appear as their own negative terms. | [`screening/scoring.py`](backend/app/screening/scoring.py) `TERM_CATALOG`, `DEFAULT_RULE`, `score_pair` |
+| 4 | Dispose | Assigns MATCH (≥ 0.9), REVIEW or CLEAR (< 0.35). A name match with a DOB or ID conflict can fall no lower than REVIEW. CLEAR closes without a human only when every list answered. | [`screening/dispose.py`](backend/app/screening/dispose.py) `decide`, `DisposeStage` |
+| 5 | Ongoing monitoring | When a list changes, re-screens existing subjects against only the added and changed records. | [`screening/monitor.py`](backend/app/screening/monitor.py) `rescreen_for_snapshot` |
+
 ## Quick start
 
 ```bash
