@@ -2121,3 +2121,12 @@ under their own trigger, dependency-free SVG graph.
   that hides it while it runs, the notice keeps polling (one page per poll)
   until the filter is cleared. Accepted for now; polling the run directly
   would remove this edge.
+
+## 2026-10-02 — README "Checks, in order" section
+
+- **Decision:** each check links to its file and names the class/function
+  instead of a `#L` line anchor. Line numbers already differ between `main`
+  and an open branch, so anchors would rot; symbol names stay greppable.
+- **Rebase:** written against a stale local `main`; rebased onto the merge of
+  0088/0089 and updated the cross-submission reuse bullet to match 0088
+  (30-day window, excludes the same submission and the same entity).
