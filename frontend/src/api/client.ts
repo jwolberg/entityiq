@@ -150,6 +150,8 @@ export interface EvidenceItem {
   confidence: number | null;
   attribution: Record<string, unknown> | null;
   fetched_at: string | null;
+  /** Public-records detail only (ticket 0095); person names redacted for API keys. */
+  raw_payload?: Record<string, unknown> | null;
 }
 
 export interface SourceSummary {

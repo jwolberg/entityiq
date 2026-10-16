@@ -260,3 +260,16 @@ def test_public_records_scenarios_show_in_the_report_evidence(db):
             e["raw_value"] == kind and e["normalized_value"] == "strong" for e in items
         )
         assert all("raw_payload" in e for e in items)
+
+
+def test_demo_dockets_never_link_to_real_courtlistener_cases(db):
+    load_demo_data(db)
+    from app.models.evidence import Evidence
+
+    rows = db.query(Evidence).filter(Evidence.source == "public_records").all()
+    urls = [
+        (r.raw_payload or {}).get("source_url")
+        for r in rows
+        if r.field == "public_record"
+    ]
+    assert urls and all(u is None for u in urls)

@@ -786,3 +786,15 @@ def test_http_client_maps_statuses_and_sends_only_search_params(monkeypatch):
     monkeypatch.setattr(httpx, "get", timeout)
     with pytest.raises(TimeoutError):
         client.docket(1)
+
+
+def test_non_positive_docket_ids_get_no_link(db):
+    """Demo dockets use ids <= 0 so they never link to a real CourtListener case."""
+    bk = _load("search_bankruptcy.json")
+    for r in bk["results"]:
+        r["docket_id"] = -r["docket_id"]
+    run_id = _run(db)
+    _stage(FakeCourtListener(bankruptcy=bk)).run(run_id, db, _context())
+    recs = _records(db, run_id, "bankruptcy")
+    assert recs and all(r.raw_payload["source_url"] is None for r in recs)
+    assert all("source_url" not in (r.attribution or {}) for r in recs)
