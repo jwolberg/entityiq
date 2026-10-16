@@ -48,7 +48,7 @@ The pipeline proves a business exists and is who it claims to be. It does not lo
 - R8. Entity-layer elevated signals, on strong matches only:
   - `public_records_open_bankruptcy`: an open bankruptcy docket filed within 36 months. Weight 0.8.
   - `public_records_active_federal_exclusion`: an active SAM exclusion. Weight 0.9.
-  - `public_records_federal_litigation_as_defendant`: three or more open federal civil cases as defendant. Weight 0.3.
+  - `public_records_federal_litigation_as_defendant`: **dropped from v1 under R11.** U1 confirmed that search results carry no party role (2026-10-16). Cases are stored and shown unscored.
 - R9. Absence of records produces no trust signal.
 - R10. `public_records_active_federal_exclusion` is added to `CRITICAL_ESCALATION_SIGNALS`, so it forces `escalate`. The bankruptcy and litigation signals are not critical (KTD11).
 - R13. A CourtListener docket counts as open only when its last refresh is within 12 months. Older "open" dockets show as possible matches with an "out of date" note and never score (KTD13).
@@ -62,7 +62,7 @@ The pipeline proves a business exists and is who it claims to be. It does not lo
 
 - AE1. **Covers R8, R6.** Given a strong-match open Chapter 11 docket filed 14 months ago, when the run scores, then `public_records_open_bankruptcy` fires and its explanation cites the court, docket number, and filed date.
 - AE2. **Covers R8.** Given an active firm-classification SAM exclusion whose name and state match the submission's, the exclusion signal fires, forces `escalate`, and cites the excluding agency and activation date. The same record with a past termination date fires nothing.
-- AE3. **Covers R8, R11.** Three open cases as defendant fire the litigation signal. Two cases, three as plaintiff, or cases with unknown role fire nothing.
+- AE3. **Covers R8, R11.** In v1, open federal civil cases, at any count or role, are stored and shown but fire no signal (R11 fallback, confirmed by U1).
 - AE4. **Covers R3, R9.** Unconfigured sources, and configured sources returning no records, both produce an overall score equal to a run without the stage.
 - AE5. **Covers R6.** A Delaware bankruptcy docket for a Texas-registered company with a matching name is a strong match (court district is never a conflict). A docket whose debtor address state conflicts with the registry state appears under possible matches and fires nothing.
 
@@ -173,8 +173,9 @@ flowchart TB
 - **Approach:**
   1. The CourtListener client is injectable, reads the token from the env, never logs it, and is wrapped in `RetryingAdapter`.
   2. SAM lookup reads the latest snapshot and matches `core_name` plus state (KTD10).
-  3. Classify each record per R6 and KTD7.
-  4. Emit status, summary, and record rows per R5 and R7. Each source succeeds or fails on its own (KTD5).
+  3. A bankruptcy debtor is identified by `names_match(caseName, name)`, never by the `party` list, which includes counsel and creditors. Make one docket-detail call per strong-match open bankruptcy to read `date_last_filing` (KTD13).
+  4. Classify each record per R6 and KTD7.
+  5. Emit status, summary, and record rows per R5 and R7. Each source succeeds or fails on its own (KTD5).
 - **Execution note:** Implement test-first. The RED adapter tests are the spec and get reviewed before code.
 - **Patterns to follow:** `backend/app/adapters/tax_id.py` (provider protocol, `UnconfiguredTaxIdProvider`, `names_match`, failure mapping), `backend/app/adapters/sanctions.py` (`SanctionsScreeningStage`).
 - **Test scenarios:**
@@ -203,7 +204,7 @@ flowchart TB
 - **Test scenarios:**
   - Covers AE1. An open bankruptcy filed 14 months ago fires at weight 0.8 and cites court, docket, and date. One filed 40 months ago, or a discharged one, fires nothing.
   - Covers AE2. An active exclusion fires at 0.9 and forces `escalate` through the critical-signal path. A terminated one fires nothing.
-  - Covers AE3. The litigation threshold and role handling.
+  - Covers AE3. Five open civil cases fire no signal and are shown unscored.
   - Weak records never fire.
   - Covers AE4. `no_records` evidence yields a score equal to no evidence (no trust signal).
   - Only `public_records_active_federal_exclusion` is in `CRITICAL_ESCALATION_SIGNALS`. Triage has a test per tier: a clean company with the exclusion escalates, and one with only a bankruptcy keeps its score-based tier.
