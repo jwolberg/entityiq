@@ -35,13 +35,13 @@ The pipeline proves a business exists and is who it claims to be. It does not lo
 
 **Sources and access**
 - R1. Search CourtListener for bankruptcy dockets naming the business as debtor and for open federal civil dockets naming it as a party.
-- R2. Screen the business against a local snapshot of the SAM.gov public exclusions extract, matching by UEI when known, otherwise by normalized name plus state.
+- R2. Screen the business against a local snapshot of the SAM.gov public exclusions extract, matching by normalized name plus state (KTD10).
 - R3. With no `COURTLISTENER_API_TOKEN`, CourtListener reports `unavailable`. With no SAM snapshot, SAM reports `unavailable`. Neither case emits evidence or signals, or changes the score.
 - R4. A non-US submission records `not_applicable` and calls neither source.
 
 **Evidence**
 - R5. Each matched docket or exclusion is stored as one `public_records` evidence row carrying kind, status, dates, court/agency, docket number or SAM id, party name and role, match strength, and a source URL.
-- R6. A record is a strong match only when the party name passes `names_match` and no state or UEI conflict exists. Everything else is `weak`: stored and shown under "Possible matches", never scored.
+- R6. A record is a strong match only when the party name passes `names_match` and no state conflict exists under KTD10's per-source rules. SAM individual-classification rows are always `weak` in v1. Everything else is `weak`: stored and shown under "Possible matches", never scored.
 - R7. Each run records a per-source status (`searched`, `no_records`, `unavailable`, `timeout`, `rate_limited`, `not_applicable`, `stale`) and a summary with true counts. Stored records are capped at 50 per category.
 
 **Scoring**
@@ -50,7 +50,9 @@ The pipeline proves a business exists and is who it claims to be. It does not lo
   - `public_records_active_federal_exclusion`: an active SAM exclusion. Weight 0.9.
   - `public_records_federal_litigation_as_defendant`: three or more open federal civil cases as defendant. Weight 0.3.
 - R9. Absence of records produces no trust signal.
-- R10. None of the three signals is added to `CRITICAL_ESCALATION_SIGNALS`.
+- R10. `public_records_active_federal_exclusion` is added to `CRITICAL_ESCALATION_SIGNALS`, so it forces `escalate`. The bankruptcy and litigation signals are not critical (KTD11).
+- R13. A CourtListener docket counts as open only when its last refresh is within 12 months. Older "open" dockets show as possible matches with an "out of date" note and never score (KTD13).
+- R14. Personal data retention follows KTD12.
 
 **Feasibility and display**
 - R11. If CourtListener search results can't identify the party role, the litigation signal is dropped from v1 and cases are shown unscored.
@@ -59,10 +61,10 @@ The pipeline proves a business exists and is who it claims to be. It does not lo
 ### Acceptance Examples
 
 - AE1. **Covers R8, R6.** Given a strong-match open Chapter 11 docket filed 14 months ago, when the run scores, then `public_records_open_bankruptcy` fires and its explanation cites the court, docket number, and filed date.
-- AE2. **Covers R8.** Given an active SAM exclusion whose UEI matches the submission's, the exclusion signal fires and cites the excluding agency and activation date. The same record with a past termination date fires nothing.
+- AE2. **Covers R8.** Given an active firm-classification SAM exclusion whose name and state match the submission's, the exclusion signal fires, forces `escalate`, and cites the excluding agency and activation date. The same record with a past termination date fires nothing.
 - AE3. **Covers R8, R11.** Three open cases as defendant fire the litigation signal. Two cases, three as plaintiff, or cases with unknown role fire nothing.
 - AE4. **Covers R3, R9.** Unconfigured sources, and configured sources returning no records, both produce an overall score equal to a run without the stage.
-- AE5. **Covers R6.** A docket whose debtor name matches but whose district state conflicts with the registry state appears under possible matches and fires nothing.
+- AE5. **Covers R6.** A Delaware bankruptcy docket for a Texas-registered company with a matching name is a strong match (court district is never a conflict). A docket whose debtor address state conflicts with the registry state appears under possible matches and fires nothing.
 
 ### Scope Boundaries
 
@@ -88,6 +90,10 @@ The pipeline proves a business exists and is who it claims to be. It does not lo
 - KTD7. **Match strength is decided in the adapter and stored on the evidence.** Scoring reads `match=strong` and never re-derives it. That keeps the explanation and the panel consistent with the scored evidence.
 - KTD8. **No new dependencies.** Use the HTTP client already used by existing adapters and the stdlib `csv`/`zipfile`. Verify in U1.
 - KTD9. **Place the stage at 3e, after `screen_people` and before `analyze_domain`.** Mirror that position in `test_pipeline_e2e.py` and `demo_data.py` for the stage-order guard.
+- KTD10. **Match on name plus registry state; no UEI in v1.** (session-settled: user-approved — chosen over adding an optional UEI submission field: avoids a schema and API change now.) State comes from the resolved registry jurisdiction, with the billing-address state as fallback. A bankruptcy court's district never counts as a conflict. Only a debtor or party address state, or a SAM address state, can conflict. Governs R2, R6.
+- KTD11. **An active federal exclusion forces escalation.** (session-settled: user-approved — chosen over raising weights or keeping all signals non-critical: at weight × 40 × 0.25 each signal adds only about 9 overall points, so a clean debarred company would still pre-clear.) This overrides the origin spec's "nothing critical" rule for this one signal. The operator still decides. Governs R10.
+- KTD12. **Store all SAM classifications, keep the last 7 snapshots, and redact party names for integration API keys.** (session-settled: user-directed — chosen over storing firm rows only: individual exclusions stay available for later use.) Individual rows are stored but never strong-match a business in v1 (R6). Snapshots beyond the newest 7 are pruned with their rows. Recorded as an ADR-0002 addendum in U2. Governs R14.
+- KTD13. **A docket counts as open only if refreshed within 12 months.** (session-settled: user-approved — chosen over 6 months or no freshness rule: CourtListener data refreshes only when someone fetches it, so old "open" dockets are often closed.) U1 confirms the refresh field. Governs R13.
 
 ### High-Level Technical Design
 
@@ -97,7 +103,7 @@ flowchart TB
     X[SAM public exclusions extract ZIP] --> P[parse rows] --> S[(list_snapshot + sam_exclusion_record)]
   end
   subgraph Stage[public_records stage - 3e]
-    C[AdapterContext: resolved name, state, UEI, country] --> G{US?}
+    C[AdapterContext: resolved name, registry state, country] --> G{US?}
     G -->|no| NA[status not_applicable]
     G -->|yes| CL[CourtListener client]
     G -->|yes| SL[SAM snapshot lookup]
@@ -144,10 +150,10 @@ flowchart TB
 ### U2. Ingest the SAM public exclusions extract as a snapshot
 
 - **Goal:** A CLI that downloads, parses, and snapshots the SAM extract into `sam_exclusion_record`.
-- **Requirements:** R2, R7
+- **Requirements:** R2, R7, R14
 - **Dependencies:** U1
 - **Files:** `backend/app/lists/sam.py`, `backend/app/models/sam_exclusion_record.py`, `backend/app/models/__init__.py`, `backend/app/db/migrations/versions/<new>_sam_exclusion_record.py`, `backend/tests/lists/test_sam.py`, `backend/tests/test_migrations.py`
-- **Approach:** Follow KTD3 and KTD4. Each row stores the name, UEI, CAGE, state, classification, exclusion type, excluding agency, activation and termination dates, and SAM record id. Skip storing a new snapshot when the content hash is unchanged. A fetcher injected at the boundary keeps tests offline.
+- **Approach:** Follow KTD3 and KTD4. Each row stores the name, UEI, CAGE, state, classification, exclusion type, excluding agency, activation and termination dates, and SAM record id. Skip storing a new snapshot when the content hash is unchanged. A fetcher injected at the boundary keeps tests offline. Retention per KTD12: prune to the newest 7 snapshots, and add the ADR-0002 addendum.
 - **Patterns to follow:** `backend/app/lists/ingest.py` (`ingest_source`), `backend/app/lists/snapshot.py`, `backend/app/models/watchlist_record.py`.
 - **Test scenarios:**
   - The synthetic extract parses into the expected record count and fields.
@@ -166,7 +172,7 @@ flowchart TB
 - **Files:** `backend/app/adapters/public_records.py`, `backend/tests/adapters/test_public_records.py`
 - **Approach:**
   1. The CourtListener client is injectable, reads the token from the env, never logs it, and is wrapped in `RetryingAdapter`.
-  2. SAM lookup reads the latest snapshot. Match by UEI first, then `core_name` plus state.
+  2. SAM lookup reads the latest snapshot and matches `core_name` plus state (KTD10).
   3. Classify each record per R6 and KTD7.
   4. Emit status, summary, and record rows per R5 and R7. Each source succeeds or fails on its own (KTD5).
 - **Execution note:** Implement test-first. The RED adapter tests are the spec and get reviewed before code.
@@ -174,8 +180,10 @@ flowchart TB
 - **Test scenarios:**
   - Covers AE4. With no token and no snapshot, both sources are `unavailable` and no record rows exist.
   - A CourtListener open Chapter 11 fixture yields a strong `bankruptcy` record with court, docket number, filed date, and source URL.
-  - Covers AE5. A name match with a district-state conflict yields `match=weak`.
-  - A SAM UEI match yields strong. Same name with a different UEI yields weak.
+  - Covers AE5. A Delaware-venue bankruptcy for a Texas-registered company stays strong. A debtor-address state conflict yields `match=weak`.
+  - A SAM firm row matching name and registry state yields strong. An individual-class row with the same name yields weak.
+  - With no registry state, the billing-address state is used. With neither, an exact name match is strong only for CourtListener, and SAM stays weak.
+  - A docket last refreshed 13 months ago with no termination date yields weak with an `out_of_date` flag.
   - CourtListener `TimeoutError` → `timeout`, HTTP 429 → `rate_limited`, any other error → `unavailable`. A SAM hit in the same run is still emitted.
   - A non-US country records `not_applicable`, and both injected clients record zero calls.
   - A snapshot older than 7 days is used, with a `stale` status row.
@@ -194,11 +202,11 @@ flowchart TB
 - **Patterns to follow:** `_tax_id_signals` and `backend/tests/scoring/test_tax_id_signals.py`.
 - **Test scenarios:**
   - Covers AE1. An open bankruptcy filed 14 months ago fires at weight 0.8 and cites court, docket, and date. One filed 40 months ago, or a discharged one, fires nothing.
-  - Covers AE2. An active exclusion fires at 0.9. A terminated one fires nothing.
+  - Covers AE2. An active exclusion fires at 0.9 and forces `escalate` through the critical-signal path. A terminated one fires nothing.
   - Covers AE3. The litigation threshold and role handling.
   - Weak records never fire.
   - Covers AE4. `no_records` evidence yields a score equal to no evidence (no trust signal).
-  - None of the three names is in `CRITICAL_ESCALATION_SIGNALS`.
+  - Only `public_records_active_federal_exclusion` is in `CRITICAL_ESCALATION_SIGNALS`. Triage has a test per tier: a clean company with the exclusion escalates, and one with only a bankruptcy keeps its score-based tier.
   - Registry signals are unchanged when `public_records` rows are added.
   - Public-records signals still fire when registry evidence is missing.
 - **Verification:** the scoring suite is green and existing scoring tests are unchanged.
@@ -341,12 +349,7 @@ Each unit below becomes its own adapter, except U7, which extends `sanctions_scr
 
 ## Open Questions
 
-These came from the doc review on 2026-10-16. Each is deferred, not launch-blocking: it must be settled before its owning unit starts, not before tickets are filed.
-
-- OQ1. **Score impact (owner: U4, affects U5).** At weight × 40 × the 0.25 entity-layer share, an active exclusion adds about 9 overall points, so a clean company still pre-clears. Choose one: make the exclusion a critical (forced-escalate) signal, raise the weights, or accept that the signals only shift the score. R10 currently forbids new critical signals.
-- OQ2. **Match inputs (owner: U3).** `AdapterContext` has no state or UEI, and submissions carry no UEI. Decide where state comes from (the registry jurisdiction, with the billing address as fallback, is proposed), and whether to drop UEI from v1. Also decide per-source conflict rules: a bankruptcy court's district never counts as a conflict, and a submitter-supplied UEI may only upgrade a match. SAM individual-classification rows stay weak unless the UEI matches.
-- OQ3. **Personal data retention (owner: U2).** Decide whether to store SAM individual-classification rows at all, how many snapshots to keep, and whether to redact party names for integration API keys. Record the outcome as an ADR-0002 addendum.
-- OQ4. **Docket freshness (owner: U3, input from U1).** Decide the last-refreshed window within which a CourtListener docket counts as "open". Older dockets show as possible matches with an "out of date" note.
+OQ1–OQ4 from the 2026-10-16 doc review were resolved the same day as KTD11 (OQ1), KTD10 (OQ2), KTD12 (OQ3), and KTD13 (OQ4). None remain open.
 
 ---
 

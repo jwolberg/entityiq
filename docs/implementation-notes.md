@@ -2130,3 +2130,12 @@ under their own trigger, dependency-free SVG graph.
 - **Rebase:** written against a stale local `main`; rebased onto the merge of
   0088/0089 and updated the cross-submission reuse bullet to match 0088
   (30-day window, excludes the same submission and the same entity).
+## 2026-10-16 — Public-records sources: direction and open-question answers (tickets 0090–0101)
+
+- **Direction change.** CLEAR (Thomson Reuters) was pitched. We build on official free sources instead: CourtListener and SAM.gov exclusions for v1, with CSL, EPA ECHO, DOL, CFPB, GLEIF and EDGAR as future tickets. People-finder scraping was rejected because it would need bot-protection evasion, likely breaches ToS, and produces non-citable evidence with FCRA ambiguity. Spec: `docs/spec.md`; plan: `docs/plans/2026-10-16-001-feat-public-records-sources-plan.md`.
+- **Coverage gap, accepted.** No free source covers state-court judgments, tax liens or UCC filings. "No records" never counts as a trust signal.
+- **Deviation from the spec: an active federal exclusion forces escalation** (plan KTD11). The spec said no public-records signal would be critical. The doc review showed each signal adds only about 9 overall points (weight × 40 × the 0.25 entity-layer share), so a clean debarred company would still pre-clear. Bankruptcy and litigation stay as weighted signals, which means a clean company with only a bankruptcy may still pre-clear.
+- **No UEI in v1** (KTD10). Submissions don't carry one. Matching uses name plus the registry state, falling back to the billing-address state. A bankruptcy court's district is never treated as a conflict, because venue is often not the company's home state.
+- **SAM retention** (KTD12). Store every classification, but individual rows never strong-match a business in v1. Prune to the newest 7 snapshots and redact party names for integration API keys. U2 adds this as an ADR-0002 addendum.
+- **Docket freshness** (KTD13). A docket counts as open only if CourtListener refreshed it within 12 months. RECAP data refreshes only when someone fetches it.
+- **SAM access.** The per-entity Exclusions API allows only 10 requests a day on a non-federal personal key, so we ingest the daily public extract instead.
