@@ -2139,3 +2139,13 @@ under their own trigger, dependency-free SVG graph.
 - **SAM retention** (KTD12). Store every classification, but individual rows never strong-match a business in v1. Prune to the newest 7 snapshots and redact party names for integration API keys. U2 adds this as an ADR-0002 addendum.
 - **Docket freshness** (KTD13). A docket counts as open only if CourtListener refreshed it within 12 months. RECAP data refreshes only when someone fetches it.
 - **SAM access.** The per-entity Exclusions API allows only 10 requests a day on a non-federal personal key, so we ingest the daily public extract instead.
+
+### 2026-10-16 — U1 (ticket 0090) findings so far: SAM extract contract (CourtListener still pending a token)
+
+- **Download.** `GET https://api.sam.gov/data-services/v1/extracts?api_key=<key>&fileType=EXCLUSION` returns the latest daily file. `&date=MM/DD/YYYY` selects a specific day. `fileName=SAM_Exclusions_Public_Extract_V2_YYDDD.ZIP` (Julian date) must be passed on its own. Files are produced daily; check after 7 AM ET.
+- **A key is needed.** Use a free personal SAM.gov key, which allows 10 requests/day for non-federal users with no role; one download a day fits. This adds a second secret, `SAM_API_KEY`, alongside `COURTLISTENER_API_TOKEN`. The plan said a key "may" be needed; this confirms it.
+- **Format.** A ZIP containing one comma-separated CSV. The published layout (v2.1, Oct 2017) has 29 columns: Classification (Firm / Individual / Special Entity Designation / Vessel), Name, Prefix/First/Middle/Last/Suffix, Address 1–4, City, State / Province, Country, Zip Code, DUNS, Exclusion Program, Excluding Agency, CT Code, Exclusion Type, Additional Comments, Active Date, Termination Date (`MM/DD/YYYY` or `Indefinite`), Record Status, Cross-Reference, SAM Number, CAGE, NPI, Creation Date.
+- **Only active exclusions.** Each file contains only active exclusions (Record Status is always blank), as a full snapshot, not a delta. A termination date can still be past or future, so the KTD11 "active" check is mostly satisfied by presence in the file. Treat `Indefinite` as active.
+- **Unverified: layout drift.** The published layout predates SAM's 2022 switch from DUNS to UEI, and current files carry a `V2` suffix. U1 must confirm the real header row from one downloaded file (once `SAM_API_KEY` is set) before U2 pins column positions. Parse by header name, not position.
+- **Aliases.** The Cross-Reference column carries alternate names. U3 should match `core_name` against the primary name and these aliases.
+- **Name field.** `Name` is empty for Individual rows (they use First/Last). This matches KTD12: individual rows are stored but never strong-match a business.
