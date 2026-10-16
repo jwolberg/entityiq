@@ -2167,3 +2167,12 @@ Raw responses stay in the session scratchpad and are never committed. Fixtures c
 - **Roles.** `GET /api/rest/v4/parties/?docket=<id>` gives `party_types[].name` (e.g. "Creditor Committee", "Claims and Noticing Agent"). That is one extra call per docket, which the 125/day free limit can't absorb.
 - **R11 fallback applied: the litigation signal is dropped from v1.** Search results can't identify roles. The live probe also showed why an "open" count is unreliable: 3,461 unterminated non-bankruptcy dockets named one large company, mostly old mass-tort cases. v1 stores the true count and the 50 most recent cases unscored (`role=unknown`). Inferring defendant from `caseName` ("A v. B") is possible but heuristic; it's left as a follow-up, not a v1 signal.
 - **Budget.** Per US submission: 1 bankruptcy search, plus 1 civil search, plus at most 1 docket-detail call per strong-match open bankruptcy. The search API returns no rate-limit headers, so the client relies on 429 → `rate_limited`.
+
+### 2026-10-16 — U1 (ticket 0090): SAM extract verified live (1 request)
+
+- **The real header differs from the 2017 published layout.** The file `SAM_Exclusions_Public_Extract_V2_26289.CSV` (UTF-8, comma-separated, inside a ZIP) has **31 columns**. `Open Data Flag` and `Blank (Deprecated)` come before `Unique Entity ID`, and the final column is `Creation_Date` (underscore). My assumed 29-column fixture header was wrong. U2 must parse by header name and fail loudly if required columns are missing.
+- **Size.** 11.9 MB zipped, 78.6 MB unzipped, 169,025 rows. That sizes U2's caps (for example 50 MB download and 300 MB decompressed) and its row-count-collapse check. Keeping 7 snapshots (KTD12) is about 1.2M rows.
+- **Mix.** 133,775 Individual, 25,564 Special Entity Designation, 8,364 Firm, 1,322 Vessel. Only about 5% are firms, so name matching runs against a small business subset (KTD12 stores all of them).
+- **Dates.** `Termination Date` is `Indefinite` on 94% of rows and `MM/DD/YYYY` otherwise. Every row is active by definition.
+- **State.** `State / Province` is blank on 20% of rows, so a blank SAM state is "unknown", never a conflict (KTD10).
+- **Fixtures** live in `backend/tests/fixtures/public_records/`. They copy the real shapes with fictional parties only. `backend/tests/adapters/test_public_records_fixtures.py` guards shape, fictional names and the absence of credentials; a mutation check confirmed it fails on a real name and on a token-like string.

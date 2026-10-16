@@ -1,0 +1,19 @@
+{
+  "id": 900001,
+  "absolute_url": "/docket/900001/contoso-freight-llc/",
+  "case_name": "Contoso Freight LLC",
+  "case_name_full": "In re Contoso Freight LLC",
+  "court_id": "deb",
+  "docket_number": "25-10417",
+  "date_filed": "2025-08-12",
+  "date_terminated": null,
+  "date_last_filing": "2024-07-02",
+  "date_modified": "2024-07-03T10:00:00-07:00",
+  "date_created": "2025-08-12T21:15:39-07:00",
+  "pacer_case_id": "700001",
+  "source": 1,
+  "nature_of_suit": "",
+  "jurisdiction_type": "",
+  "cause": "",
+  "bankruptcy_information": null
+}

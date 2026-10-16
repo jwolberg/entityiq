@@ -1,0 +1,5 @@
+Classification,Name,Prefix,First,Middle,Last,Suffix,Address 1,Address 2,Address 3,Address 4,City,State / Province,Country,Zip Code,Open Data Flag,Blank (Deprecated),Unique Entity ID,Exclusion Program,Excluding Agency,CT Code,Exclusion Type,Additional Comments,Active Date,Termination Date,Record Status,Cross-Reference,SAM Number,CAGE,NPI,Creation_Date
+Firm,Fabrikam Logistics Inc.,,,,,,100 Example Way,,,,Austin,TX,USA,78701,,,EXMPL0000001,Reciprocal,GSA,,Ineligible (Proceedings Completed),,03/14/2025,Indefinite,,Fabrikam Transport (also known as),S4MR00001,0EX01,,03/14/2025
+Firm,Northwind Builders LLC,,,,,,9 Example Rd,,,,Reno,NV,USA,89501,,,EXMPL0000002,Reciprocal,DOD,,Prohibition/Restriction,,01/05/2026,01/05/2029,,,S4MR00002,0EX02,,01/05/2026
+Individual,,,Jordan,,Example,,,,,,Dover,DE,USA,19901,,,,Reciprocal,HHS,,Ineligible (Proceedings Completed),,06/01/2024,Indefinite,,,S4MR00003,,,06/01/2024
+Individual,,,Contoso,,Example,,,,,,Austin,TX,USA,,,,,Reciprocal,HHS,,Ineligible (Proceedings Completed),,02/02/2025,Indefinite,,,S4MR00004,,,02/02/2025

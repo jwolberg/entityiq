@@ -1,0 +1,207 @@
+{
+  "count": 57,
+  "next": "https://www.courtlistener.com/api/rest/v4/search/?type=d&cursor=example",
+  "previous": null,
+  "results": [
+    {
+      "assignedTo": "",
+      "assigned_to_id": null,
+      "attorney": [],
+      "attorney_id": [],
+      "caseName": "Wingtip Supply Co. v. Contoso Freight LLC",
+      "case_name_full": "",
+      "cause": "",
+      "chapter": null,
+      "court": "United States District Court, D. Delaware",
+      "court_citation_string": "",
+      "court_id": "ded",
+      "dateArgued": null,
+      "dateFiled": "2026-01-15",
+      "dateTerminated": null,
+      "docketNumber": "1:26-cv-01000",
+      "docket_absolute_url": "/docket/910000/x/",
+      "docket_id": 910000,
+      "firm": [],
+      "firm_id": [],
+      "jurisdictionType": "Diversity",
+      "juryDemand": "",
+      "meta": {
+        "timestamp": "2026-10-01T00:00:00Z",
+        "date_created": "2025-01-01T00:00:00Z",
+        "score": {
+          "bm25": 10.0
+        }
+      },
+      "pacer_case_id": "",
+      "party": [
+        "Contoso Freight LLC",
+        "Wingtip Supply Co."
+      ],
+      "party_id": [],
+      "referredTo": "",
+      "referred_to_id": null,
+      "suitNature": "190 Contract: Other",
+      "trustee_str": ""
+    },
+    {
+      "assignedTo": "",
+      "assigned_to_id": null,
+      "attorney": [],
+      "attorney_id": [],
+      "caseName": "Contoso Freight LLC v. Adventure Works Corp.",
+      "case_name_full": "",
+      "cause": "",
+      "chapter": null,
+      "court": "United States District Court, D. Delaware",
+      "court_citation_string": "",
+      "court_id": "ded",
+      "dateArgued": null,
+      "dateFiled": "2026-02-15",
+      "dateTerminated": null,
+      "docketNumber": "1:26-cv-01001",
+      "docket_absolute_url": "/docket/910001/x/",
+      "docket_id": 910001,
+      "firm": [],
+      "firm_id": [],
+      "jurisdictionType": "Diversity",
+      "juryDemand": "",
+      "meta": {
+        "timestamp": "2026-10-01T00:00:00Z",
+        "date_created": "2025-01-01T00:00:00Z",
+        "score": {
+          "bm25": 10.0
+        }
+      },
+      "pacer_case_id": "",
+      "party": [
+        "Contoso Freight LLC",
+        "Adventure Works Corp."
+      ],
+      "party_id": [],
+      "referredTo": "",
+      "referred_to_id": null,
+      "suitNature": "190 Contract: Other",
+      "trustee_str": ""
+    },
+    {
+      "assignedTo": "",
+      "assigned_to_id": null,
+      "attorney": [],
+      "attorney_id": [],
+      "caseName": "Wingtip Supply Co. v. Contoso Freight LLC",
+      "case_name_full": "",
+      "cause": "",
+      "chapter": null,
+      "court": "United States District Court, D. Delaware",
+      "court_citation_string": "",
+      "court_id": "ded",
+      "dateArgued": null,
+      "dateFiled": "2026-03-15",
+      "dateTerminated": null,
+      "docketNumber": "1:26-cv-01002",
+      "docket_absolute_url": "/docket/910002/x/",
+      "docket_id": 910002,
+      "firm": [],
+      "firm_id": [],
+      "jurisdictionType": "Diversity",
+      "juryDemand": "",
+      "meta": {
+        "timestamp": "2026-10-01T00:00:00Z",
+        "date_created": "2025-01-01T00:00:00Z",
+        "score": {
+          "bm25": 10.0
+        }
+      },
+      "pacer_case_id": "",
+      "party": [
+        "Contoso Freight LLC",
+        "Wingtip Supply Co."
+      ],
+      "party_id": [],
+      "referredTo": "",
+      "referred_to_id": null,
+      "suitNature": "190 Contract: Other",
+      "trustee_str": ""
+    },
+    {
+      "assignedTo": "",
+      "assigned_to_id": null,
+      "attorney": [],
+      "attorney_id": [],
+      "caseName": "Contoso Freight LLC v. Adventure Works Corp.",
+      "case_name_full": "",
+      "cause": "",
+      "chapter": null,
+      "court": "United States District Court, D. Delaware",
+      "court_citation_string": "",
+      "court_id": "ded",
+      "dateArgued": null,
+      "dateFiled": "2026-04-15",
+      "dateTerminated": null,
+      "docketNumber": "1:26-cv-01003",
+      "docket_absolute_url": "/docket/910003/x/",
+      "docket_id": 910003,
+      "firm": [],
+      "firm_id": [],
+      "jurisdictionType": "Diversity",
+      "juryDemand": "",
+      "meta": {
+        "timestamp": "2026-10-01T00:00:00Z",
+        "date_created": "2025-01-01T00:00:00Z",
+        "score": {
+          "bm25": 10.0
+        }
+      },
+      "pacer_case_id": "",
+      "party": [
+        "Contoso Freight LLC",
+        "Adventure Works Corp."
+      ],
+      "party_id": [],
+      "referredTo": "",
+      "referred_to_id": null,
+      "suitNature": "190 Contract: Other",
+      "trustee_str": ""
+    },
+    {
+      "assignedTo": "",
+      "assigned_to_id": null,
+      "attorney": [],
+      "attorney_id": [],
+      "caseName": "Wingtip Supply Co. v. Contoso Freight LLC",
+      "case_name_full": "",
+      "cause": "",
+      "chapter": null,
+      "court": "United States District Court, D. Delaware",
+      "court_citation_string": "",
+      "court_id": "ded",
+      "dateArgued": null,
+      "dateFiled": "2026-05-15",
+      "dateTerminated": null,
+      "docketNumber": "1:26-cv-01004",
+      "docket_absolute_url": "/docket/910004/x/",
+      "docket_id": 910004,
+      "firm": [],
+      "firm_id": [],
+      "jurisdictionType": "Diversity",
+      "juryDemand": "",
+      "meta": {
+        "timestamp": "2026-10-01T00:00:00Z",
+        "date_created": "2025-01-01T00:00:00Z",
+        "score": {
+          "bm25": 10.0
+        }
+      },
+      "pacer_case_id": "",
+      "party": [
+        "Contoso Freight LLC",
+        "Wingtip Supply Co."
+      ],
+      "party_id": [],
+      "referredTo": "",
+      "referred_to_id": null,
+      "suitNature": "190 Contract: Other",
+      "trustee_str": ""
+    }
+  ]
+}
