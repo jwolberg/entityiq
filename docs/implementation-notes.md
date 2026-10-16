@@ -2130,3 +2130,40 @@ under their own trigger, dependency-free SVG graph.
 - **Rebase:** written against a stale local `main`; rebased onto the merge of
   0088/0089 and updated the cross-submission reuse bullet to match 0088
   (30-day window, excludes the same submission and the same entity).
+## 2026-10-16 — Public-records sources: direction and open-question answers (tickets 0090–0101)
+
+- **Direction change.** CLEAR (Thomson Reuters) was pitched. We build on official free sources instead: CourtListener and SAM.gov exclusions for v1, with CSL, EPA ECHO, DOL, CFPB, GLEIF and EDGAR as future tickets. People-finder scraping was rejected because it would need bot-protection evasion, likely breaches ToS, and produces non-citable evidence with FCRA ambiguity. Spec: `docs/spec.md`; plan: `docs/plans/2026-10-16-001-feat-public-records-sources-plan.md`.
+- **Coverage gap, accepted.** No free source covers state-court judgments, tax liens or UCC filings. "No records" never counts as a trust signal.
+- **Deviation from the spec: an active federal exclusion forces escalation** (plan KTD11). The spec said no public-records signal would be critical. The doc review showed each signal adds only about 9 overall points (weight × 40 × the 0.25 entity-layer share), so a clean debarred company would still pre-clear. Bankruptcy and litigation stay as weighted signals, which means a clean company with only a bankruptcy may still pre-clear.
+- **No UEI in v1** (KTD10). Submissions don't carry one. Matching uses name plus the registry state, falling back to the billing-address state. A bankruptcy court's district is never treated as a conflict, because venue is often not the company's home state.
+- **SAM retention** (KTD12). Store every classification, but individual rows never strong-match a business in v1. Prune to the newest 7 snapshots and redact party names for integration API keys. U2 adds this as an ADR-0002 addendum.
+- **Docket freshness** (KTD13). A docket counts as open only if CourtListener refreshed it within 12 months. RECAP data refreshes only when someone fetches it.
+- **SAM access.** The per-entity Exclusions API allows only 10 requests a day on a non-federal personal key, so we ingest the daily public extract instead.
+
+### 2026-10-16 — U1 (ticket 0090) findings so far: SAM extract contract (CourtListener still pending a token)
+
+- **Download.** `GET https://api.sam.gov/data-services/v1/extracts?api_key=<key>&fileType=EXCLUSION` returns the latest daily file. `&date=MM/DD/YYYY` selects a specific day. `fileName=SAM_Exclusions_Public_Extract_V2_YYDDD.ZIP` (Julian date) must be passed on its own. Files are produced daily; check after 7 AM ET.
+- **A key is needed.** Use a free personal SAM.gov key, which allows 10 requests/day for non-federal users with no role; one download a day fits. This adds a second secret, `SAM_API_KEY`, alongside `COURTLISTENER_API_TOKEN`. The plan said a key "may" be needed; this confirms it.
+- **Format.** A ZIP containing one comma-separated CSV. The published layout (v2.1, Oct 2017) has 29 columns: Classification (Firm / Individual / Special Entity Designation / Vessel), Name, Prefix/First/Middle/Last/Suffix, Address 1–4, City, State / Province, Country, Zip Code, DUNS, Exclusion Program, Excluding Agency, CT Code, Exclusion Type, Additional Comments, Active Date, Termination Date (`MM/DD/YYYY` or `Indefinite`), Record Status, Cross-Reference, SAM Number, CAGE, NPI, Creation Date.
+- **Only active exclusions.** Each file contains only active exclusions (Record Status is always blank), as a full snapshot, not a delta. A termination date can still be past or future, so the KTD11 "active" check is mostly satisfied by presence in the file. Treat `Indefinite` as active.
+- **Unverified: layout drift.** The published layout predates SAM's 2022 switch from DUNS to UEI, and current files carry a `V2` suffix. U1 must confirm the real header row from one downloaded file (once `SAM_API_KEY` is set) before U2 pins column positions. Parse by header name, not position.
+- **Aliases.** The Cross-Reference column carries alternate names. U3 should match `core_name` against the primary name and these aliases.
+- **Name field.** `Name` is empty for Individual rows (they use First/Last). This matches KTD12: individual rows are stored but never strong-match a business.
+
+### 2026-10-16 — U1 (ticket 0090): CourtListener access terms — stop condition hit for production
+
+- **Free access exists, but with tight limits.** Since 2026-05-07, any CourtListener account gets full REST API access with a default of 5 requests/min, 50/hour and 125/day. Paid memberships raise these limits. The "5,000/hour" figure in older docs is out of date. The REST API (v4) is the right product: search plus dockets. Anonymous requests return 401.
+- **Commercial-use bar.** Membership and free access "may not be used to power a revenue-positive commercial product, service, or feature," and FLP counts internal business tooling as commercial use. Allowed uses are exploratory, research, and pre-revenue unfunded small organizations. Commercial agreements are priced "based on means and mission" and "start at free."
+- **Consequence.** Developing and demoing EntityIQ on a free account with fictional fixtures is fine. Any production or client deployment needs a commercial agreement first, filed as HITL. The production default stays unconfigured (R3), so nothing calls CourtListener unless a token is set.
+- **Rate-limit design input for U3.** 125/day is about 60 submissions/day at two queries each. Use the existing adapter cache and keep it to one search per submission where possible.
+
+### 2026-10-16 — U1 (ticket 0090): CourtListener contract verified live (6 requests)
+
+Raw responses stay in the session scratchpad and are never committed. Fixtures copy the shape only and use fictional parties.
+
+- **Search.** `GET /api/rest/v4/search/?type=d&q=party:"<name>" AND chapter:11` works. `party`, `chapter`, `dateTerminated`, `court_id` and `dateFiled` are all query fields, and `-chapter:[* TO *]` excludes bankruptcy dockets. Results carry `docket_id`, `caseName`, `court_id` (bankruptcy courts end in `b`, e.g. `nysb`), `court`, `docketNumber`, `dateFiled`, `dateTerminated`, `chapter`, `suitNature`, and `party` (a list of every party name on the docket). `count` is returned, so the summary can report true totals.
+- **`party` matches any role.** In a large bankruptcy, the creditor-committee law firm is a "party". **Debtor identification uses `caseName`, not `party`**: a bankruptcy record is strong only when `names_match(caseName, submitted name)`. Without this, the counsel and creditors on a docket would be flagged as bankrupt. U3 and ticket 0092 are updated to say so.
+- **Freshness (KTD13).** Search results have no refresh date. `GET /api/rest/v4/dockets/<id>/` has `date_last_filing` and `date_modified`. U3 makes one detail call, only for a strong-match bankruptcy with no termination date, and applies the 12-month rule to `date_last_filing`.
+- **Roles.** `GET /api/rest/v4/parties/?docket=<id>` gives `party_types[].name` (e.g. "Creditor Committee", "Claims and Noticing Agent"). That is one extra call per docket, which the 125/day free limit can't absorb.
+- **R11 fallback applied: the litigation signal is dropped from v1.** Search results can't identify roles. The live probe also showed why an "open" count is unreliable: 3,461 unterminated non-bankruptcy dockets named one large company, mostly old mass-tort cases. v1 stores the true count and the 50 most recent cases unscored (`role=unknown`). Inferring defendant from `caseName` ("A v. B") is possible but heuristic; it's left as a follow-up, not a v1 signal.
+- **Budget.** Per US submission: 1 bankruptcy search, plus 1 civil search, plus at most 1 docket-detail call per strong-match open bankruptcy. The search API returns no rate-limit headers, so the client relies on 429 → `rate_limited`.
