@@ -64,6 +64,13 @@ _DEFAULT_ASN_REUSE_WINDOW_DAYS = 30
 OFFICER_SCREENING_SOURCE = "officer_screening"
 OFFICER_SCREENING_FIELD = "officer_screening_result"
 
+# Public-records evidence (ticket 0092/0093). Court dockets and federal
+# exclusions are facts about the company's record, not registry evidence;
+# status and summary rows are bookkeeping. Never registry evidence or coverage.
+PUBLIC_RECORDS_SOURCE = "public_records"
+PUBLIC_RECORD_FIELD = "public_record"
+OPEN_BANKRUPTCY_WINDOW_DAYS = 36 * 30  # R8: filed within 36 months
+
 # ---------------------------------------------------------------------------
 # Layer 1 — Entity legitimacy
 # ---------------------------------------------------------------------------
@@ -92,7 +99,8 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
     tier1_evidence = [
         e
         for e in evidence_rows
-        if e.tier == 1 and e.source not in ("tax_id", OFFICER_SCREENING_SOURCE)
+        if e.tier == 1
+        and e.source not in ("tax_id", OFFICER_SCREENING_SOURCE, PUBLIC_RECORDS_SOURCE)
     ]
     name_evidence = [e for e in tier1_evidence if e.field == "company_name"]
     reg_number_evidence = [
@@ -154,6 +162,7 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
         signals.extend(_tax_id_signals(evidence_rows))
         signals.extend(_linkedin_entity_signals(evidence_rows))
         signals.extend(_officer_screening_signals(evidence_rows))
+        signals.extend(_public_records_signals(evidence_rows))
         return signals
 
     # Registry name confirmed / mismatch
@@ -252,6 +261,7 @@ def entity_legitimacy_signals(evidence_rows: list) -> list[Signal]:
     signals.extend(_tax_id_signals(evidence_rows))
     signals.extend(_linkedin_entity_signals(evidence_rows))
     signals.extend(_officer_screening_signals(evidence_rows))
+    signals.extend(_public_records_signals(evidence_rows))
     return signals
 
 
@@ -312,6 +322,98 @@ def _officer_screening_signals(evidence_rows: list) -> list[Signal]:
             )
         )
     return out
+
+
+def _public_records_signals(evidence_rows: list) -> list[Signal]:
+    """Entity-layer signals from court dockets and SAM exclusions (ticket 0093).
+
+    Only strong matches score: match strength is decided by the adapter and
+    never re-derived here (KTD7). Civil cases are stored ``unscored`` and never
+    fire (R11). An active federal exclusion is critical (KTD11); an open,
+    recent bankruptcy raises the score without forcing escalation. No records
+    earns no trust: coverage is partial (R9).
+    """
+    records = [
+        e
+        for e in evidence_rows
+        if e.source == PUBLIC_RECORDS_SOURCE
+        and e.field == PUBLIC_RECORD_FIELD
+        and e.normalized_value == "strong"
+    ]
+    bankruptcies = [
+        e
+        for e in records
+        if e.raw_value == "bankruptcy"
+        and (e.raw_payload or {}).get("status") == "open"
+        and _filed_recently(e)
+    ]
+    exclusions = [
+        e
+        for e in records
+        if e.raw_value == "federal_exclusion"
+        and (e.raw_payload or {}).get("status") == "active"
+        and (e.raw_payload or {}).get("classification") != "Individual"
+    ]
+    out: list[Signal] = []
+    if bankruptcies:
+        cited = "; ".join(
+            "Chapter {chapter} case {docket} in {court}, filed {filed}".format(
+                chapter=(e.raw_payload or {}).get("chapter") or "?",
+                docket=(e.raw_payload or {}).get("docket_number") or "?",
+                court=(e.raw_payload or {}).get("court") or "an unknown court",
+                filed=(e.raw_payload or {}).get("filed_date") or "on an unknown date",
+            )
+            for e in bankruptcies
+        )
+        out.append(
+            Signal(
+                name="public_records_open_bankruptcy",
+                layer="entity",
+                direction="elevated",
+                weight=0.8,
+                description=(
+                    f"Open federal bankruptcy naming this company as debtor: {cited}."
+                ),
+                evidence_ids=[e.id for e in bankruptcies],
+            )
+        )
+    if exclusions:
+        cited = "; ".join(
+            "{agency} exclusion ({kind}) active since {since}".format(
+                agency=(e.raw_payload or {}).get("agency") or "a federal agency",
+                kind=(e.raw_payload or {}).get("exclusion_type") or "type not given",
+                since=(e.raw_payload or {}).get("active_date") or "an unknown date",
+            )
+            for e in exclusions
+        )
+        out.append(
+            Signal(
+                name="public_records_active_federal_exclusion",
+                layer="entity",
+                direction="elevated",
+                weight=0.9,
+                description=(
+                    "This company is on the SAM.gov federal exclusions list: "
+                    f"{cited}. Critical — forces escalation."
+                ),
+                evidence_ids=[e.id for e in exclusions],
+            )
+        )
+    return out
+
+
+def _filed_recently(ev) -> bool:
+    """R8: filed within 36 months of when the evidence was fetched."""
+    from datetime import date  # noqa: PLC0415
+
+    filed = (ev.raw_payload or {}).get("filed_date")
+    if not filed or ev.fetched_at is None:
+        return False
+    try:
+        filed_on = date.fromisoformat(str(filed)[:10])
+    except ValueError:
+        return False
+    return (ev.fetched_at.date() - filed_on).days <= OPEN_BANKRUPTCY_WINDOW_DAYS
 
 
 def _tax_id_signals(evidence_rows: list) -> list[Signal]:

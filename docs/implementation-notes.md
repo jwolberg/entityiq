@@ -2217,3 +2217,12 @@ Raw responses stay in the session scratchpad and are never committed. Fixtures c
   - `HttpCourtListener` now has tests for request shape and status mapping (429, 5xx, timeout).
 - **Left for 0093 (latent until 0094 registers the stage):** exclude `public_records` from the Tier-1 registry filter in `entity_legitimacy_signals` and from `_compute_confidence`. Otherwise status rows would suppress `no_registry_evidence`. This is already in 0093's acceptance criteria.
 - **Follow-up candidate:** an alias column precomputed at ingest. The alias lookup is a capped LIKE scan over `cross_reference`; fine at 169k rows on SQLite in tests, but worth indexing if Postgres latency shows it.
+
+## 2026-10-16 — public-records scoring signals (ticket 0093)
+
+- `_public_records_signals` in `app/scoring/signals.py` emits two entity-layer signals, from strong matches only:
+  - `public_records_open_bankruptcy` (weight 0.8): open, filed within 36 months of when the evidence was fetched. It cites chapter, docket, court and filed date.
+  - `public_records_active_federal_exclusion` (weight 0.9): active, non-individual. It is **critical** (KTD11), and cites agency, exclusion type and active date.
+  - Civil records (`unscored`) never fire. `no_records` earns no trust.
+- `public_records` is excluded from the Tier-1 registry filter and from `_compute_confidence` (KTD6, the tier-filter learning). Tests prove registry signals and coverage are unchanged by these rows, and that the new signals still fire when registry evidence is missing.
+- **Effect on a clean demo-like company** (computed): baseline 20.2 is pre_clear. With an open bankruptcy it scores 28.2 and is **still pre_clear**. With an active exclusion it scores 29.2 and escalates (critical). With both it scores 37.2 and escalates. The bankruptcy-only outcome follows the OQ1 answer (bankruptcy stays a weighted signal), but a clean company in an open bankruptcy pre-clears. Revisit if that is not acceptable; the options are a higher weight or a review floor.

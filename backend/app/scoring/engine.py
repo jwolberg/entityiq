@@ -69,6 +69,9 @@ CRITICAL_ESCALATION_SIGNALS: frozenset[str] = frozenset(
         "ip_asn_reuse_high",
         # An officer or owner is a screening MATCH (ticket 0082, ADR-0006).
         "officer_sanctions_match",
+        # The company is on the SAM.gov federal exclusions list (ticket 0093,
+        # plan KTD11). The operator still decides.
+        "public_records_active_federal_exclusion",
     }
 )
 
@@ -280,12 +283,16 @@ def _compute_confidence(evidence_rows: list) -> float:
 
     Reduced confidence reflects missing sources, not increased risk.
     """
-    from app.scoring.signals import OFFICER_SCREENING_SOURCE  # noqa: PLC0415
+    from app.scoring.signals import (  # noqa: PLC0415
+        OFFICER_SCREENING_SOURCE,
+        PUBLIC_RECORDS_SOURCE,
+    )
 
     tiers_present = {
         e.tier
         for e in evidence_rows
-        if e.tier in (1, 2, 3) and e.source != OFFICER_SCREENING_SOURCE
+        if e.tier in (1, 2, 3)
+        and e.source not in (OFFICER_SCREENING_SOURCE, PUBLIC_RECORDS_SOURCE)
     }
     if not tiers_present:
         return 0.0
