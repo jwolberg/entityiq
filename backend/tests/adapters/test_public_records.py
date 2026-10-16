@@ -299,7 +299,12 @@ def test_records_are_capped_most_recent_first(db):
     many = _load("search_civil.json")
     template = many["results"][0]
     many["results"] = [
-        {**template, "docket_id": 920000 + i, "dateFiled": f"2026-01-{1 + i % 28:02d}"}
+        {
+            **template,
+            "docket_id": 920000 + i,
+            "docketNumber": f"1:26-cv-{2000 + i}",
+            "dateFiled": f"2026-01-{1 + i % 28:02d}",
+        }
         for i in range(60)
     ]
     many["count"] = 60
@@ -798,3 +803,37 @@ def test_non_positive_docket_ids_get_no_link(db):
     recs = _records(db, run_id, "bankruptcy")
     assert recs and all(r.raw_payload["source_url"] is None for r in recs)
     assert all("source_url" not in (r.attribution or {}) for r in recs)
+
+
+# --- live-data findings (2026-10-16 run against real CourtListener data) ------
+
+
+def test_jointly_administered_et_al_case_name_is_the_debtor(db):
+    """Real cases are often captioned "Debtor, LLC, et al."; that's still the debtor."""
+    bk = _load("search_bankruptcy.json")
+    bk["results"][0]["caseName"] = "Contoso Freight LLC, et al."
+    run_id = _run(db)
+    _stage(FakeCourtListener(bankruptcy=bk)).run(run_id, db, _context())
+    rec = next(
+        r
+        for r in _records(db, run_id, "bankruptcy")
+        if r.raw_payload["docket_number"] == "25-10417"
+    )
+    assert rec.normalized_value == "strong"
+
+
+def test_duplicate_dockets_for_one_case_are_stored_once(db):
+    """CourtListener can hold several docket ids for one court + case number."""
+    civil = _load("search_civil.json")
+    first = civil["results"][0]
+    civil["results"] = [
+        first,
+        {**first, "docket_id": first["docket_id"] + 7},
+        *civil["results"][1:],
+    ]
+    run_id = _run(db)
+    _stage(FakeCourtListener(civil=civil)).run(run_id, db, _context())
+    numbers = [
+        r.raw_payload["docket_number"] for r in _records(db, run_id, "federal_civil")
+    ]
+    assert len(numbers) == len(set(numbers)) == 5

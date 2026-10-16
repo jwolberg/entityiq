@@ -2256,3 +2256,19 @@ Raw responses stay in the session scratchpad and are never committed. Fixtures c
   - Northwind shows no records.
   - The API-key response matched the redaction rules.
 - **No new frontend dependency.** The repo doesn't use jest-dom matchers, so the tests use plain assertions.
+
+## 2026-10-16 — Live functionality test and fixes (after PRs #24–#30)
+
+Ran the real pipeline (`default_stages()`) on a throwaway SQLite DB with real CourtListener calls and today's real SAM extract (169,025 rows). About 18 CourtListener requests; no new SAM request. Real company names stayed in the scratchpad.
+
+- **K AND F SERVICES CORP (PA):** 2 active SAM exclusions (OPM, HHS) matched; the second is captioned "K AND F SERVICES, CORP". Result: **escalate** on the critical signal.
+- **Spirit Airlines, LLC (FL):** open Chapter 11 `25-11896` (S.D.N.Y., 2025) is a strong match and fresh by a live docket call. Result: **review**, with the open-bankruptcy signal.
+- **Microsoft Corporation (WA):** 528 open federal civil cases (first page stored, `truncated`) and **0 bankruptcies**, even though it is a creditor in many cases. No public-records signal.
+
+Two bugs found that the fixtures could not show:
+- **"et al." captions.** Jointly administered cases are captioned "Spirit Airlines, LLC, et al.", which failed the exact name match and came out weak. The debtor name now drops a trailing "et al." before `names_match`; the 2024 Spirit case is now strong. Tested.
+- **Duplicate dockets.** CourtListener held three docket IDs for one case (`nysd 1:26-cv-08082`). Results are now de-duplicated by court plus docket number, so Microsoft stores 18 unique cases instead of 20 with repeats. Tested.
+
+Also confirmed live:
+- The free tier's 5-requests-per-minute limit returns 429. That maps to `rate_limited`: the source shows as temporarily unavailable and nothing crashes.
+- Bursts of submissions will hit this limit. Ticket 0103 tracks a client-side throttle.

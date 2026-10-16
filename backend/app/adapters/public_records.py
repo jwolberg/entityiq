@@ -87,6 +87,8 @@ US_COUNTRY_CODES = frozenset({"", "US", "USA"})
 # Two-letter code before a ZIP, e.g. "Austin, TX 78701".
 _ADDRESS_STATE = re.compile(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b")
 _ALIAS_NOTE = re.compile(r"\([^)]*\)")
+# Jointly administered cases are captioned "Debtor, LLC, et al.".
+_ET_AL = re.compile(r"[\s,]+et\.?\s+al\.?\s*$", re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +191,29 @@ def _docket_url(docket_id: Any) -> str | None:
     return f"{COURTLISTENER_SITE}/docket/{number}/" if number > 0 else None
 
 
+def _debtor_name(case_name: str) -> str:
+    """The debtor's own name from a bankruptcy caption, minus "et al."."""
+    return _ET_AL.sub("", case_name or "").strip()
+
+
+def _unique_dockets(results: list[dict]) -> list[dict]:
+    """CourtListener can hold several docket ids for one court + case number."""
+    seen: set[tuple] = set()
+    out = []
+    for r in results:
+        key = (
+            (r.get("court_id"), r.get("docketNumber"))
+            if r.get("docketNumber")
+            else None
+        )
+        if key is not None and key in seen:
+            continue
+        if key is not None:
+            seen.add(key)
+        out.append(r)
+    return out
+
+
 def _like_escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
@@ -261,9 +286,9 @@ class CourtListenerAdapter:
             order_by="dateFiled desc",
         )
         found = CourtListenerFindings()
-        bk_results = bankrupt.get("results") or []
+        bk_results = _unique_dockets(bankrupt.get("results") or [])
         cv_results = sorted(
-            civil.get("results") or [],
+            _unique_dockets(civil.get("results") or []),
             key=lambda r: r.get("dateFiled") or "",
             reverse=True,
         )[:MAX_RECORDS_PER_KIND]
@@ -291,7 +316,7 @@ class CourtListenerAdapter:
         checks = 0
         for r in sorted(results, key=lambda x: x.get("dateFiled") or "", reverse=True):
             case = r.get("caseName") or ""
-            if names_match(name, case):
+            if names_match(name, _debtor_name(case)):
                 match = "strong"
             elif key and key in core_name(case):
                 match = "weak"
