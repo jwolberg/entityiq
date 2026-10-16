@@ -2238,3 +2238,21 @@ Raw responses stay in the session scratchpad and are never committed. Fixtures c
 - **Before/after for the existing seven** (computed on the 0093 branch, then this one): Northwind 2.5 pre_clear, Fabrikam 4.0 pre_clear, Contoso 45.5 review, Brightpath 60.5 review, Quantum 77.0 escalate, Volga 22.0 escalate, Wingtip 14.0 escalate. **Identical scores and tiers.**
 - RUNBOOK documents the CourtListener budget, the commercial-use gate, `python -m app.lists.sam`, the daily schedule after 7 AM ET, no concurrent runs, guard behavior, and both env vars. ARCHITECTURE lists the new Tier-1 sources. The demo count goes from 7 to 9 in the README, RUNBOOK and CLAUDE.md.
 - **Known gap:** there is no operator override for the SAM row-count-collapse guard. The RUNBOOK gives the manual workaround.
+
+## 2026-10-16 — Public records panel (ticket 0095)
+
+- **Backend:** `EvidenceItemSchema` gains `raw_payload`. It is set only for `public_records` evidence, and the report API passes it through after `filter_summary_for_viewer`. Before this, the summary carried the payload but the API dropped it. Tested via `_serialize_report` for both the operator and API-key viewers.
+- **Frontend:** `PublicRecordsPanel` sits on the company detail page after Identity Corroboration.
+  - **Statuses:** one line per source, with every adapter status mapped to plain wording. Timeout and rate-limited read "Could not be checked (temporary)".
+  - **Records:** strong matches are grouped with exclusions first, then bankruptcies, then civil cases (marked not scored, role unknown). Weak matches go under "Possible matches (not scored)". A record cited by a risk signal's `evidence_ids` is marked "Counts toward risk", so the panel never re-implements scoring.
+  - **Truncation:** shows "Showing N of M".
+  - **Coverage note:** always says what isn't searched, with no success styling.
+  - **Links:** only https on courtlistener.com or sam.gov, otherwise plain text. Each link is named "View docket X on CourtListener".
+  - **Tests:** 19 vitest cases. Mutation-checked: dropping the URL allowlist, or adding "All clear" wording, fails the tests.
+- **Found by viewing the live demo:** the fictional demo dockets linked to `courtlistener.com/docket/990000/`, a real ID that could open an unrelated real case. Demo dockets now use non-positive IDs, and the adapter builds no link for those (or for a missing ID). Both behaviors are tested.
+- **Verified in the running app** (throwaway demo DB on ports 8010/5183):
+  - Tailwind shows the open Chapter 11 marked "Counts toward risk" and triages as Review.
+  - Adventure Works escalates on the exclusion.
+  - Northwind shows no records.
+  - The API-key response matched the redaction rules.
+- **No new frontend dependency.** The repo doesn't use jest-dom matchers, so the tests use plain assertions.

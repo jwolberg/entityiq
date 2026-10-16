@@ -26,6 +26,7 @@ import {
 } from "../components/DetailPanels";
 import { OperatorActions } from "../components/OperatorActions";
 import { OwnershipPanel } from "../components/OwnershipPanel";
+import { PublicRecordsPanel } from "../components/PublicRecordsPanel";
 import { PeopleGraphPanel } from "../components/PeopleGraphPanel";
 import { ActivityPanel } from "../components/ActivityPanel";
 
@@ -346,6 +347,16 @@ export function CompanyDetail({
               status={report.section_statuses.evidence}
               sources={report.sources}
               mismatches={report.mismatches}
+            />
+          </section>
+
+          {/* Public records: dockets + federal exclusions (ticket 0095) */}
+          <section style={styles.section}>
+            <h3 style={styles.sectionTitle}>Public Records</h3>
+            <PublicRecordsPanel
+              evidence={report.evidence}
+              status={report.section_statuses.evidence}
+              signals={report.scores?.contributing_signals ?? []}
             />
           </section>
 

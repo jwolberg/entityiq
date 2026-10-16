@@ -595,7 +595,8 @@ class _DemoCourtListener:
         today = datetime.now(tz=timezone.utc).date()
         self._results = [
             {
-                "docket_id": 990000 + n,
+                # Non-positive ids: fictional, never linked to a real case.
+                "docket_id": -(n + 1),
                 "caseName": company,
                 "court_id": court_id,
                 "court": court,

@@ -180,8 +180,13 @@ def _phrase(name: str) -> str:
     return " ".join(name.replace('"', " ").replace("\\", " ").split())[:200]
 
 
-def _docket_url(docket_id: Any) -> str:
-    return f"{COURTLISTENER_SITE}/docket/{int(docket_id)}/"
+def _docket_url(docket_id: Any) -> str | None:
+    """Link a real docket. Non-positive ids are fictional (demo) and get none."""
+    try:
+        number = int(docket_id)
+    except (TypeError, ValueError):
+        return None
+    return f"{COURTLISTENER_SITE}/docket/{number}/" if number > 0 else None
 
 
 def _like_escape(text: str) -> str:
@@ -310,7 +315,7 @@ class CourtListenerAdapter:
                 "freshness": "not_needed",
                 "out_of_date": False,
                 "last_filing_date": None,
-                "source_url": _docket_url(r["docket_id"]),
+                "source_url": _docket_url(r.get("docket_id")),
             }
             if (
                 match == "strong"
@@ -381,7 +386,7 @@ class CourtListenerAdapter:
             "party_name": r.get("caseName") or "",
             "party_role": "unknown",
             "scored": False,
-            "source_url": _docket_url(r["docket_id"]),
+            "source_url": _docket_url(r.get("docket_id")),
         }
 
 

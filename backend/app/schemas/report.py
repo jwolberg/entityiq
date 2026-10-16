@@ -44,6 +44,8 @@ class EvidenceItemSchema(BaseModel):
     confidence: float | None = None
     attribution: dict[str, Any] | None = None
     fetched_at: str | None = None
+    # Public-records detail only (ticket 0095); redacted for API keys.
+    raw_payload: dict[str, Any] | None = None
 
 
 class MismatchItemSchema(BaseModel):
