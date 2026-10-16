@@ -95,8 +95,8 @@ The screening stages run in this order, set in `screening_stages()` in
 Needs Python 3.11+ and Node 20+. No Docker, Postgres, or Redis. On first run
 the script sets everything up and loads the demo data:
 
-- seven fictional companies that span every risk tier, with their officers and
-  owners (one of whom is on the demo sanctions list);
+- nine fictional companies that span every risk tier, with their officers and
+  owners, an open bankruptcy and a federal exclusion (one of whom is on the demo sanctions list);
 - four fictional people that span every screening outcome (MATCH, REVIEW and
   auto-CLEAR).
 

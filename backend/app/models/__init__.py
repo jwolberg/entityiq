@@ -19,6 +19,7 @@ from app.models.ownership_challenge import OwnershipChallenge
 from app.models.report import Report
 from app.models.review import Review
 from app.models.risk_assessment import RiskAssessment, risk_assessment_evidence
+from app.models.sam_exclusion_record import SamExclusionRecord
 from app.models.submission import Submission
 from app.models.verification_run import VerificationRun
 from app.models.watchlist_record import WatchlistRecord
@@ -37,6 +38,7 @@ __all__ = [
     "Review",
     "RiskAssessment",
     "risk_assessment_evidence",
+    "SamExclusionRecord",
     "Submission",
     "VerificationRun",
     "WatchlistRecord",

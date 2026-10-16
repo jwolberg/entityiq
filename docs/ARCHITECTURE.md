@@ -70,7 +70,9 @@ is fallback enrichment only.
 2. **Resolve entity candidates** — match the submission to candidate real-world
    entities.
 3. **Query authoritative registries** — business registries, OpenCorporates,
-   tax-ID/FEIN verification (US), sanctions/watchlists (Tier 1).
+   tax-ID/FEIN verification (US), sanctions/watchlists, and public records:
+   federal bankruptcy and civil dockets (CourtListener) plus SAM.gov federal
+   exclusions (Tier 1; stage `public_records`, plan 2026-10-16-001).
 4. **Analyze domain infrastructure** — WHOIS age, DNS, MX, SPF/DKIM, SSL, registrar
    reputation (Tier 2).
 5. **Enrich network/IP** — IPinfo on the captured submission IP: geo, ASN/ISP,
@@ -135,7 +137,7 @@ pipeline from per-source quirks and the PRD's known "scraping brittleness" risk.
 - **Graceful degradation** — an unavailable source yields a `unavailable` section,
   not a failed run; scoring accounts for reduced coverage.
 - **Source tiers** — Tier 1 authoritative (registries, sanctions, OpenCorporates,
-  tax ID/FEIN), Tier 2 infrastructure (WHOIS/DNS/SSL, IPinfo), Tier 3 public web
+  tax ID/FEIN, CourtListener dockets, SAM.gov exclusions), Tier 2 infrastructure (WHOIS/DNS/SSL, IPinfo), Tier 3 public web
   (Playwright fallback, LinkedIn). Identity sources default to an unconfigured
   provider (source unavailable) until Open Decision #5 selects vendors. Authoritative sources are tried first and weighted highest.
 

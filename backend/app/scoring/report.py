@@ -34,6 +34,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
+# Evidence source whose raw_payload is carried into the summary (ticket 0092).
+PUBLIC_RECORDS_SOURCE = "public_records"
+
 logger = logging.getLogger(__name__)
 
 
@@ -135,6 +138,13 @@ def _build_summary(
             "confidence": ev.confidence,
             "attribution": ev.attribution,
             "fetched_at": ev.fetched_at.isoformat() if ev.fetched_at else None,
+            # Public-records detail (docket/exclusion fields) for the panel;
+            # redacted for API keys by app.auth.pii (ADR-0007).
+            **(
+                {"raw_payload": ev.raw_payload}
+                if ev.source == PUBLIC_RECORDS_SOURCE
+                else {}
+            ),
         }
         for ev in evidence_rows
     ]

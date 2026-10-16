@@ -51,6 +51,7 @@ The pipeline proves a business exists and is who it claims to be. It does not lo
   - `public_records_federal_litigation_as_defendant`: **dropped from v1 under R11.** U1 confirmed that search results carry no party role (2026-10-16). Cases are stored and shown unscored.
 - R9. Absence of records produces no trust signal.
 - R10. `public_records_active_federal_exclusion` is added to `CRITICAL_ESCALATION_SIGNALS`, so it forces `escalate`. The bankruptcy and litigation signals are not critical (KTD11).
+- R15. An open, recent bankruptcy never pre-clears: a score in the pre-clear band triages as `review` instead. It never forces escalation (KTD14).
 - R13. A CourtListener docket counts as open only when its last refresh is within 12 months. Older "open" dockets show as possible matches with an "out of date" note and never score (KTD13).
 - R14. Personal data retention follows KTD12.
 
@@ -94,6 +95,7 @@ The pipeline proves a business exists and is who it claims to be. It does not lo
 - KTD11. **An active federal exclusion forces escalation.** (session-settled: user-approved — chosen over raising weights or keeping all signals non-critical: at weight × 40 × 0.25 each signal adds only about 9 overall points, so a clean debarred company would still pre-clear.) This overrides the origin spec's "nothing critical" rule for this one signal. The operator still decides. Governs R10.
 - KTD12. **Store all SAM classifications, keep the last 7 snapshots, and redact party names for integration API keys.** (session-settled: user-directed — chosen over storing firm rows only: individual exclusions stay available for later use.) Individual rows are stored but never strong-match a business in v1 (R6). Snapshots beyond the newest 7 are pruned with their rows. Recorded as an ADR-0002 addendum in U2. Governs R14.
 - KTD13. **A docket counts as open only if refreshed within 12 months.** (session-settled: user-approved — chosen over 6 months or no freshness rule: CourtListener data refreshes only when someone fetches it, so old "open" dockets are often closed.) U1 confirms the refresh field. Governs R13.
+- KTD14. **An open bankruptcy floors the tier at review.** (session-settled: user-approved — chosen over keeping it a plain weighted signal or making it critical: computed scores showed a clean company in bankruptcy at 28.2 still pre-cleared, and forcing escalation would over-flag legitimate restructurings.) Implemented as `REVIEW_FLOOR_SIGNALS` in the engine and mirrored in `derive_triage`. Governs R15.
 
 ### High-Level Technical Design
 

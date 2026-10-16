@@ -1,5 +1,8 @@
 # Feature Spec
 
+> **Superseded in detail by the plan.** `docs/plans/2026-10-16-001-feat-public-records-sources-plan.md` governs where this spec differs. In particular: an active federal exclusion **is** critical (KTD11); an open bankruptcy floors the tier at review (KTD14); there is no UEI matching in v1 (KTD10); there is no litigation-as-defendant signal (R11); and `triage.py`/`engine.py` do change. This spec is kept as the original request record.
+
+
 ## Feature Request
 - Original request: Thomson Reuters CLEAR public records integration: liens, judgments, bankruptcies, criminal records, lawsuits, business/people screening & monitoring, sanctions/PEP/OFAC, adverse media, court document retrieval — scoped against EntityIQ's existing pipeline
 - **Revised direction (2026-10-16):** build our own capability on **official, free public sources** instead of buying CLEAR. People-finder scraping was considered and rejected: those sites disclaim FCRA-type use, sit behind bot protection, and produce non-citable evidence.

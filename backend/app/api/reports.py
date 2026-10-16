@@ -148,6 +148,7 @@ def _serialize_report(
             confidence=ev.get("confidence"),
             attribution=ev.get("attribution"),
             fetched_at=ev.get("fetched_at"),
+            raw_payload=ev.get("raw_payload"),
         )
         for ev in summary.get("evidence", [])
     ]

@@ -2167,3 +2167,108 @@ Raw responses stay in the session scratchpad and are never committed. Fixtures c
 - **Roles.** `GET /api/rest/v4/parties/?docket=<id>` gives `party_types[].name` (e.g. "Creditor Committee", "Claims and Noticing Agent"). That is one extra call per docket, which the 125/day free limit can't absorb.
 - **R11 fallback applied: the litigation signal is dropped from v1.** Search results can't identify roles. The live probe also showed why an "open" count is unreliable: 3,461 unterminated non-bankruptcy dockets named one large company, mostly old mass-tort cases. v1 stores the true count and the 50 most recent cases unscored (`role=unknown`). Inferring defendant from `caseName` ("A v. B") is possible but heuristic; it's left as a follow-up, not a v1 signal.
 - **Budget.** Per US submission: 1 bankruptcy search, plus 1 civil search, plus at most 1 docket-detail call per strong-match open bankruptcy. The search API returns no rate-limit headers, so the client relies on 429 → `rate_limited`.
+
+### 2026-10-16 — U1 (ticket 0090): SAM extract verified live (1 request)
+
+- **The real header differs from the 2017 published layout.** The file `SAM_Exclusions_Public_Extract_V2_26289.CSV` (UTF-8, comma-separated, inside a ZIP) has **31 columns**. `Open Data Flag` and `Blank (Deprecated)` come before `Unique Entity ID`, and the final column is `Creation_Date` (underscore). My assumed 29-column fixture header was wrong. U2 must parse by header name and fail loudly if required columns are missing.
+- **Size.** 11.9 MB zipped, 78.6 MB unzipped, 169,025 rows. That sizes U2's caps (for example 50 MB download and 300 MB decompressed) and its row-count-collapse check. Keeping 7 snapshots (KTD12) is about 1.2M rows.
+- **Mix.** 133,775 Individual, 25,564 Special Entity Designation, 8,364 Firm, 1,322 Vessel. Only about 5% are firms, so name matching runs against a small business subset (KTD12 stores all of them).
+- **Dates.** `Termination Date` is `Indefinite` on 94% of rows and `MM/DD/YYYY` otherwise. Every row is active by definition.
+- **State.** `State / Province` is blank on 20% of rows, so a blank SAM state is "unknown", never a conflict (KTD10).
+- **Fixtures** live in `backend/tests/fixtures/public_records/`. They copy the real shapes with fictional parties only. `backend/tests/adapters/test_public_records_fixtures.py` guards shape, fictional names and the absence of credentials; a mutation check confirmed it fails on a real name and on a token-like string.
+
+## 2026-10-16 — SAM exclusions ingest (ticket 0091)
+
+- **The live file uses ISO dates.** `Active Date`, `Termination Date` and `Creation_Date` are `YYYY-MM-DD`, not the `MM/DD/YYYY` the 2017 layout documents, and about 6.5% of rows have a blank Active Date. A full-size smoke test caught this after the unit tests passed on a fixture copied from the docs. The fixture is now ISO and guarded. The parser accepts ISO first, with `MM/DD/YYYY` as a fallback, and an unparseable date becomes `None` rather than an error.
+- **Smoke test on the real extract** (scratchpad SQLite, not committed): 169,025 rows ingested in about 18 s with 0 skipped. Re-ingest is a no-op, and an indexed name+state lookup takes about 4 ms.
+- **Separate module, not `ingest.SOURCES`** (KTD4). `python -m app.lists.sam` is its own CLI so SAM snapshots never trigger individual-screening monitoring. It reuses `IngestResult`, `record_snapshot` and `content_hash`. The hash is taken over the CSV bytes, not the ZIP, because ZIP timestamps change daily even when the content doesn't.
+- **Guards.** HTTPS only. Download capped at 50 MB and decompressed size at 300 MB, read with one byte past the cap so a lying ZIP header can't bypass it. Exactly one CSV member. Required columns checked by name. A new snapshot is rejected if it has fewer than half the previous row count. Any failure keeps the last good snapshot. The API key is masked in every error.
+- **Retention.** Newest 7 snapshots kept, older SAM snapshots and rows pruned on each ingest. ADR-0007 records the rule as an addendum to ADR-0002.
+- **Postgres gate.** The migration was run up and down on a throwaway local Postgres cluster (`TEST_POSTGRES_URL`), together with the append-only trigger suite: 10 passed, no skips. CI sets the same variable.
+- **Scheduling** (daily after 7 AM ET) is documented in U5 / ticket 0094 alongside the RUNBOOK work.
+- **Fresh-context review (2026-10-16) and fixes:**
+  - Ingest is now a single transaction (snapshot plus rows). Before, a failed insert left an empty "latest" snapshot that blocked every later run.
+  - The fetcher follows redirects by hand and requires https on every hop. It never re-sends the key to another host, enforces a 10-minute wall-clock deadline, and silences httpx's request-URL logging, which would otherwise log the key.
+  - NUL bytes are stripped and values are truncated to their column lengths.
+  - A file is rejected when more than 5 rows and more than 5% of rows are unusable.
+  - `IngestResult.skipped` is reported, so the CLI prints it.
+  - Snapshot ordering has an `id` tiebreak. `keep < 1` still keeps the newest snapshot.
+  - Inserts run in 5k-row chunks over a streamed, hashed read. Peak memory on the real file is about 276 MB.
+  - Left as notes for 0094 (RUNBOOK): an operator override for the row-count-collapse guard, and running at most one ingest at a time (no lock).
+- **Third live-format surprise: `SAM Number` is a 36-character UUID**, not the 9 characters the layout documents. Postgres testing with real data caught it: the original `String(32)` column truncated every row. It is now `String(64)`; the migration hadn't been applied anywhere outside tests. The fixture uses UUID-shaped fictional numbers and the guard test pins that shape.
+- **Postgres with real data:** 169,025 rows ingested in 33.5 s with 0 skipped and 0 truncated. Every SAM number is distinct, and an indexed lookup takes about 19 ms. The SAM unit tests, migration tests and append-only suite pass on Postgres in either order (46 passed, no skips).
+
+## 2026-10-16 — public_records stage (ticket 0092)
+
+- **Built:** `backend/app/adapters/public_records.py` (`PublicRecordsStage`, not yet registered; ticket 0094 wires it in at 3e). Evidence shape is documented in the module docstring. The report summary now carries `raw_payload` for `public_records` evidence only, so the panel (0095) has docket and exclusion details.
+- **Deviations from the ticket and plan, all from live facts:**
+  - **CourtListener returns 20 results per page** (live probe; the docs don't say). Extra pages cost calls against the 125/day free budget, so v1 stores the first page, reports the true `count`, and sets `truncated` on the status row. The "store 50 of 60" criterion holds for the code path, but in production a category stores at most 20.
+  - **No debtor-address state check for bankruptcies.** Neither search results nor the docket detail carry a debtor address, so a bankruptcy match rests on the case name alone. A court's district is never a conflict (KTD10). The state rule applies only to SAM.
+  - **SAM has no `source_url`.** There is no verified per-record SAM.gov URL, so the record cites its SAM Number instead of linking somewhere unverified.
+- **Fresh-context review fixes:**
+  - Bankruptcy total is the search `count`. SAM total is counted before the cap. Status rows carry `truncated` and `notes`.
+  - CourtListener is not retried by default (a retry repeats both searches). Docket-detail freshness checks are capped at 3 per run; beyond that a record is weak, `not_checked`. A rate limit during a freshness check is surfaced in the status `notes`.
+  - Freshness uses only `date_last_filing`, because `date_modified` changes on our own lookup. Every bankruptcy record carries a `freshness` value.
+  - Civil records have `normalized_value="unscored"`, so no scorer can treat them as strong. Status and summary rows have `confidence=None`.
+  - A SAM lookup failure is caught and recorded as `unavailable`; CourtListener results are still saved (KTD5).
+  - SAM strong matches need a present, equal US state on the row. The alias query escapes LIKE wildcards, skips first words under 4 characters, and is capped at 500 candidates. Strong matches are kept first, newest first.
+  - The billing-address state must be a real US state code. A blank company name spends no API calls.
+  - **Redaction for integration API keys:** a party name is visible only on a strong bankruptcy or strong non-individual exclusion match, where it is the company's own name. Individual rows, every civil case name (the other side may be a person) and every weak match get `[redacted]`. Reports carrying such records raise the existing PII-view audit event. Tests include a round trip through the real stage and `_build_summary`.
+  - `HttpCourtListener` now has tests for request shape and status mapping (429, 5xx, timeout).
+- **Left for 0093 (latent until 0094 registers the stage):** exclude `public_records` from the Tier-1 registry filter in `entity_legitimacy_signals` and from `_compute_confidence`. Otherwise status rows would suppress `no_registry_evidence`. This is already in 0093's acceptance criteria.
+- **Follow-up candidate:** an alias column precomputed at ingest. The alias lookup is a capped LIKE scan over `cross_reference`; fine at 169k rows on SQLite in tests, but worth indexing if Postgres latency shows it.
+
+## 2026-10-16 — public-records scoring signals (ticket 0093)
+
+- `_public_records_signals` in `app/scoring/signals.py` emits two entity-layer signals, from strong matches only:
+  - `public_records_open_bankruptcy` (weight 0.8): open, filed within 36 months of when the evidence was fetched. It cites chapter, docket, court and filed date.
+  - `public_records_active_federal_exclusion` (weight 0.9): active, non-individual. It is **critical** (KTD11), and cites agency, exclusion type and active date.
+  - Civil records (`unscored`) never fire. `no_records` earns no trust.
+- `public_records` is excluded from the Tier-1 registry filter and from `_compute_confidence` (KTD6, the tier-filter learning). Tests prove registry signals and coverage are unchanged by these rows, and that the new signals still fire when registry evidence is missing.
+- **Effect on a clean demo-like company** (computed): baseline 20.2 is pre_clear. With an open bankruptcy it scores 28.2 and is **still pre_clear**. With an active exclusion it scores 29.2 and escalates (critical). With both it scores 37.2 and escalates. The bankruptcy-only outcome follows the OQ1 answer (bankruptcy stays a weighted signal), but a clean company in an open bankruptcy pre-clears. Revisit if that is not acceptable; the options are a higher weight or a review floor.
+- **Follow-up decision (same day): an open bankruptcy floors the tier at `review`** (plan KTD14, R15). The user chose this over keeping the weighted signal alone (a clean company at 28.2 pre-cleared) or making it critical. `REVIEW_FLOOR_SIGNALS` in `app/scoring/engine.py` lifts a pre-clear score to `review`, and `derive_triage` mirrors it with a reason naming the signal. A score of 70 or more still escalates. Tests cover each tier.
+
+## 2026-10-16 — public_records wired into the pipeline and demo (ticket 0094)
+
+- `PublicRecordsStage` is registered at 3e in `default_stages()`, after `screen_people` and before `analyze_domain`. The e2e test's faked list mirrors it with a CourtListener fake that finds nothing, and the stage-order guard passes.
+- **Demo: two new fictional scenarios instead of changing existing ones**, so every earlier scenario keeps its exact result:
+  - *Tailwind Freight LLC* is clean with an open Chapter 11. It scores 11.0 and lands in **review** through the bankruptcy floor (KTD14).
+  - *Adventure Works Supply Co* is clean with an active GSA exclusion. It scores 15.0 and **escalates** on the critical signal (KTD11).
+  - Demo docket dates are relative to the seed date, so the 36-month rule keeps firing. The demo SAM snapshot is a 2-row fictional extract, loaded once by `ensure_sam_demo_snapshot`.
+- **Before/after for the existing seven** (computed on the 0093 branch, then this one): Northwind 2.5 pre_clear, Fabrikam 4.0 pre_clear, Contoso 45.5 review, Brightpath 60.5 review, Quantum 77.0 escalate, Volga 22.0 escalate, Wingtip 14.0 escalate. **Identical scores and tiers.**
+- RUNBOOK documents the CourtListener budget, the commercial-use gate, `python -m app.lists.sam`, the daily schedule after 7 AM ET, no concurrent runs, guard behavior, and both env vars. ARCHITECTURE lists the new Tier-1 sources. The demo count goes from 7 to 9 in the README, RUNBOOK and CLAUDE.md.
+- **Known gap:** there is no operator override for the SAM row-count-collapse guard. The RUNBOOK gives the manual workaround.
+
+## 2026-10-16 — Public records panel (ticket 0095)
+
+- **Backend:** `EvidenceItemSchema` gains `raw_payload`. It is set only for `public_records` evidence, and the report API passes it through after `filter_summary_for_viewer`. Before this, the summary carried the payload but the API dropped it. Tested via `_serialize_report` for both the operator and API-key viewers.
+- **Frontend:** `PublicRecordsPanel` sits on the company detail page after Identity Corroboration.
+  - **Statuses:** one line per source, with every adapter status mapped to plain wording. Timeout and rate-limited read "Could not be checked (temporary)".
+  - **Records:** strong matches are grouped with exclusions first, then bankruptcies, then civil cases (marked not scored, role unknown). Weak matches go under "Possible matches (not scored)". A record cited by a risk signal's `evidence_ids` is marked "Counts toward risk", so the panel never re-implements scoring.
+  - **Truncation:** shows "Showing N of M".
+  - **Coverage note:** always says what isn't searched, with no success styling.
+  - **Links:** only https on courtlistener.com or sam.gov, otherwise plain text. Each link is named "View docket X on CourtListener".
+  - **Tests:** 19 vitest cases. Mutation-checked: dropping the URL allowlist, or adding "All clear" wording, fails the tests.
+- **Found by viewing the live demo:** the fictional demo dockets linked to `courtlistener.com/docket/990000/`, a real ID that could open an unrelated real case. Demo dockets now use non-positive IDs, and the adapter builds no link for those (or for a missing ID). Both behaviors are tested.
+- **Verified in the running app** (throwaway demo DB on ports 8010/5183):
+  - Tailwind shows the open Chapter 11 marked "Counts toward risk" and triages as Review.
+  - Adventure Works escalates on the exclusion.
+  - Northwind shows no records.
+  - The API-key response matched the redaction rules.
+- **No new frontend dependency.** The repo doesn't use jest-dom matchers, so the tests use plain assertions.
+
+## 2026-10-16 — Live functionality test and fixes (after PRs #24–#30)
+
+Ran the real pipeline (`default_stages()`) on a throwaway SQLite DB with real CourtListener calls and today's real SAM extract (169,025 rows). About 18 CourtListener requests; no new SAM request. Real company names stayed in the scratchpad.
+
+- **K AND F SERVICES CORP (PA):** 2 active SAM exclusions (OPM, HHS) matched; the second is captioned "K AND F SERVICES, CORP". Result: **escalate** on the critical signal.
+- **Spirit Airlines, LLC (FL):** open Chapter 11 `25-11896` (S.D.N.Y., 2025) is a strong match and fresh by a live docket call. Result: **review**, with the open-bankruptcy signal.
+- **Microsoft Corporation (WA):** 528 open federal civil cases (first page stored, `truncated`) and **0 bankruptcies**, even though it is a creditor in many cases. No public-records signal.
+
+Two bugs found that the fixtures could not show:
+- **"et al." captions.** Jointly administered cases are captioned "Spirit Airlines, LLC, et al.", which failed the exact name match and came out weak. The debtor name now drops a trailing "et al." before `names_match`; the 2024 Spirit case is now strong. Tested.
+- **Duplicate dockets.** CourtListener held three docket IDs for one case (`nysd 1:26-cv-08082`). Results are now de-duplicated by court plus docket number, so Microsoft stores 18 unique cases instead of 20 with repeats. Tested.
+
+Also confirmed live:
+- The free tier's 5-requests-per-minute limit returns 429. That maps to `rate_limited`: the source shows as temporarily unavailable and nothing crashes.
+- Bursts of submissions will hit this limit. Ticket 0103 tracks a client-side throttle.

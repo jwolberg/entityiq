@@ -1,0 +1,129 @@
+{
+  "count": 3,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "assignedTo": "",
+      "assigned_to_id": null,
+      "attorney": [],
+      "attorney_id": [],
+      "caseName": "Contoso Freight LLC",
+      "case_name_full": "In re Contoso Freight LLC",
+      "cause": "",
+      "chapter": "11",
+      "court": "United States Bankruptcy Court, D. Delaware",
+      "court_citation_string": "",
+      "court_id": "deb",
+      "dateArgued": null,
+      "dateFiled": "2025-08-12",
+      "dateTerminated": null,
+      "docketNumber": "25-10417",
+      "docket_absolute_url": "/docket/900001/contoso-freight-llc/",
+      "docket_id": 900001,
+      "firm": [],
+      "firm_id": [],
+      "jurisdictionType": "",
+      "juryDemand": "",
+      "meta": {
+        "timestamp": "2026-10-01T00:00:00Z",
+        "date_created": "2025-01-01T00:00:00Z",
+        "score": {
+          "bm25": 10.0
+        }
+      },
+      "pacer_case_id": "700001",
+      "party": [
+        "Contoso Freight LLC",
+        "Northwind Restructuring Partners LLP",
+        "Official Committee of Unsecured Creditors of Contoso Freight LLC"
+      ],
+      "party_id": [],
+      "referredTo": "",
+      "referred_to_id": null,
+      "suitNature": "",
+      "trustee_str": ""
+    },
+    {
+      "assignedTo": "",
+      "assigned_to_id": null,
+      "attorney": [],
+      "attorney_id": [],
+      "caseName": "Contoso Freight LLC",
+      "case_name_full": "In re Contoso Freight LLC",
+      "cause": "",
+      "chapter": "7",
+      "court": "United States Bankruptcy Court, N.D. Texas",
+      "court_citation_string": "",
+      "court_id": "txnb",
+      "dateArgued": null,
+      "dateFiled": "2019-03-04",
+      "dateTerminated": "2020-11-30",
+      "docketNumber": "19-30122",
+      "docket_absolute_url": "/docket/900002/contoso-freight-llc/",
+      "docket_id": 900002,
+      "firm": [],
+      "firm_id": [],
+      "jurisdictionType": "",
+      "juryDemand": "",
+      "meta": {
+        "timestamp": "2026-10-01T00:00:00Z",
+        "date_created": "2025-01-01T00:00:00Z",
+        "score": {
+          "bm25": 10.0
+        }
+      },
+      "pacer_case_id": "700002",
+      "party": [
+        "Contoso Freight LLC",
+        "Tailwind Capital Trustee Services"
+      ],
+      "party_id": [],
+      "referredTo": "",
+      "referred_to_id": null,
+      "suitNature": "",
+      "trustee_str": ""
+    },
+    {
+      "assignedTo": "",
+      "assigned_to_id": null,
+      "attorney": [],
+      "attorney_id": [],
+      "caseName": "Fabrikam Logistics Inc.",
+      "case_name_full": "In re Fabrikam Logistics Inc.",
+      "cause": "",
+      "chapter": "11",
+      "court": "United States Bankruptcy Court, S.D. New York",
+      "court_citation_string": "",
+      "court_id": "nysb",
+      "dateArgued": null,
+      "dateFiled": "2024-06-20",
+      "dateTerminated": null,
+      "docketNumber": "24-22051",
+      "docket_absolute_url": "/docket/900003/fabrikam-logistics-inc/",
+      "docket_id": 900003,
+      "firm": [],
+      "firm_id": [],
+      "jurisdictionType": "",
+      "juryDemand": "",
+      "meta": {
+        "timestamp": "2026-10-01T00:00:00Z",
+        "date_created": "2025-01-01T00:00:00Z",
+        "score": {
+          "bm25": 10.0
+        }
+      },
+      "pacer_case_id": "700003",
+      "party": [
+        "Fabrikam Logistics Inc.",
+        "Contoso Freight LLC",
+        "Litware Claims Agents LLC"
+      ],
+      "party_id": [],
+      "referredTo": "",
+      "referred_to_id": null,
+      "suitNature": "",
+      "trustee_str": ""
+    }
+  ]
+}

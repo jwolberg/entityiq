@@ -80,6 +80,7 @@ class IngestResult:
     snapshot_id: str | None = None
     records: int = 0
     error: str | None = None
+    skipped: int = 0
 
 
 def _http_fetch(url: str) -> str:

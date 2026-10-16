@@ -14,7 +14,10 @@ All companies, domains, people, and sanctions entries are fictional.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import csv
+import io
+import zipfile
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
@@ -28,6 +31,7 @@ from app.adapters.linkedin import (
     VerifyLinkedInStage,
 )
 from app.adapters.opencorporates import OpenCorporatesAdapter, QueryRegistriesStage
+from app.adapters.public_records import PublicRecordsStage
 from app.adapters.sanctions import SanctionsScreeningStage
 from app.adapters.tax_id import StubTaxIdProvider, TaxIdAdapter, VerifyTaxIdStage
 from app.adapters.web import FetchResult, WebEvidenceStage
@@ -87,6 +91,10 @@ class Scenario:
     # one listed name.
     people: list[dict] = field(default_factory=list)
     registry_people: list[dict] = field(default_factory=list)
+    # Public records (ticket 0094): bankruptcy dockets CourtListener "finds"
+    # for this company, as (court_id, court, docket_number, chapter,
+    # days_ago_filed). The demo SAM snapshot is shared; see SAM_DEMO_ROWS.
+    dockets: list[tuple] = field(default_factory=list)
 
 
 def _registry_company(name: str, number: str, status: str, jur: str, addr: str):
@@ -429,6 +437,197 @@ SCENARIOS: list[Scenario] = [
     ),
 ]
 
+# Public-records scenarios (ticket 0094): otherwise as clean as Northwind, so
+# the record alone moves the tier. Every name, docket and exclusion is fictional.
+_CLEAN = SCENARIOS[0]
+SCENARIOS += [
+    replace(
+        _CLEAN,
+        company_name="Tailwind Freight LLC",
+        domain="tailwindfreight.com",
+        work_email="lena.ortiz@tailwindfreight.com",
+        billing_address="2200 Commerce St, Dallas, TX 75201",
+        requester_full_name="Lena Ortiz",
+        hq=(32.7808, -96.7970),
+        expected_tier="review",
+        story=(
+            "Clean logistics firm in an open Chapter 11: the bankruptcy never "
+            "lets it pre-clear."
+        ),
+        registry=[
+            _registry_company(
+                "Tailwind Freight LLC",
+                "0803417762",
+                "Active",
+                "us_tx",
+                "2200 Commerce St, Dallas, TX 75201",
+            )
+        ],
+        html=_site(
+            "Tailwind Freight",
+            "<p>Regional trucking since 2006. 2200 Commerce St, Dallas, TX"
+            " 75201.</p><p>Contact: dispatch@tailwindfreight.com · +1 (214)"
+            " 555-0144</p><p>Team: lena.ortiz@tailwindfreight.com</p>",
+        ),
+        tax_id=None,
+        tax_id_records={},
+        linkedin_url=None,
+        linkedin_pages=[],
+        registry_people=[],
+        dockets=[
+            (
+                "txnb",
+                "United States Bankruptcy Court, N.D. Texas",
+                "25-31876",
+                "11",
+                140,
+            )
+        ],
+    ),
+    replace(
+        _CLEAN,
+        company_name="Adventure Works Supply Co",
+        domain="adventureworkssupply.com",
+        work_email="sam.patel@adventureworkssupply.com",
+        billing_address="15 SW Market St, Portland, OR 97204",
+        requester_full_name="Sam Patel",
+        hq=(45.5152, -122.6784),
+        expected_tier="escalate",
+        story=(
+            "Clean supplier that is on the SAM.gov federal exclusions list: "
+            "a critical signal forces escalation."
+        ),
+        registry=[
+            _registry_company(
+                "Adventure Works Supply Co",
+                "1149087",
+                "Active",
+                "us_or",
+                "15 SW Market St, Portland, OR 97204",
+            )
+        ],
+        html=_site(
+            "Adventure Works Supply",
+            "<p>Outdoor equipment wholesale. 15 SW Market St, Portland, OR"
+            " 97204.</p><p>Contact: orders@adventureworkssupply.com · +1 (503)"
+            " 555-0119</p><p>Team: sam.patel@adventureworkssupply.com</p>",
+        ),
+        tax_id=None,
+        tax_id_records={},
+        linkedin_url=None,
+        linkedin_pages=[],
+        registry_people=[],
+    ),
+]
+
+# Fictional SAM exclusions for the demo snapshot (columns as in the live
+# extract, ticket 0091). Only Adventure Works matches a scenario.
+SAM_DEMO_HEADER = [
+    "Classification", "Name", "Prefix", "First", "Middle", "Last", "Suffix",
+    "Address 1", "Address 2", "Address 3", "Address 4", "City",
+    "State / Province", "Country", "Zip Code", "Open Data Flag",
+    "Blank (Deprecated)", "Unique Entity ID", "Exclusion Program",
+    "Excluding Agency", "CT Code", "Exclusion Type", "Additional Comments",
+    "Active Date", "Termination Date", "Record Status", "Cross-Reference",
+    "SAM Number", "CAGE", "NPI", "Creation_Date",
+]  # fmt: skip
+SAM_DEMO_ROWS = [
+    {
+        "Classification": "Firm",
+        "Name": "Adventure Works Supply Co",
+        "City": "Portland",
+        "State / Province": "OR",
+        "Country": "USA",
+        "Unique Entity ID": "DEMO00000001",
+        "Exclusion Program": "Reciprocal",
+        "Excluding Agency": "GSA",
+        "Exclusion Type": "Ineligible (Proceedings Completed)",
+        "Active Date": "2025-11-03",
+        "Termination Date": "Indefinite",
+        "SAM Number": "00000000-0000-4000-8000-00000000d001",
+        "Creation_Date": "2025-11-03",
+    },
+    {
+        "Classification": "Firm",
+        "Name": "Litware Demolition Inc",
+        "City": "Reno",
+        "State / Province": "NV",
+        "Country": "USA",
+        "Exclusion Program": "Reciprocal",
+        "Excluding Agency": "DOD",
+        "Exclusion Type": "Prohibition/Restriction",
+        "Active Date": "2024-02-12",
+        "Termination Date": "2030-02-12",
+        "SAM Number": "00000000-0000-4000-8000-00000000d002",
+        "Creation_Date": "2024-02-12",
+    },
+]
+
+
+def _sam_demo_extract() -> bytes:
+    text = io.StringIO()
+    writer = csv.DictWriter(text, fieldnames=SAM_DEMO_HEADER)
+    writer.writeheader()
+    for row in SAM_DEMO_ROWS:
+        writer.writerow({col: row.get(col, "") for col in SAM_DEMO_HEADER})
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("SAM_Exclusions_Public_Extract_V2_DEMO.CSV", text.getvalue())
+    return buf.getvalue()
+
+
+def ensure_sam_demo_snapshot(db: Session) -> None:
+    """Load the fictional SAM snapshot unless one already exists."""
+    from app.lists import sam  # noqa: PLC0415
+
+    if sam.latest_snapshot(db) is None:
+        result = sam.ingest(db, fetch=_sam_demo_extract)
+        if result.error:
+            raise RuntimeError(f"demo SAM snapshot failed: {result.error}")
+
+
+class _DemoCourtListener:
+    """CourtListener fake: serves a scenario's dockets, filed relative to today."""
+
+    name = "courtlistener"
+
+    def __init__(self, company: str, dockets: list[tuple]):
+        today = datetime.now(tz=timezone.utc).date()
+        self._results = [
+            {
+                # Non-positive ids: fictional, never linked to a real case.
+                "docket_id": -(n + 1),
+                "caseName": company,
+                "court_id": court_id,
+                "court": court,
+                "docketNumber": number,
+                "chapter": chapter,
+                "dateFiled": (today - timedelta(days=days_ago)).isoformat(),
+                "dateTerminated": None,
+                "suitNature": "",
+                "party": [company],
+            }
+            for n, (court_id, court, number, chapter, days_ago) in enumerate(dockets)
+        ]
+        self._today = today
+
+    def search(self, query: str, **params) -> dict:
+        bankruptcy = "-chapter" not in query
+        results = self._results if bankruptcy else []
+        return {
+            "count": len(results),
+            "next": None,
+            "previous": None,
+            "results": results,
+        }
+
+    def docket(self, docket_id: int) -> dict:
+        return {
+            "id": docket_id,
+            "date_terminated": None,
+            "date_last_filing": (self._today - timedelta(days=9)).isoformat(),
+        }
+
 
 # ---------------------------------------------------------------------------
 # Recorded-response clients
@@ -529,6 +728,7 @@ def _stages(s: Scenario) -> list:
             )
         ),
         ScreenPeopleStage(),
+        PublicRecordsStage(client=_DemoCourtListener(s.company_name, s.dockets)),
         AnalyzeDomainStage(
             whois_client=_Whois(s.domain_age_days),
             dns_client=_Dns(s.mx, s.txt),
@@ -550,6 +750,8 @@ def load_demo_data(db: Session) -> int:
     """Submit and verify every scenario not already present. Returns count added."""
     # Officers are screened against the demo watchlist during these runs.
     ensure_watchlist(db)
+    # Exclusions are matched against the demo SAM snapshot (ticket 0094).
+    ensure_sam_demo_snapshot(db)
     added = 0
     for s in SCENARIOS:
         exists = (
