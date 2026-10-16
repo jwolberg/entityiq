@@ -53,6 +53,40 @@ REQUESTER_ASSOCIATION_EVIDENCE_FIELDS = frozenset({"linkedin_requester_match"})
 # company_name, domain, tax_id, or linkedin_website.
 CONTACT_PII_MISMATCH_FIELDS = frozenset({"billing_address"})
 
+# Public-records evidence (ticket 0092, ADR-0007). Its payload can name a
+# natural person. Integration API keys see party names only where the record
+# is a strong match to the company itself (see _names_a_person); everything
+# else gets a placeholder.
+PUBLIC_RECORDS_SOURCE = "public_records"
+REDACTED = "[redacted]"
+
+
+def _names_a_person(item: dict) -> bool:
+    """True unless the record is a strong match to the company itself.
+
+    API keys see a party name only on a strong bankruptcy or a strong
+    non-individual exclusion, where the name is the submitted company's.
+    Anything else (an Individual row, any civil case name, a weak match that
+    may be a sole proprietor) is treated as naming a person.
+    """
+    payload = item.get("raw_payload") or {}
+    if item.get("field") != "public_record":
+        return False
+    company_match = (
+        payload.get("match") == "strong"
+        and payload.get("kind") in ("bankruptcy", "federal_exclusion")
+        and payload.get("classification") != "Individual"
+    )
+    return not company_match
+
+
+def _redact_public_record(item: dict) -> dict:
+    if item.get("source") != PUBLIC_RECORDS_SOURCE or not _names_a_person(item):
+        return item
+    item = dict(item)
+    item["raw_payload"] = {**(item.get("raw_payload") or {}), "party_name": REDACTED}
+    return item
+
 
 def resolve_viewer(principal: "Principal", db: "Session") -> Viewer:
     """Map an authenticated Principal to its report-visibility tier.
@@ -102,6 +136,7 @@ def filter_summary_for_viewer(summary: dict, viewer: Viewer) -> dict:
             and e.get("field") not in REQUESTER_ASSOCIATION_EVIDENCE_FIELDS
         ]
         sources = [s for s in sources if s.get("source") != NETWORK_METADATA_SOURCE]
+        evidence = [_redact_public_record(e) for e in evidence]
         mismatches = [
             m
             for m in mismatches
@@ -142,6 +177,11 @@ def report_contains_pii(summary: dict) -> bool:
     if any(e.get("source") == NETWORK_METADATA_SOURCE for e in evidence):
         return True
     if any(e.get("field") in REQUESTER_ASSOCIATION_EVIDENCE_FIELDS for e in evidence):
+        return True
+    if any(
+        e.get("source") == PUBLIC_RECORDS_SOURCE and _names_a_person(e)
+        for e in evidence
+    ):
         return True
     mismatches = summary.get("mismatches") or []
     return any(m.get("field_name") in CONTACT_PII_MISMATCH_FIELDS for m in mismatches)

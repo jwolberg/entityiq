@@ -2197,3 +2197,23 @@ Raw responses stay in the session scratchpad and are never committed. Fixtures c
   - Left as notes for 0094 (RUNBOOK): an operator override for the row-count-collapse guard, and running at most one ingest at a time (no lock).
 - **Third live-format surprise: `SAM Number` is a 36-character UUID**, not the 9 characters the layout documents. Postgres testing with real data caught it: the original `String(32)` column truncated every row. It is now `String(64)`; the migration hadn't been applied anywhere outside tests. The fixture uses UUID-shaped fictional numbers and the guard test pins that shape.
 - **Postgres with real data:** 169,025 rows ingested in 33.5 s with 0 skipped and 0 truncated. Every SAM number is distinct, and an indexed lookup takes about 19 ms. The SAM unit tests, migration tests and append-only suite pass on Postgres in either order (46 passed, no skips).
+
+## 2026-10-16 — public_records stage (ticket 0092)
+
+- **Built:** `backend/app/adapters/public_records.py` (`PublicRecordsStage`, not yet registered; ticket 0094 wires it in at 3e). Evidence shape is documented in the module docstring. The report summary now carries `raw_payload` for `public_records` evidence only, so the panel (0095) has docket and exclusion details.
+- **Deviations from the ticket and plan, all from live facts:**
+  - **CourtListener returns 20 results per page** (live probe; the docs don't say). Extra pages cost calls against the 125/day free budget, so v1 stores the first page, reports the true `count`, and sets `truncated` on the status row. The "store 50 of 60" criterion holds for the code path, but in production a category stores at most 20.
+  - **No debtor-address state check for bankruptcies.** Neither search results nor the docket detail carry a debtor address, so a bankruptcy match rests on the case name alone. A court's district is never a conflict (KTD10). The state rule applies only to SAM.
+  - **SAM has no `source_url`.** There is no verified per-record SAM.gov URL, so the record cites its SAM Number instead of linking somewhere unverified.
+- **Fresh-context review fixes:**
+  - Bankruptcy total is the search `count`. SAM total is counted before the cap. Status rows carry `truncated` and `notes`.
+  - CourtListener is not retried by default (a retry repeats both searches). Docket-detail freshness checks are capped at 3 per run; beyond that a record is weak, `not_checked`. A rate limit during a freshness check is surfaced in the status `notes`.
+  - Freshness uses only `date_last_filing`, because `date_modified` changes on our own lookup. Every bankruptcy record carries a `freshness` value.
+  - Civil records have `normalized_value="unscored"`, so no scorer can treat them as strong. Status and summary rows have `confidence=None`.
+  - A SAM lookup failure is caught and recorded as `unavailable`; CourtListener results are still saved (KTD5).
+  - SAM strong matches need a present, equal US state on the row. The alias query escapes LIKE wildcards, skips first words under 4 characters, and is capped at 500 candidates. Strong matches are kept first, newest first.
+  - The billing-address state must be a real US state code. A blank company name spends no API calls.
+  - **Redaction for integration API keys:** a party name is visible only on a strong bankruptcy or strong non-individual exclusion match, where it is the company's own name. Individual rows, every civil case name (the other side may be a person) and every weak match get `[redacted]`. Reports carrying such records raise the existing PII-view audit event. Tests include a round trip through the real stage and `_build_summary`.
+  - `HttpCourtListener` now has tests for request shape and status mapping (429, 5xx, timeout).
+- **Left for 0093 (latent until 0094 registers the stage):** exclude `public_records` from the Tier-1 registry filter in `entity_legitimacy_signals` and from `_compute_confidence`. Otherwise status rows would suppress `no_registry_evidence`. This is already in 0093's acceptance criteria.
+- **Follow-up candidate:** an alias column precomputed at ingest. The alias lookup is a capped LIKE scan over `cross_reference`; fine at 169k rows on SQLite in tests, but worth indexing if Postgres latency shows it.
