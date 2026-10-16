@@ -192,3 +192,71 @@ def test_individuals_demo_still_loads_after_the_company_demo(db):
 
     load_demo_data(db)
     assert screening_demo.load_screening_demo(db) == len(screening_demo.DEMO_SUBJECTS)
+
+
+# --- Public records (ticket 0094) --------------------------------------------
+
+
+def _signals(db, company):
+    sub = db.query(Submission).filter(Submission.company_name == company).one()
+    run = (
+        db.query(VerificationRun).filter(VerificationRun.submission_id == sub.id).one()
+    )
+    ra = (
+        db.query(RiskAssessment)
+        .filter(RiskAssessment.verification_run_id == run.id)
+        .one()
+    )
+    return ra, {s["name"] for s in ra.contributing_signals or []}
+
+
+def test_open_bankruptcy_scenario_is_floored_at_review(db):
+    load_demo_data(db)
+    ra, names = _signals(db, "Tailwind Freight LLC")
+    assert "public_records_open_bankruptcy" in names
+    assert ra.triage_tier == "review"
+
+
+def test_federal_exclusion_scenario_escalates(db):
+    load_demo_data(db)
+    ra, names = _signals(db, "Adventure Works Supply Co")
+    assert "public_records_active_federal_exclusion" in names
+    assert ra.triage_tier == "escalate"
+
+
+def test_other_scenarios_get_no_public_records_signal(db):
+    load_demo_data(db)
+    for scenario in SCENARIOS:
+        if scenario.company_name in (
+            "Tailwind Freight LLC",
+            "Adventure Works Supply Co",
+        ):
+            continue
+        _, names = _signals(db, scenario.company_name)
+        assert not {
+            n for n in names if n.startswith("public_records")
+        }, scenario.company_name
+
+
+def test_public_records_scenarios_show_in_the_report_evidence(db):
+    load_demo_data(db)
+    for company, kind in (
+        ("Tailwind Freight LLC", "bankruptcy"),
+        ("Adventure Works Supply Co", "federal_exclusion"),
+    ):
+        sub = db.query(Submission).filter(Submission.company_name == company).one()
+        run = (
+            db.query(VerificationRun)
+            .filter(VerificationRun.submission_id == sub.id)
+            .one()
+        )
+        report = db.query(Report).filter(Report.verification_run_id == run.id).one()
+        items = [
+            e
+            for e in report.summary["evidence"]
+            if e["source"] == "public_records" and e["field"] == "public_record"
+        ]
+        assert any(
+            e["raw_value"] == kind and e["normalized_value"] == "strong" for e in items
+        )
+        assert all("raw_payload" in e for e in items)

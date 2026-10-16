@@ -2227,3 +2227,14 @@ Raw responses stay in the session scratchpad and are never committed. Fixtures c
 - `public_records` is excluded from the Tier-1 registry filter and from `_compute_confidence` (KTD6, the tier-filter learning). Tests prove registry signals and coverage are unchanged by these rows, and that the new signals still fire when registry evidence is missing.
 - **Effect on a clean demo-like company** (computed): baseline 20.2 is pre_clear. With an open bankruptcy it scores 28.2 and is **still pre_clear**. With an active exclusion it scores 29.2 and escalates (critical). With both it scores 37.2 and escalates. The bankruptcy-only outcome follows the OQ1 answer (bankruptcy stays a weighted signal), but a clean company in an open bankruptcy pre-clears. Revisit if that is not acceptable; the options are a higher weight or a review floor.
 - **Follow-up decision (same day): an open bankruptcy floors the tier at `review`** (plan KTD14, R15). The user chose this over keeping the weighted signal alone (a clean company at 28.2 pre-cleared) or making it critical. `REVIEW_FLOOR_SIGNALS` in `app/scoring/engine.py` lifts a pre-clear score to `review`, and `derive_triage` mirrors it with a reason naming the signal. A score of 70 or more still escalates. Tests cover each tier.
+
+## 2026-10-16 — public_records wired into the pipeline and demo (ticket 0094)
+
+- `PublicRecordsStage` is registered at 3e in `default_stages()`, after `screen_people` and before `analyze_domain`. The e2e test's faked list mirrors it with a CourtListener fake that finds nothing, and the stage-order guard passes.
+- **Demo: two new fictional scenarios instead of changing existing ones**, so every earlier scenario keeps its exact result:
+  - *Tailwind Freight LLC* is clean with an open Chapter 11. It scores 11.0 and lands in **review** through the bankruptcy floor (KTD14).
+  - *Adventure Works Supply Co* is clean with an active GSA exclusion. It scores 15.0 and **escalates** on the critical signal (KTD11).
+  - Demo docket dates are relative to the seed date, so the 36-month rule keeps firing. The demo SAM snapshot is a 2-row fictional extract, loaded once by `ensure_sam_demo_snapshot`.
+- **Before/after for the existing seven** (computed on the 0093 branch, then this one): Northwind 2.5 pre_clear, Fabrikam 4.0 pre_clear, Contoso 45.5 review, Brightpath 60.5 review, Quantum 77.0 escalate, Volga 22.0 escalate, Wingtip 14.0 escalate. **Identical scores and tiers.**
+- RUNBOOK documents the CourtListener budget, the commercial-use gate, `python -m app.lists.sam`, the daily schedule after 7 AM ET, no concurrent runs, guard behavior, and both env vars. ARCHITECTURE lists the new Tier-1 sources. The demo count goes from 7 to 9 in the README, RUNBOOK and CLAUDE.md.
+- **Known gap:** there is no operator override for the SAM row-count-collapse guard. The RUNBOOK gives the manual workaround.
