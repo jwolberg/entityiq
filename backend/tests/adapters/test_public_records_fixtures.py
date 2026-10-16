@@ -159,6 +159,20 @@ def test_sam_extract_header_and_rows():
     classes = {row["Classification"] for row in rows}
     assert {"Firm", "Individual"} <= classes
     assert any(row["Termination Date"] == "Indefinite" for row in rows)
+    # Live file (2026-10-16) uses ISO dates, not the MM/DD/YYYY the 2017 layout
+    # documents; blank Active Date occurs too.
+    iso = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    # Live SAM Number is a 36-char UUID (the 2017 layout says 9 chars).
+    uuid = re.compile(
+        r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    )
+    assert all(uuid.match(row["SAM Number"]) for row in rows)
+    for row in rows:
+        for col in ("Active Date", "Creation_Date"):
+            assert row[col] == "" or iso.match(row[col]), (col, row[col])
+        assert row["Termination Date"] == "Indefinite" or iso.match(
+            row["Termination Date"]
+        )
     for row in rows:
         if row["Classification"] == "Individual":
             assert row["Name"] == "" and row["Last"]

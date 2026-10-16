@@ -2176,3 +2176,24 @@ Raw responses stay in the session scratchpad and are never committed. Fixtures c
 - **Dates.** `Termination Date` is `Indefinite` on 94% of rows and `MM/DD/YYYY` otherwise. Every row is active by definition.
 - **State.** `State / Province` is blank on 20% of rows, so a blank SAM state is "unknown", never a conflict (KTD10).
 - **Fixtures** live in `backend/tests/fixtures/public_records/`. They copy the real shapes with fictional parties only. `backend/tests/adapters/test_public_records_fixtures.py` guards shape, fictional names and the absence of credentials; a mutation check confirmed it fails on a real name and on a token-like string.
+
+## 2026-10-16 — SAM exclusions ingest (ticket 0091)
+
+- **The live file uses ISO dates.** `Active Date`, `Termination Date` and `Creation_Date` are `YYYY-MM-DD`, not the `MM/DD/YYYY` the 2017 layout documents, and about 6.5% of rows have a blank Active Date. A full-size smoke test caught this after the unit tests passed on a fixture copied from the docs. The fixture is now ISO and guarded. The parser accepts ISO first, with `MM/DD/YYYY` as a fallback, and an unparseable date becomes `None` rather than an error.
+- **Smoke test on the real extract** (scratchpad SQLite, not committed): 169,025 rows ingested in about 18 s with 0 skipped. Re-ingest is a no-op, and an indexed name+state lookup takes about 4 ms.
+- **Separate module, not `ingest.SOURCES`** (KTD4). `python -m app.lists.sam` is its own CLI so SAM snapshots never trigger individual-screening monitoring. It reuses `IngestResult`, `record_snapshot` and `content_hash`. The hash is taken over the CSV bytes, not the ZIP, because ZIP timestamps change daily even when the content doesn't.
+- **Guards.** HTTPS only. Download capped at 50 MB and decompressed size at 300 MB, read with one byte past the cap so a lying ZIP header can't bypass it. Exactly one CSV member. Required columns checked by name. A new snapshot is rejected if it has fewer than half the previous row count. Any failure keeps the last good snapshot. The API key is masked in every error.
+- **Retention.** Newest 7 snapshots kept, older SAM snapshots and rows pruned on each ingest. ADR-0007 records the rule as an addendum to ADR-0002.
+- **Postgres gate.** The migration was run up and down on a throwaway local Postgres cluster (`TEST_POSTGRES_URL`), together with the append-only trigger suite: 10 passed, no skips. CI sets the same variable.
+- **Scheduling** (daily after 7 AM ET) is documented in U5 / ticket 0094 alongside the RUNBOOK work.
+- **Fresh-context review (2026-10-16) and fixes:**
+  - Ingest is now a single transaction (snapshot plus rows). Before, a failed insert left an empty "latest" snapshot that blocked every later run.
+  - The fetcher follows redirects by hand and requires https on every hop. It never re-sends the key to another host, enforces a 10-minute wall-clock deadline, and silences httpx's request-URL logging, which would otherwise log the key.
+  - NUL bytes are stripped and values are truncated to their column lengths.
+  - A file is rejected when more than 5 rows and more than 5% of rows are unusable.
+  - `IngestResult.skipped` is reported, so the CLI prints it.
+  - Snapshot ordering has an `id` tiebreak. `keep < 1` still keeps the newest snapshot.
+  - Inserts run in 5k-row chunks over a streamed, hashed read. Peak memory on the real file is about 276 MB.
+  - Left as notes for 0094 (RUNBOOK): an operator override for the row-count-collapse guard, and running at most one ingest at a time (no lock).
+- **Third live-format surprise: `SAM Number` is a 36-character UUID**, not the 9 characters the layout documents. Postgres testing with real data caught it: the original `String(32)` column truncated every row. It is now `String(64)`; the migration hadn't been applied anywhere outside tests. The fixture uses UUID-shaped fictional numbers and the guard test pins that shape.
+- **Postgres with real data:** 169,025 rows ingested in 33.5 s with 0 skipped and 0 truncated. Every SAM number is distinct, and an indexed lookup takes about 19 ms. The SAM unit tests, migration tests and append-only suite pass on Postgres in either order (46 passed, no skips).

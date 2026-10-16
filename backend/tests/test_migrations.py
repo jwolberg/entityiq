@@ -99,3 +99,47 @@ def test_head_indexes_report_list_filter_and_order(tmp_path, monkeypatch):
     assert ra["ix_risk_assessment_triage_tier"] == ["triage_tier"]
     rep = {i["name"]: i["column_names"] for i in insp.get_indexes("report")}
     assert rep["ix_report_created_at"] == ["created_at"]
+
+
+def test_head_adds_sam_exclusion_record_with_lookup_indexes(tmp_path, monkeypatch):
+    """SAM exclusions snapshot rows (ticket 0091): lookups by name+state, UEI."""
+    url = f"sqlite:///{tmp_path / 's.db'}"
+    command.upgrade(_config(url, monkeypatch), "head")
+    insp = inspect(create_engine(url))
+
+    cols = {c["name"] for c in insp.get_columns("sam_exclusion_record")}
+    assert {
+        "snapshot_id",
+        "sam_number",
+        "classification",
+        "name",
+        "core_name",
+        "state",
+        "uei",
+        "active_date",
+        "termination_date",
+        "termination_indefinite",
+    } <= cols
+    indexes = {
+        tuple(ix["column_names"]) for ix in insp.get_indexes("sam_exclusion_record")
+    }
+    assert ("snapshot_id", "core_name", "state") in indexes
+    assert ("snapshot_id", "uei") in indexes
+
+
+def test_sam_exclusion_migration_runs_on_postgres(monkeypatch):
+    """Required gate for ticket 0091; CI sets TEST_POSTGRES_URL."""
+    import os
+
+    import pytest
+
+    url = os.environ.get("TEST_POSTGRES_URL")
+    if not url:
+        pytest.skip("TEST_POSTGRES_URL not set")
+    cfg = _config(url, monkeypatch)
+    command.upgrade(cfg, "head")
+    try:
+        assert "sam_exclusion_record" in inspect(create_engine(url)).get_table_names()
+    finally:
+        command.downgrade(cfg, "base")
+    assert "sam_exclusion_record" not in inspect(create_engine(url)).get_table_names()
