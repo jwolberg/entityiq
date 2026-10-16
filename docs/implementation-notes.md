@@ -2149,3 +2149,10 @@ under their own trigger, dependency-free SVG graph.
 - **Unverified: layout drift.** The published layout predates SAM's 2022 switch from DUNS to UEI, and current files carry a `V2` suffix. U1 must confirm the real header row from one downloaded file (once `SAM_API_KEY` is set) before U2 pins column positions. Parse by header name, not position.
 - **Aliases.** The Cross-Reference column carries alternate names. U3 should match `core_name` against the primary name and these aliases.
 - **Name field.** `Name` is empty for Individual rows (they use First/Last). This matches KTD12: individual rows are stored but never strong-match a business.
+
+### 2026-10-16 — U1 (ticket 0090): CourtListener access terms — stop condition hit for production
+
+- **Free access exists, but with tight limits.** Since 2026-05-07, any CourtListener account gets full REST API access with a default of 5 requests/min, 50/hour and 125/day. Paid memberships raise these limits. The "5,000/hour" figure in older docs is out of date. The REST API (v4) is the right product: search plus dockets. Anonymous requests return 401.
+- **Commercial-use bar.** Membership and free access "may not be used to power a revenue-positive commercial product, service, or feature," and FLP counts internal business tooling as commercial use. Allowed uses are exploratory, research, and pre-revenue unfunded small organizations. Commercial agreements are priced "based on means and mission" and "start at free."
+- **Consequence.** Developing and demoing EntityIQ on a free account with fictional fixtures is fine. Any production or client deployment needs a commercial agreement first, filed as HITL. The production default stays unconfigured (R3), so nothing calls CourtListener unless a token is set.
+- **Rate-limit design input for U3.** 125/day is about 60 submissions/day at two queries each. Use the existing adapter cache and keep it to one search per submission where possible.
