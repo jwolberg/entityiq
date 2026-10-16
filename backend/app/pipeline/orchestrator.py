@@ -82,6 +82,7 @@ def default_stages() -> list[PipelineStage]:
       3b. sanctions_screening         — OFAC SDN sanctions/watchlist (P2-T3)
       3c. collect_people              — declared + registry officers/owners (0080)
       3d. screen_people               — screen each through individual screening (0081)
+      3e. public_records              — CourtListener dockets + SAM exclusions (0092)
       4. analyze_domain               — Tier-2 domain/infrastructure signals (P1-T5)
       5. enrich_network_ip            — IPinfo geo/ASN/VPN enrichment (P2-T2)
       6. web_evidence                 — Tier-3 public web evidence (P2-T4)
@@ -96,6 +97,7 @@ def default_stages() -> list[PipelineStage]:
     from app.adapters.ipinfo import EnrichNetworkIPStage  # noqa: PLC0415
     from app.adapters.linkedin import VerifyLinkedInStage  # noqa: PLC0415
     from app.adapters.opencorporates import QueryRegistriesStage  # noqa: PLC0415
+    from app.adapters.public_records import PublicRecordsStage  # noqa: PLC0415
     from app.adapters.sanctions import SanctionsScreeningStage  # noqa: PLC0415
     from app.adapters.tax_id import VerifyTaxIdStage  # noqa: PLC0415
     from app.adapters.web import WebEvidenceStage  # noqa: PLC0415
@@ -115,6 +117,7 @@ def default_stages() -> list[PipelineStage]:
         SanctionsScreeningStage(),
         CollectPeopleStage(),
         ScreenPeopleStage(),
+        PublicRecordsStage(),
         AnalyzeDomainStage(),
         EnrichNetworkIPStage(),
         WebEvidenceStage(),

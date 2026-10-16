@@ -44,8 +44,8 @@ docker-compose.yml   Full stack: Postgres + Redis + API + worker + UI
 
 This creates the backend venv and installs the frontend on the first run,
 migrates a local SQLite database (`backend/entityiq-demo.db`), seeds demo
-accounts and an integration API key, loads seven fictional demo companies that
-span all three triage tiers, with their officers and owners (`python -m app.demo_data`: real pipeline, recorded
+accounts and an integration API key, loads nine fictional demo companies that
+span all three triage tiers (two show public records: an open bankruptcy and a federal exclusion), with their officers and owners (`python -m app.demo_data`: real pipeline, recorded
 source responses, no network), then serves:
 
 - UI: http://localhost:5173. Sign in as `operator@demo.entityiq.dev` or
@@ -348,6 +348,28 @@ Expected on the demo data:
 
 ---
 
+## Public records: CourtListener and SAM exclusions
+
+The `public_records` stage (3e, tickets 0090–0095) checks each US submission for open federal bankruptcies and civil cases (CourtListener) and for active federal exclusions (SAM.gov). Plan: `docs/plans/2026-10-16-001-feat-public-records-sources-plan.md`. Each source is optional: without credentials or a snapshot it shows as *unavailable* and changes no score.
+
+**CourtListener.**
+- Set `COURTLISTENER_API_TOKEN` from a free courtlistener.com account (Profile → API).
+- Free accounts get 5 requests/minute, 50/hour and 125/day. Each run uses 2 searches plus at most 3 docket-detail calls, with no automatic retries, so about 40–60 submissions a day.
+- **Production or client use needs a commercial agreement with Free Law Project first.** Membership/free access may not power a revenue-positive product or internal business tooling. This is tracked in the HITL inbox.
+
+**SAM exclusions.** Set `SAM_API_KEY` (a free personal key from sam.gov → Account Details), then load the daily extract:
+
+```bash
+cd backend && .venv/bin/python -m app.lists.sam
+```
+
+- **Schedule it daily, after 7 AM ET** (cron or a Celery beat entry). One run uses 1 of the key's 10 requests a day.
+- **Don't run two at once.** There is no lock, so concurrent runs can store duplicate snapshots.
+- **A new snapshot is stored only when the content changed.** The newest 7 are kept and older ones pruned (ADR-0007).
+- **A snapshot older than 7 days still matches**, but the report flags it as *stale*.
+- **Ingest refuses a file that is not one CSV in a ZIP, lacks required columns, is mostly unusable rows, or has fewer than half the previous snapshot's rows**, and keeps the last good snapshot. If SAM genuinely shrinks that much, there is no override yet; clear the old snapshots by hand and re-run.
+- Live run (2026-10-16): 169,025 rows, about 34 s on Postgres and 18 s on SQLite, peak about 280 MB.
+
 ## Environment variables
 
 | Variable | Default | Purpose |
@@ -357,6 +379,8 @@ Expected on the demo data:
 | `CELERY_BROKER_URL` | `redis://localhost:6379/0` | Celery broker (when not in eager mode). |
 | `CELERY_RESULT_BACKEND` | `redis://localhost:6379/0` | Celery result backend. |
 | `OPENCORPORATES_API_TOKEN` | _(unset)_ | OpenCorporates API token. **Required for registry lookups**: the API returns 401 without one, and the registry source then shows as *unavailable* in the report. Production use also needs a license (Open Decision #5). |
+| `COURTLISTENER_API_TOKEN` | _(unset)_ | CourtListener REST v4 token for the `public_records` stage. Unset: the CourtListener source reports *unavailable* (no signal, no penalty). Free tier is 125 requests a day; production use needs a Free Law Project commercial agreement. |
+| `SAM_API_KEY` | _(unset)_ | SAM.gov personal API key used by `python -m app.lists.sam` to download the daily public exclusions extract. Unset: ingest fails and the SAM source reports *unavailable* until a snapshot exists. Never logged. |
 | `SESSION_TTL_HOURS` | `12` | Operator session lifetime, enforced by whichever session store is active (Redis TTL or the in-memory store's own expiry check). |
 | `REDIS_URL` | `redis://localhost:6379/0` | Backend for operator sessions (ticket 0024). Tried once at API startup; sessions are then shared across API instances and survive a restart. If unreachable, falls back to a single-process in-memory store and logs a startup warning — dev/demo work either way. Independent of `CELERY_BROKER_URL` (can point at the same Redis or a different one/DB). |
 | `IPINFO_TOKEN` | _(unset)_ | Optional ipinfo.io token. The free tier works without one; a paid token adds precise VPN/proxy/hosting flags. |

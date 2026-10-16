@@ -25,6 +25,7 @@ from app.adapters.linkedin import (
     VerifyLinkedInStage,
 )
 from app.adapters.opencorporates import OpenCorporatesAdapter, QueryRegistriesStage
+from app.adapters.public_records import PublicRecordsStage
 from app.adapters.sanctions import SanctionsScreeningStage
 from app.adapters.tax_id import StubTaxIdProvider, TaxIdAdapter, VerifyTaxIdStage
 from app.adapters.web import FetchResult, WebEvidenceStage
@@ -154,6 +155,18 @@ _ACME_HTML = """<!DOCTYPE html><html><head>
 </body></html>"""
 
 
+class _NoDockets:
+    """CourtListener fake: every search finds nothing (ticket 0094)."""
+
+    name = "courtlistener"
+
+    def search(self, query, **params):
+        return {"count": 0, "next": None, "previous": None, "results": []}
+
+    def docket(self, docket_id):
+        raise AssertionError("no docket should be fetched")
+
+
 def _stages(*, age_days: int, mx: list[str], txt: list[str], registry: dict):
     """Real stage classes in default_stages() order; only clients faked."""
     return [
@@ -164,6 +177,7 @@ def _stages(*, age_days: int, mx: list[str], txt: list[str], registry: dict):
         SanctionsScreeningStage(fetcher=_Sdn()),
         CollectPeopleStage(provider=StubRegistryPeopleProvider({})),
         ScreenPeopleStage(),
+        PublicRecordsStage(client=_NoDockets()),
         AnalyzeDomainStage(
             whois_client=_Whois(age_days),
             dns_client=_Dns(mx, txt),
@@ -268,6 +282,12 @@ def test_stage_list_matches_default_stages():
     """The faked list must mirror production order, or this test proves nothing."""
     faked = _stages(age_days=4000, mx=["mx.acme.com"], txt=[], registry=_ACME_REGISTRY)
     assert [s.name for s in faked] == [s.name for s in default_stages()]
+
+
+def test_public_records_runs_at_3e_after_screen_people():
+    names = [s.name for s in default_stages()]
+    assert names.index("public_records") == names.index("screen_people") + 1
+    assert names.index("analyze_domain") == names.index("public_records") + 1
 
 
 def test_established_company_gets_infrastructure_trust_signals(db):
