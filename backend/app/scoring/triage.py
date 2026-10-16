@@ -37,6 +37,7 @@ from dataclasses import dataclass, field
 
 from app.scoring.engine import (
     CRITICAL_ESCALATION_SIGNALS,
+    REVIEW_FLOOR_SIGNALS,
     TRIAGE_ESCALATE_MIN,
     TRIAGE_PRE_CLEAR_MAX,
     ScoringResult,
@@ -117,6 +118,21 @@ def derive_triage(result: ScoringResult) -> TriageResult:
     score = result.overall_score
 
     if score <= TRIAGE_PRE_CLEAR_MAX:
+        floor = [
+            s.name
+            for s in result.contributing_signals
+            if s.name in REVIEW_FLOOR_SIGNALS
+        ]
+        if floor:
+            return TriageResult(
+                tier="review",
+                reason=(
+                    f"Overall score {score:.1f} is below the pre-clear threshold "
+                    f"({TRIAGE_PRE_CLEAR_MAX}), but {', '.join(floor)} never "
+                    "pre-clears. Standard review."
+                ),
+                critical_signals=[],
+            )
         elevated = [
             s.name for s in result.contributing_signals if s.direction == "elevated"
         ]

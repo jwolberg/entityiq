@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from app.models.evidence import Evidence
 from app.scoring.engine import (
     CRITICAL_ESCALATION_SIGNALS,
+    REVIEW_FLOOR_SIGNALS,
     ScoringEngine,
     _compute_confidence,
 )
@@ -264,11 +265,30 @@ def test_active_exclusion_forces_escalate_on_a_clean_company():
     assert (triage.tier, triage.critical_signals) == ("escalate", [EXCLUSION])
 
 
-def test_bankruptcy_alone_keeps_the_score_based_tier():
+def test_open_bankruptcy_floors_a_clean_company_at_review():
+    """Answered 2026-10-16: a bankrupt counterparty never pre-clears."""
     base = ScoringEngine().score(_clean_company(), [])
     result = ScoringEngine().score(_clean_company() + [_bankruptcy()], [])
-    signal = _signal(result, BANKRUPTCY)
-    assert signal is not None
-    assert result.overall_score > base.overall_score
-    expected = "pre_clear" if result.overall_score <= 30 else "review"
-    assert result.triage_tier == expected  # never forced to escalate
+    assert _signal(result, BANKRUPTCY) is not None
+    assert base.triage_tier == "pre_clear"
+    assert result.overall_score <= 30  # the score alone would pre-clear...
+    assert result.triage_tier == "review"  # ...the floor lifts it
+    triage = derive_triage(result)
+    assert triage.tier == "review"
+    assert BANKRUPTCY in triage.reason
+
+
+def test_bankruptcy_floor_never_forces_escalate():
+    assert BANKRUPTCY in REVIEW_FLOOR_SIGNALS
+    assert BANKRUPTCY not in CRITICAL_ESCALATION_SIGNALS
+    result = ScoringEngine().score(_clean_company() + [_bankruptcy()], [])
+    assert result.triage_tier != "escalate"
+
+
+def test_high_score_with_bankruptcy_still_escalates_by_score():
+    from app.scoring.engine import _triage_tier
+
+    assert _triage_tier(75.0, {BANKRUPTCY}) == "escalate"
+    assert _triage_tier(50.0, {BANKRUPTCY}) == "review"
+    assert _triage_tier(10.0, {BANKRUPTCY}) == "review"
+    assert _triage_tier(10.0, set()) == "pre_clear"

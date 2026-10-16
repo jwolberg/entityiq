@@ -75,6 +75,16 @@ CRITICAL_ESCALATION_SIGNALS: frozenset[str] = frozenset(
     }
 )
 
+# Signals that never let a run pre-clear: with one present, a score in the
+# pre-clear band triages as "review" instead. They don't force escalation.
+REVIEW_FLOOR_SIGNALS: frozenset[str] = frozenset(
+    {
+        # An open, recent bankruptcy (ticket 0093; answered 2026-10-16: a
+        # bankrupt counterparty is never expedited).
+        "public_records_open_bankruptcy",
+    }
+)
+
 # ---------------------------------------------------------------------------
 # Layer weights for overall_score (v1: equal)
 # ---------------------------------------------------------------------------
@@ -269,6 +279,8 @@ def _triage_tier(overall_score: float, signal_names: set[str] | None = None) -> 
     if signal_names and signal_names & CRITICAL_ESCALATION_SIGNALS:
         return "escalate"
     if overall_score <= TRIAGE_PRE_CLEAR_MAX:
+        if signal_names and signal_names & REVIEW_FLOOR_SIGNALS:
+            return "review"
         return "pre_clear"
     if overall_score >= TRIAGE_ESCALATE_MIN:
         return "escalate"
